@@ -202,6 +202,7 @@ const useStyles = makeStyles((theme) => ({
 const defaultlocalLobbySettings: ILobbySettings = {
 	maxDistance: 5.32,
 	haunting: false,
+	thirdPartyHaunting: false,
 	hearImpostorsInVents: false,
 	impostersHearImpostersInvent: false,
 	impostorRadioEnabled: false,
@@ -344,6 +345,13 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		return Math.max(...Object.values(visibleColorCounts)) >= Math.max(2, activePlayers.length - 1);
 	}
 
+	function canHearGhosts(player: Player): boolean {
+		return (
+			(player.isImpostor && lobbySettings.haunting) ||
+			(player.isThirdParty && lobbySettings.thirdPartyHaunting)
+		);
+	}
+
 	function calculateVoiceAudio(
 		state: AmongUsState,
 		settings: ISettings,
@@ -428,7 +436,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					}
 				}
 
-				if (!me.isDead && other.isDead && me.isImpostor && lobbySettings.haunting) {
+				if (!me.isDead && other.isDead && canHearGhosts(me)) {
 					if (!audio.reverbConnected) {
 						audio.reverbConnected = true;
 						applyEffect(gain, reverb, destination, other);
@@ -459,7 +467,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			pan.maxDistance = maxDistanceRef.current;
 		}
 
-		if (!other.isDead || state.gameState !== GameState.TASKS || !me.isImpostor || me.isDead) {
+		if (!other.isDead || state.gameState !== GameState.TASKS || !canHearGhosts(me) || me.isDead) {
 			if (audio.reverbConnected && reverb) {
 				audio.reverbConnected = false;
 				restoreEffect(gain, reverb, destination, other);

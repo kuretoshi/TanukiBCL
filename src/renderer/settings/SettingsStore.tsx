@@ -269,6 +269,10 @@ export const SettingsStore = new Store<ISettings>({
 					type: 'boolean',
 					default: false,
 				},
+				thirdPartyHaunting: {
+					type: 'boolean',
+					default: false,
+				},
 				commsSabotage: {
 					type: 'boolean',
 					default: false,
@@ -325,6 +329,7 @@ export const SettingsStore = new Store<ISettings>({
 			default: {
 				maxDistance: 5.32,
 				haunting: false,
+				thirdPartyHaunting: false,
 				commsSabotage: false,
 				hearImpostorsInVents: false,
 				hearThroughCameras: false,

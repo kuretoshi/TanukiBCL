@@ -49,6 +49,7 @@ export interface ILobbySettings {
 	maxDistance: number;
 	visionHearing: boolean;
 	haunting: boolean;
+	thirdPartyHaunting: boolean;
 	hearImpostorsInVents: boolean;
 	impostersHearImpostersInvent: boolean;
 	impostorRadioEnabled: boolean;
