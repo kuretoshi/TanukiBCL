@@ -499,21 +499,6 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 						disabled={!canChangeLobbySettings}
 						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
 					>
-						<FormControlLabel
-							className={classes.formLabel}
-							label={t('settings.lobbysettings.thirdpartyhearsghost')}
-							disabled={!canChangeLobbySettings}
-							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ thirdPartyHaunting: newValue })}
-							value={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
-							checked={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
-							control={<Checkbox />}
-						/>
-					</DisabledTooltip>
-
-					<DisabledTooltip
-						disabled={!canChangeLobbySettings}
-						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
-					>
 						<PublicLobbySettings
 							t={t}
 							updateSetting={SavePublicLobbyCallback}
@@ -562,6 +547,21 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ haunting: newValue })}
 							value={canChangeLobbySettings ? localLobbySettingsBuffer.haunting : hostLobbySettings.haunting}
 							checked={canChangeLobbySettings ? localLobbySettingsBuffer.haunting : hostLobbySettings.haunting}
+							control={<Checkbox />}
+						/>
+					</DisabledTooltip>
+
+					<DisabledTooltip
+						disabled={!canChangeLobbySettings}
+						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
+					>
+						<FormControlLabel
+							className={classes.formLabel}
+							label={t('settings.lobbysettings.thirdpartyhearsghost')}
+							disabled={!canChangeLobbySettings}
+							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ thirdPartyHaunting: newValue })}
+							value={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
+							checked={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
 							control={<Checkbox />}
 						/>
 					</DisabledTooltip>

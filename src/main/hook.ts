@@ -64,12 +64,13 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 		readingGame = true;
 		let speaking: number = 0
 		resetKeyHooks();
+		gameReader = new GameReader(event.sender.send.bind(event.sender));
 
 		keyboardWatcher.on('keydown', (keyId: number) => {
 			if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
 				speaking += 1;
 			}
-			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
 				speaking += 1;
 				event.sender.send(IpcRendererMessages.IMPOSTOR_RADIO, true);
 			}
@@ -93,7 +94,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 			if (keyCodeMatches(muteShortcut!, keyId)) {
 				event.sender.send(IpcRendererMessages.TOGGLE_MUTE);
 			}
-			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
 				speaking -= 1;
 				event.sender.send(IpcRendererMessages.IMPOSTOR_RADIO, false);
 			}
@@ -110,7 +111,6 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 		keyboardWatcher.start();
 
 		// Read game memory
-		gameReader = new GameReader(event.sender.send.bind(event.sender));
 		let gotError = false;
 		const frame = async () => {
 			const err = await gameReader.loop();
