@@ -225,6 +225,8 @@ export default class GameReader {
 			this.isLocalGame = lobbyCodeInt === 32; // is local game
 			let lightRadius = 1;
 			let comsSabotaged = false;
+			let mushroomMixupSabotaged = false;
+			let camouflaged = false;
 			let currentCamera = CameraLocation.NONE;
 			let map = MapType.UNKNOWN;
 			let maxPlayers = 10;
@@ -271,6 +273,21 @@ export default class GameReader {
 				maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
 				map = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId);
 				if (state === GameState.TASKS) {
+					const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
+					const activePlayerCount = activePlayers.length;
+					const shiftedPlayers = activePlayers.filter((player) => player.shiftedColor !== -1);
+					const shiftedPlayerCount = shiftedPlayers.length;
+					const mushroomMixupThreshold = Math.min(2, Math.max(1, activePlayerCount - 1));
+					mushroomMixupSabotaged = map === MapType.FUNGLE && shiftedPlayerCount >= mushroomMixupThreshold;
+					const camouflageThreshold = Math.max(2, activePlayerCount - 1);
+					const shiftedColors = new Set(shiftedPlayers.map((player) => player.shiftedColor));
+					camouflaged =
+						this.loadedMod.id === 'SUPER_NEW_ROLES' &&
+						activePlayerCount >= 3 &&
+						shiftedPlayerCount >= camouflageThreshold &&
+						shiftedColors.size === 1;
+				}
+				if (state === GameState.TASKS) {
 					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
 
 					const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
@@ -283,13 +300,13 @@ export default class GameReader {
 								switch (map) {
 									case MapType.AIRSHIP:
 									case MapType.POLUS:
-									case MapType.FUNGLE:
 									case MapType.THE_SKELD:
 									case MapType.SUBMERGED: {
 										comsSabotaged =
 											this.readMemory<number>('uint32', value, this.offsets!.HudOverrideSystemType_isActive) === 1;
 										break;
 									}
+									case MapType.FUNGLE:
 									case MapType.MIRA_HQ: {
 										comsSabotaged =
 											this.readMemory<number>('uint32', value, this.offsets!.hqHudSystemType_CompletedConsoles) < 2;
@@ -392,6 +409,8 @@ export default class GameReader {
 				hostId: hostId,
 				clientId: clientId,
 				comsSabotaged,
+				mushroomMixupSabotaged,
+				camouflaged,
 				currentCamera,
 				lightRadius,
 				lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
@@ -1114,7 +1133,7 @@ export default class GameReader {
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
 		if (!this.PlayerStruct || !this.offsets) return undefined;
 
-		const { data } = this.PlayerStruct.report<PlayerReport>(buffer, 0, {});
+		const { data } = this.PlayerStruct.report<PlayerReport>(buffer as unknown as BufferSource, 0, {});
 
 		if (this.is_64bit) {
 			data.objectPtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('objectPtr')]);
@@ -1193,7 +1212,9 @@ export default class GameReader {
 			skinId: data.skin ?? '',
 			visorId: data.visor ?? '',
 			disconnected: data.disconnected != 0,
+			roleTeam: data.impostor,
 			isImpostor: data.impostor == 1,
+			isThirdParty: data.impostor != 0 && data.impostor != 1,
 			isDead: data.dead == 1,
 			taskPtr: data.taskPtr,
 			objectPtr: data.objectPtr,

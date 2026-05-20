@@ -2,6 +2,7 @@ import React, { ReactChild, useCallback, useContext, useEffect, useReducer, useS
 import { SettingsContext, GameStateContext, HostSettingsContext } from '../contexts';
 import MicrophoneSoundBar from './MicrophoneSoundBar';
 import TestSpeakersButton from './TestSpeakersButton';
+import TestVoiceEffectButton from './TestVoiceEffectButton';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import makeStyles from '@mui/styles/makeStyles';
 import withStyles from '@mui/styles/withStyles';
@@ -37,8 +38,8 @@ interface StyleInput {
 const Divider = withStyles((theme) => ({
 	root: {
 		width: '100%',
-		marginTop: theme.spacing(2),
-		marginBottom: theme.spacing(2),
+		marginTop: theme.spacing(1.25),
+		marginBottom: theme.spacing(1.25),
 	},
 }))(MuiDivider);
 
@@ -62,22 +63,73 @@ const useStyles = makeStyles((theme) => ({
 		display: 'flex',
 		justifyContent: 'center',
 		alignItems: 'center',
-		height: 40,
+		height: 34,
+		'& h6': {
+			fontSize: 17,
+			lineHeight: '22px',
+			fontWeight: 700,
+		},
 	},
 	scroll: {
-		paddingTop: theme.spacing(1),
-		paddingLeft: theme.spacing(2),
-		paddingRight: theme.spacing(2),
+		paddingTop: theme.spacing(0.75),
+		paddingLeft: theme.spacing(1.5),
+		paddingRight: theme.spacing(1.5),
 		overflowY: 'auto',
 		display: 'flex',
 		flexDirection: 'column',
 		justifyContent: 'start',
 		alignItems: 'center',
 		paddingBottom: theme.spacing(7),
-		height: `calc(100vh - 40px - ${theme.spacing(7 + 3 + 3)})`,
+		height: `calc(100vh - 34px - ${theme.spacing(7 + 3 + 3)})`,
+		'& > div': {
+			width: '100%',
+		},
+		'& h6': {
+			fontSize: 17,
+			lineHeight: '22px',
+			fontWeight: 700,
+			marginTop: theme.spacing(0.5),
+			marginBottom: theme.spacing(0.5),
+		},
+		'& p, & label, & .MuiTypography-body1': {
+			fontSize: 13,
+			lineHeight: 1.25,
+		},
+		'& .MuiFormControlLabel-root': {
+			minHeight: 34,
+			alignItems: 'center',
+		},
+		'& .MuiFormControlLabel-label': {
+			fontSize: 13,
+			lineHeight: 1.25,
+			overflowWrap: 'anywhere',
+		},
+		'& .MuiCheckbox-root, & .MuiRadio-root': {
+			padding: 6,
+		},
+		'& .MuiButton-root': {
+			minHeight: 32,
+			padding: '5px 12px',
+			fontSize: 13,
+			lineHeight: 1.25,
+			whiteSpace: 'normal',
+			wordBreak: 'keep-all',
+		},
+		'& .MuiTextField-root': {
+			marginTop: theme.spacing(0.75),
+		},
+		'& .MuiInputBase-root': {
+			fontSize: 13,
+		},
+		'& .MuiInputLabel-root': {
+			fontSize: 13,
+		},
+		'& .MuiSlider-root': {
+			marginTop: theme.spacing(0.25),
+		},
 	},
 	shortcutField: {
-		marginTop: theme.spacing(1),
+		marginTop: theme.spacing(0.75),
 	},
 	back: {
 		cursor: 'pointer',
@@ -95,15 +147,33 @@ const useStyles = makeStyles((theme) => ({
 		flexDirection: 'column',
 		alignItems: 'center',
 		justifyContent: 'start',
+		width: '100%',
+		boxSizing: 'border-box',
 		'&>*': {
-			marginBottom: theme.spacing(1),
+			width: '100%',
+			boxSizing: 'border-box',
+			marginBottom: theme.spacing(0.75),
 		},
 	},
 	formLabel: {
 		width: '100%',
 		borderTop: '1px solid #313135',
 		marginRight: '0px',
+		marginLeft: 0,
 		// paddingBottom:'5px'
+	},
+	sliderLabel: {
+		textAlign: 'center',
+		fontWeight: 700,
+		marginBottom: theme.spacing(0.25),
+	},
+	voiceEffectControl: {
+		marginTop: theme.spacing(1.25),
+	},
+	voiceEffectLabel: {
+		textAlign: 'center',
+		fontWeight: 700,
+		marginBottom: theme.spacing(0.5),
 	},
 }));
 
@@ -191,6 +261,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 		settings.echoCancellation,
 		settings.mobileHost,
 		settings.microphoneGainEnabled,
+		settings.voiceEffectStrength,
 		settings.micSensitivityEnabled,
 	]);
 
@@ -380,7 +451,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 
 				<Typography variant="h6">{t('settings.lobbysettings.title')}</Typography>
 				<div>
-					<Typography id="input-slider" gutterBottom>
+					<Typography id="input-slider" className={classes.sliderLabel} gutterBottom>
 						{(canChangeLobbySettings ? localLobbySettingsBuffer.visionHearing : hostLobbySettings.visionHearing)
 							? t('settings.lobbysettings.voicedistance_impostor')
 							: t('settings.lobbysettings.voicedistance')}
@@ -476,6 +547,20 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ haunting: newValue })}
 							value={canChangeLobbySettings ? localLobbySettingsBuffer.haunting : hostLobbySettings.haunting}
 							checked={canChangeLobbySettings ? localLobbySettingsBuffer.haunting : hostLobbySettings.haunting}
+							control={<Checkbox />}
+						/>
+					</DisabledTooltip>
+					<DisabledTooltip
+						disabled={!canChangeLobbySettings}
+						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
+					>
+						<FormControlLabel
+							className={classes.formLabel}
+							label={t('settings.lobbysettings.thirdpartyhearsghost')}
+							disabled={!canChangeLobbySettings}
+							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ thirdPartyHaunting: newValue })}
+							value={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
+							checked={canChangeLobbySettings ? localLobbySettingsBuffer.thirdPartyHaunting : hostLobbySettings.thirdPartyHaunting}
 							control={<Checkbox />}
 						/>
 					</DisabledTooltip>
@@ -655,6 +740,33 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					))}
 				</TextField>
 				{open && <TestSpeakersButton t={t} speaker={settings.speaker} />}
+				<div className={classes.voiceEffectControl}>
+					<Typography id="voice-effect-slider" className={classes.voiceEffectLabel}>
+						{t('settings.audio.voice_effect_strength')}
+					</Typography>
+					<Grid container direction="row" justifyContent="center" alignItems="center">
+						<Grid item xs={11}>
+							<Slider
+								size="small"
+								value={settings.voiceEffectStrength}
+								valueLabelDisplay="auto"
+								min={0}
+								max={100}
+								step={5}
+								onChange={(_, newValue: number | number[]) => setSettings('voiceEffectStrength', newValue as number)}
+								aria-labelledby="voice-effect-slider"
+							/>
+						</Grid>
+					</Grid>
+				</div>
+				{open && (
+					<TestVoiceEffectButton
+						t={t}
+						microphone={settings.microphone}
+						speaker={settings.speaker}
+						voiceEffectStrength={settings.voiceEffectStrength}
+					/>
+				)}
 				<RadioGroup
 					value={settings.pushToTalkMode}
 					onChange={(ev) => {

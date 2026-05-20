@@ -41,6 +41,12 @@ import adapter from 'webrtc-adapter';
 import { VADOptions } from './vad';
 import { pushToTalkOptions } from './settings/SettingsStore';
 import { poseCollide } from '../common/ColliderMap';
+import {
+	createVoiceDisguiseEffect,
+	disconnectVoiceDisguiseEffect,
+	updateVoiceDisguiseEffect,
+	VoiceDisguiseEffect,
+} from './voiceEffect';
 
 console.log(adapter.browserDetails.browser);
 
@@ -66,9 +72,11 @@ interface AudioNodes {
 	pan: PannerNode;
 	reverb: ConvolverNode;
 	muffle: BiquadFilterNode;
+	voiceEffect: VoiceDisguiseEffect;
 	destination: AudioNode;
 	reverbConnected: boolean;
 	muffleConnected: boolean;
+	voiceEffectConnected: boolean;
 }
 
 interface AudioElements {
@@ -194,6 +202,7 @@ const useStyles = makeStyles((theme) => ({
 const defaultlocalLobbySettings: ILobbySettings = {
 	maxDistance: 5.32,
 	haunting: false,
+	thirdPartyHaunting: false,
 	hearImpostorsInVents: false,
 	impostersHearImpostersInvent: false,
 	impostorRadioEnabled: false,
@@ -287,6 +296,62 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			console.log('error with applying effect: ', player.name, effectNode);
 		}
 	}
+
+	function applyVoiceEffect(gain: AudioNode, effect: VoiceDisguiseEffect, destination: AudioNode, player: Player) {
+		console.log('Apply voice disguise effect->', player.name);
+		try {
+			gain.disconnect(destination);
+			gain.connect(effect.input);
+			effect.output.connect(destination);
+		} catch {
+			console.log('error with applying voice disguise effect: ', player.name);
+		}
+	}
+
+	function restoreVoiceEffect(gain: AudioNode, effect: VoiceDisguiseEffect, destination: AudioNode, player: Player) {
+		console.log('Restore voice disguise effect->', player.name);
+		try {
+			effect.output.disconnect(destination);
+			gain.disconnect(effect.input);
+			gain.connect(destination);
+		} catch {
+			console.log('error with restoring voice disguise effect: ', player.name);
+		}
+	}
+
+	function isVoiceDisguiseEffectActive(state: AmongUsState): boolean {
+		if (state.mushroomMixupSabotaged || state.camouflaged) {
+			return true;
+		}
+		if (state.gameState !== GameState.TASKS) {
+			return false;
+		}
+
+		const activePlayers = state.players.filter((player) => !player.disconnected && !player.bugged && !player.isDead);
+		const shiftedPlayers = activePlayers.filter((player) => player.shiftedColor !== -1);
+		const shiftedPlayerCount = shiftedPlayers.length;
+		if (state.map === MapType.FUNGLE && shiftedPlayerCount >= Math.min(2, Math.max(1, activePlayers.length - 1))) {
+			return true;
+		}
+		if (state.mod !== 'SUPER_NEW_ROLES' || activePlayers.length < 3) {
+			return false;
+		}
+
+		const visibleColorCounts = activePlayers.reduce((counts: { [colorId: number]: number }, player) => {
+			const visibleColor = player.shiftedColor !== -1 ? player.shiftedColor : player.colorId;
+			counts[visibleColor] = (counts[visibleColor] ?? 0) + 1;
+			return counts;
+		}, {});
+		return Math.max(...Object.values(visibleColorCounts)) >= Math.max(2, activePlayers.length - 1);
+	}
+
+	function canHearGhosts(player: Player): boolean {
+		return (
+			(player.isImpostor && lobbySettings.haunting) ||
+			(player.isThirdParty && lobbySettings.thirdPartyHaunting)
+		);
+	}
+
 	function calculateVoiceAudio(
 		state: AmongUsState,
 		settings: ISettings,
@@ -294,7 +359,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		other: Player,
 		audio: AudioNodes
 	): number {
-		const { pan, gain, muffle, reverb, destination } = audio;
+		const { pan, gain, muffle, reverb, voiceEffect, destination } = audio;
 		const audioContext = pan.context;
 		const useLightSource = true;
 		let maxdistance = maxDistanceRef.current;
@@ -303,6 +368,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		let collided = false;
 		let skipDistanceCheck = false;
 		let muffleEnabled = false;
+		let voiceEffectEnabled = false;
 
 		if (other.disconnected || other.isDummy) {
 			return 0;
@@ -355,8 +421,22 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						applyEffect(gain, muffle, destination, other);
 					}
 				}
+				if (
+					isVoiceDisguiseEffectActive(state) &&
+					settings.voiceEffectStrength > 0 &&
+					!me.isDead &&
+					!other.isDead &&
+					!muffleEnabled
+				) {
+					updateVoiceDisguiseEffect(voiceEffect, settings.voiceEffectStrength);
+					voiceEffectEnabled = true;
+					if (!audio.voiceEffectConnected) {
+						audio.voiceEffectConnected = true;
+						applyVoiceEffect(gain, voiceEffect, destination, other);
+					}
+				}
 
-				if (!me.isDead && other.isDead && me.isImpostor && lobbySettings.haunting) {
+				if (!me.isDead && other.isDead && canHearGhosts(me)) {
 					if (!audio.reverbConnected) {
 						audio.reverbConnected = true;
 						applyEffect(gain, reverb, destination, other);
@@ -387,7 +467,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			pan.maxDistance = maxDistanceRef.current;
 		}
 
-		if (!other.isDead || state.gameState !== GameState.TASKS || !me.isImpostor || me.isDead) {
+		if (!other.isDead || state.gameState !== GameState.TASKS || !canHearGhosts(me) || me.isDead) {
 			if (audio.reverbConnected && reverb) {
 				audio.reverbConnected = false;
 				restoreEffect(gain, reverb, destination, other);
@@ -455,6 +535,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				restoreEffect(gain, muffle, destination, other);
 			}
 		}
+		if (audio.voiceEffectConnected && !voiceEffectEnabled) {
+			audio.voiceEffectConnected = false;
+			restoreVoiceEffect(gain, voiceEffect, destination, other);
+		}
 
 		if (!settings.enableSpatialAudio || skipDistanceCheck) {
 			panPos = [0, 0];
@@ -502,6 +586,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			audioElements.current[peer].gain.disconnect();
 			// if (audioElements.current[peer].reverbGain != null) audioElements.current[peer].reverbGain?.disconnect();
 			if (audioElements.current[peer].reverb != null) audioElements.current[peer].reverb?.disconnect();
+			disconnectVoiceDisguiseEffect(audioElements.current[peer].voiceEffect);
 			delete audioElements.current[peer];
 		}
 	}
@@ -650,21 +735,26 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}, [socketClients]);
 
 	useEffect(() => {
-		if (
-			connectionStuff.current?.microphoneGain?.gain &&
-			(settingsRef.current.microphoneGainEnabled || settingsRef.current.micSensitivityEnabled)
-		) {
+		if (connectionStuff.current?.microphoneGain?.gain) {
 			if (!settingsRef.current.micSensitivityEnabled)
 				connectionStuff.current.microphoneGain.gain.value = settings.microphoneGainEnabled
 					? settings.microphoneGain / 100
 					: 1;
 
 			if (connectionStuff.current?.audioListener?.options) {
-				connectionStuff.current.audioListener.options.minNoiseLevel = settings.micSensitivity;
+				connectionStuff.current.audioListener.options.minNoiseLevel = settings.micSensitivityEnabled
+					? settings.micSensitivity
+					: 0.15;
 				connectionStuff.current.audioListener.init();
 			}
 		}
-	}, [settings.microphoneGain, settings.micSensitivity]);
+	}, [settings.microphoneGain, settings.microphoneGainEnabled, settings.micSensitivity, settings.micSensitivityEnabled]);
+
+	useEffect(() => {
+		Object.values(audioElements.current).forEach((audio) => {
+			updateVoiceDisguiseEffect(audio.voiceEffect, settings.voiceEffectStrength);
+		});
+	}, [settings.voiceEffectStrength]);
 
 	const updateLobby = () => {
 		console.log(gameState);
@@ -856,7 +946,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		// Initialize variables
 		let audioListener: VadNode;
 
-		const audio: MediaTrackConstraintSet = {
+		const audio: MediaTrackConstraints & Record<string, unknown> = {
 			deviceId: (undefined as unknown) as string,
 			autoGainControl: false,
 			channelCount: 2,
@@ -1090,6 +1180,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 					const reverb = context.createConvolver();
 					reverb.buffer = convolverBuffer.current;
+					const voiceEffect = createVoiceDisguiseEffect(context, convolverBuffer.current, settingsRef.current.voiceEffectStrength);
 					const destination: AudioNode = dest;
 					// if (settingsRef.current.vadEnabled) {
 					// 	VAD(context, gain, undefined, {
@@ -1115,8 +1206,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						pan,
 						reverb,
 						muffle,
+						voiceEffect,
 						muffleConnected: false,
 						reverbConnected: false,
+						voiceEffectConnected: false,
 						destination,
 					};
 				});
@@ -1278,7 +1371,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			}
 			if (audio) {
 				handledPeerIds.push(peerId);
-				let gain = calculateVoiceAudio(gameState, settingsRef.current, myPlayer, player, audio);
+				let gain = calculateVoiceAudio(gameState, settings, myPlayer, player, audio);
 				if (connectionStuff.current.deafened || playerConfigs[player.nameHash]?.isMuted) {
 					gain = 0;
 				}
@@ -1318,7 +1411,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		}
 
 		return otherPlayers;
-	}, [gameState]);
+	}, [
+		gameState,
+		lobbySettings,
+		settings.crewVolumeAsGhost,
+		settings.enableSpatialAudio,
+		settings.ghostVolumeAsImpostor,
+		settings.masterVolume,
+		settings.voiceEffectStrength,
+	]);
 
 	// Connect to P2P negotiator, when lobby and connect code change
 	useEffect(() => {

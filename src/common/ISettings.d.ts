@@ -25,6 +25,7 @@ export interface ISettings {
 	masterVolume: number;
 	microphoneGain: number;
 	microphoneGainEnabled: boolean;
+	voiceEffectStrength: number;
 	micSensitivity: number;
 	micSensitivityEnabled: boolean;
 	mobileHost: boolean;
@@ -48,6 +49,7 @@ export interface ILobbySettings {
 	maxDistance: number;
 	visionHearing: boolean;
 	haunting: boolean;
+	thirdPartyHaunting: boolean;
 	hearImpostorsInVents: boolean;
 	impostersHearImpostersInvent: boolean;
 	impostorRadioEnabled: boolean;

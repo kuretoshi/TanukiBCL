@@ -12,6 +12,7 @@
 			"wallsblockaudio": "Walls Block Audio",
 			"visiononly": "Hear People in Vision Only",
 			"impostorshearsghost": "Impostors Hear Dead",
+			"thirdpartyhearsghost": "Third Party Hears Dead",
 			"hear_imposters_invents": "Hear Impostors in Vents",
 			"private_talk_invents": "Private Talk in Vents",
 			"comms_sabotage_audio": "Comms Sabotage Disables Voice",
@@ -55,7 +56,10 @@
 				"crewvolume": "Crew Volume as Ghost",
 				"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 				"test_speaker_start": "Test Speaker",
-				"test_speaker_stop": "Stop Test Speaker"
+				"test_speaker_stop": "Stop Test Speaker",
+				"test_voice_effect_start": "Test Voice Effect",
+				"test_voice_effect_stop": "Stop Voice Effect",
+				"voice_effect_strength": "Voice Effect Strength"
 			},
 			"keyboard": {
 				"title": "Keyboard Shortcuts",

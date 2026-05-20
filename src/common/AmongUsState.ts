@@ -11,6 +11,8 @@ export interface AmongUsState {
 	clientId: number;
 	hostId: number;
 	comsSabotaged: boolean;
+	mushroomMixupSabotaged: boolean;
+	camouflaged: boolean;
 	currentCamera: CameraLocation;
 	map: MapType;
 	lightRadius: number;
@@ -34,7 +36,9 @@ export interface Player {
 	skinId: string;
 	visorId: string;
 	disconnected: boolean;
+	roleTeam: number;
 	isImpostor: boolean;
+	isThirdParty: boolean;
 	isDead: boolean;
 	taskPtr: number;
 	objectPtr: number;
