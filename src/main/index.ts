@@ -127,6 +127,13 @@ function createMainWindow() {
 		}
 	});
 
+	window.on('close', () => {
+		if (!isQuitting) {
+			isQuitting = true;
+			setImmediate(() => app.quit());
+		}
+	});
+
 	window.on('closed', () => {
 		closeAppWindows();
 	});
@@ -255,11 +262,11 @@ if (!gotTheLock) {
 			/* Empty block */
 		}
 	});
-	autoUpdater.on('error', (err: Error, message?: string) => {
+	autoUpdater.on('error', (err: string) => {
 		try {
 			global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, {
 				state: 'error',
-				error: message ?? err.message,
+				error: err,
 			});
 		} catch (e) {
 			/*empty*/
@@ -332,7 +339,7 @@ if (!gotTheLock) {
 
 		if (isDevelopment)
 			installExtension(REACT_DEVELOPER_TOOLS)
-				.then((extension) => console.log(`Added Extension:  ${extension.name}`))
+				.then((name: string) => console.log(`Added Extension:  ${name}`))
 				.catch((err: string) => console.log('An error occurred: ', err));
 	});
 

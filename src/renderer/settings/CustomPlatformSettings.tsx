@@ -15,7 +15,6 @@ import makeStyles from '@mui/styles/makeStyles';
 import React, { useMemo, useState, useEffect, useContext } from 'react';
 import ChevronLeft from '@mui/icons-material/ArrowBack';
 import { GamePlatformInstance, PlatformRunType } from '../../common/GamePlatform';
-import { webUtils } from 'electron';
 import path from 'path';
 import { platform } from 'process';
 import { SettingsContext } from '../contexts';
@@ -160,7 +159,7 @@ export const CustomPlatformSettings: React.FC<CustomPlatformSettingProps> = func
 							hidden
 							onChange={(ev) => {
 								if (ev.target.files && ev.target.files.length > 0) {
-									setPlatformRun(webUtils.getPathForFile(ev.target.files[0]));
+									setPlatformRun(ev.target.files[0].path);
 								} else {
 									setPlatformRun('');
 								}
