@@ -1156,6 +1156,10 @@ export default class GameReader {
 		const isDummy = this.readMemory<boolean>('boolean', data.objectPtr, this.offsets.player.isDummy);
 		let name = 'error';
 		let shiftedColor = -1;
+		let currentColor = -1;
+		let currentHat = '';
+		let currentSkin = '';
+		let currentVisor = '';
 		if (data.hasOwnProperty('name')) {
 			name = this.readString(data.name, 1000).split(/<.*?>/).join('');
 		} else {
@@ -1172,7 +1176,11 @@ export default class GameReader {
 					if (currentOutfit == 0 || currentOutfit > 10)
 						return;
 				} else if (key === currentOutfit) {
-					shiftedColor = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
+					currentColor = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
+					currentHat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId));
+					currentSkin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
+					currentVisor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId));
+					shiftedColor = currentColor;
 				}
 			});
 
@@ -1200,6 +1208,11 @@ export default class GameReader {
 
 		const nameHash = this.hashCode(name);
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
+		const visibleColorId = currentColor === this.rainbowColor ? RainbowColorId : currentColor;
+		const appearanceColor = visibleColorId >= 0 ? visibleColorId : colorId;
+		const appearanceHat = currentHat || data.hat || '';
+		const appearanceSkin = currentSkin || data.skin || '';
+		const appearanceVisor = currentVisor || data.visor || '';
 		return {
 			ptr,
 			id: data.id,
@@ -1211,6 +1224,7 @@ export default class GameReader {
 			petId: data.pet ?? '',
 			skinId: data.skin ?? '',
 			visorId: data.visor ?? '',
+			appearanceId: `${appearanceColor}|${appearanceHat}|${appearanceSkin}|${appearanceVisor}`,
 			disconnected: data.disconnected != 0,
 			roleTeam: data.impostor,
 			isImpostor: data.impostor == 1,

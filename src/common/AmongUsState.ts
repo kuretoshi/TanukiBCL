@@ -35,6 +35,7 @@ export interface Player {
 	petId: number;
 	skinId: string;
 	visorId: string;
+	appearanceId: string;
 	disconnected: boolean;
 	roleTeam: number;
 	isImpostor: boolean;
