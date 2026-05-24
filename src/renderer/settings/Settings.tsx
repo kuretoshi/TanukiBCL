@@ -564,6 +564,28 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 							control={<Checkbox />}
 						/>
 					</DisabledTooltip>
+					<DisabledTooltip
+						disabled={!canChangeLobbySettings}
+						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
+					>
+						<FormControlLabel
+							className={classes.formLabel}
+							label={t('settings.lobbysettings.voice_effect_enabled')}
+							disabled={!canChangeLobbySettings}
+							onChange={(_, newValue: boolean) => updateLocalLobbySettingsBuffer({ voiceEffectEnabled: newValue })}
+							value={
+								canChangeLobbySettings
+									? localLobbySettingsBuffer.voiceEffectEnabled !== false
+									: hostLobbySettings.voiceEffectEnabled !== false
+							}
+							checked={
+								canChangeLobbySettings
+									? localLobbySettingsBuffer.voiceEffectEnabled !== false
+									: hostLobbySettings.voiceEffectEnabled !== false
+							}
+							control={<Checkbox />}
+						/>
+					</DisabledTooltip>
 
 					<DisabledTooltip
 						disabled={!canChangeLobbySettings}

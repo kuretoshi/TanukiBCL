@@ -13,6 +13,7 @@
 			"visiononly": "視界内のプレイヤーの声だけが聞こえる",
 			"impostorshearsghost": "インポスターが幽霊の声も聞こえる",
 			"thirdpartyhearsghost": "第三陣営が幽霊の声も聞こえる",
+			"voice_effect_enabled": "ボイスエフェクトを有効化",
 			"hear_imposters_invents": "インポスターはベント内にいても声が聞こえる",
 			"private_talk_invents": "インポスター同士でベント内で会話ができる",
 			"comms_sabotage_audio": "コミュサボタージュで音声を無効化",

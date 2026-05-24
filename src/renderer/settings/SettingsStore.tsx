@@ -277,6 +277,10 @@ export const SettingsStore = new Store<ISettings>({
 					type: 'boolean',
 					default: false,
 				},
+				voiceEffectEnabled: {
+					type: 'boolean',
+					default: true,
+				},
 				hearImpostorsInVents: {
 					type: 'boolean',
 					default: false,
@@ -331,6 +335,7 @@ export const SettingsStore = new Store<ISettings>({
 				haunting: false,
 				thirdPartyHaunting: false,
 				commsSabotage: false,
+				voiceEffectEnabled: true,
 				hearImpostorsInVents: false,
 				hearThroughCameras: false,
 				wallsBlockAudio: false,

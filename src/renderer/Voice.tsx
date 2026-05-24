@@ -211,6 +211,7 @@ const defaultlocalLobbySettings: ILobbySettings = {
 	impostersHearImpostersInvent: false,
 	impostorRadioEnabled: false,
 	commsSabotage: false,
+	voiceEffectEnabled: true,
 	deadOnly: false,
 	hearThroughCameras: false,
 	wallsBlockAudio: false,
@@ -440,6 +441,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				}
 				if (
 					isVoiceDisguiseEffectActive(state, other) &&
+					lobbySettings.voiceEffectEnabled !== false &&
 					settings.voiceEffectStrength > 0 &&
 					!me.isDead &&
 					!other.isDead &&
