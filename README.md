@@ -1,13 +1,13 @@
-# BetterCrewLink
+# BetterCrewLinkKai
 
-BetterCrewLinkは、Among Us 向け近接ボイスチャットアプリ [BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink) をベースに、日本語環境で使いやすいよう調整している非公式フォークです。
+BetterCrewLinkKaiは、Among Us 向け近接ボイスチャットアプリ [BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink) をベースに、日本語環境で使いやすいよう調整している非公式フォークです。
 
 元プロジェクトは [CrewLink](https://github.com/ottomated/CrewLink) のフォークで、このリポジトリもその流れを引き継いでいます。Among Us、Innersloth、CrewLink、BetterCrewLink の公式プロジェクトとは別の非公式版です。
 
 ## このフォークについて
 
 - 日本語 UI / 日本語説明を中心に調整しています。
-- BetterCrewLink の機能をベースに、国内プレイヤー向けの使いやすさを優先しています。
+- BetterCrewLink の機能をベースにしつつ、国内プレイヤー向けの使いやすさを優先しています。
 - キノコカオスやカモフラージュ系の状態に合わせたボイスエフェクト調整を追加しています。
 - Windows での利用とビルドを主な対象にしています。
 
@@ -29,13 +29,13 @@ BetterCrewLinkは、Among Us 向け近接ボイスチャットアプリ [BetterC
 
 [Releases](https://github.com/kuretoshi/BetterCrewLink/releases)
 
-Windows では `BetterCrewLink-Setup-x.x.x.exe` を実行してインストールします。Among Us の状態を読むためにプロセスへアクセスするため、環境によってはセキュリティソフトの警告が出る場合があります。
+Windows では `Better-CrewLinkKai Setup x.x.x.exe` を実行してインストールします。Among Us の状態を読むためにプロセスへアクセスするため、環境によってはセキュリティソフトの警告が出る場合があります。
 
 ## 使い方
 
-1. BetterCrewLink を起動します。
+1. BetterCrewLinkKai を起動します。
 2. Among Us を起動します。
-3. 同じロビーにいる参加者も BetterCrewLink を起動します。
+3. 同じロビーにいる参加者も BetterCrewLinkKai を起動します。
 4. 必要に応じてマイク、スピーカー、音量、ボイスエフェクトを設定します。
 
 全員が同じボイスサーバーを使っている必要があります。接続できない場合は、設定のサーバー URL やネットワーク状態を確認してください。
