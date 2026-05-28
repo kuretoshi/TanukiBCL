@@ -29,8 +29,8 @@
 				"enabled": "Бүлмә ачык",
 				"mods": "Модлар",
 				"language": "Тел",
-				"enable_warning": "Бу көйләнүне эшләтеп җибәрү сезнең бүлмәне бүтән BetterCrewLink кулланучылары өчен ачык итәчәк!",
-				"ban_warning": "Килешмәгән текстлар BetterCrewLink-та блокировкага китерәчәк."
+				"enable_warning": "Бу көйләнүне эшләтеп җибәрү сезнең бүлмәне бүтән BetterCrewLinkKai кулланучылары өчен ачык итәчәк!",
+				"ban_warning": "Килешмәгән текстлар BetterCrewLinkKai-та блокировкага китерәчәк."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Оверлей",
-			"always_on_top": "BetterCrewLink алгы планда",
+			"always_on_top": "BetterCrewLinkKai алгы планда",
 			"enabled": "Оверлейны кушу",
 			"compact": "Җыйнак оверлей",
 			"meeting": "Җыелышта оверлей",
@@ -88,7 +88,7 @@
 			"change_server": "Тавыш серверын узгәртү",
 			"voice_server": "Тавыш серверы",
 			"invalid_url": "Хаталы URL",
-			"voice_server_warning": "Бу көйләү алдынгы кулланучылар өчен генә. Башка серверлар сезнең мәгълүматны урлый яки BetterCrewLink ябылуга китерә ала.",
+			"voice_server_warning": "Бу көйләү алдынгы кулланучылар өчен генә. Башка серверлар сезнең мәгълүматны урлый яки BetterCrewLinkKai ябылуга китерә ала.",
 			"reset_default": "Әүвәлге"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS-браузер оверлее",
 			"obs_url": "OBS-браузер чыганак URL",
 			"voice_server_comp": "VS белән яраклашу шарты",
-			"voice_server_comp_warning": "Тавыш серверын BetterCrewLink тавыш серверына үзгәртү тәкъдим ителә (https://bettercrewl.ink), мәсәлән."
+			"voice_server_comp_warning": "Тавыш серверын BetterCrewLinkKai тавыш серверына үзгәртү тәкъдим ителә (https://bettercrewl.ink), мәсәлән."
 		},
 		"troubleshooting": {
 			"title": "Диагностика",
@@ -152,9 +152,9 @@
 		"open_error": "Start the Among Us manually.",
 		"waiting": "Among Us көтүе",
 		"error": "ХАТА",
-		"error_admin": "Among Us-га тоташып булмады. Зинһар, BetterCrewLink-ны администратор исеменнән ачыгыз.",
+		"error_admin": "Among Us-га тоташып булмады. Зинһар, BetterCrewLinkKai-ны администратор исеменнән ачыгыз.",
 		"error_platform": "No platform detected",
-		"error_unsupport": "Сезнең Among Us версиясендә BetterCrewLink эшләми."
+		"error_unsupport": "Сезнең Among Us версиясендә BetterCrewLinkKai эшләми."
 	},
 	"platform": {
 		"steam": "Steam",

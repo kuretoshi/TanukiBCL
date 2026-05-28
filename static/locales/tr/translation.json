@@ -29,8 +29,8 @@
 				"enabled": "Lobi Herkese Açık",
 				"mods": "Modlar",
 				"language": "Dil",
-				"enable_warning": "Bunu aktif ederek lobini diğer BetterCrewLink kullanıcılarına açabilirsin!",
-				"ban_warning": "Uygunsuz dil kullanmak BetterCrewLink'ten banlanmana sebep olabilir."
+				"enable_warning": "Bunu aktif ederek lobini diğer BetterCrewLinkKai kullanıcılarına açabilirsin!",
+				"ban_warning": "Uygunsuz dil kullanmak BetterCrewLinkKai'ten banlanmana sebep olabilir."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Arayüz",
-			"always_on_top": "BetterCrewLink'i Üstte Tut",
+			"always_on_top": "BetterCrewLinkKai'i Üstte Tut",
 			"enabled": "Arayüzü etkinleştir",
 			"compact": "Kompak Arayüz",
 			"meeting": "Toplantı Arayüzü",
@@ -88,7 +88,7 @@
 			"change_server": "Ses Sunucusunu Değiştir",
 			"voice_server": "Ses Sunucusu",
 			"invalid_url": "Geçersiz URL",
-			"voice_server_warning": "Bu ayar sadece gelişmiş kullanıcılar içindir. Diğer sunucular bilginizi çalabilir veya BetterCrewLink'i çalışmaz hale getirebilir.",
+			"voice_server_warning": "Bu ayar sadece gelişmiş kullanıcılar içindir. Diğer sunucular bilginizi çalabilir veya BetterCrewLinkKai'i çalışmaz hale getirebilir.",
 			"reset_default": "Varsayılana Sıfırla"
 		},
 		"beta": {
@@ -152,9 +152,9 @@
 		"open_error": "Among Us'ı elle başlat.",
 		"waiting": "Among Us Bekleniyor",
 		"error": "HATA",
-		"error_admin": "Among Us'a bağlanılamadı.\nLütfen BetterCrewLink'i Yönetici olarak başlatın.",
+		"error_admin": "Among Us'a bağlanılamadı.\nLütfen BetterCrewLinkKai'i Yönetici olarak başlatın.",
 		"error_platform": "Platform Bulunamadı",
-		"error_unsupport": "Kullandığınız Among Us versiyonu BetterCrewLink tarafından desteklenmemektedir."
+		"error_unsupport": "Kullandığınız Among Us versiyonu BetterCrewLinkKai tarafından desteklenmemektedir."
 	},
 	"platform": {
 		"steam": "Steam",

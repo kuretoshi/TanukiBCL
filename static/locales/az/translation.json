@@ -29,8 +29,8 @@
 				"enabled": "Lobbi İctimaidir",
 				"mods": "Modlar",
 				"language": "Dil",
-				"enable_warning": "Bunu fəallaşdırmaq, lobbini digər BetterCrewLink istifadəçiləri üçün ictimai edəcək!",
-				"ban_warning": "Uyğunsuz mətn, BetterCrewLink-də qadağa qoyulmasına səbəb olacaqdır."
+				"enable_warning": "Bunu fəallaşdırmaq, lobbini digər BetterCrewLinkKai istifadəçiləri üçün ictimai edəcək!",
+				"ban_warning": "Uyğunsuz mətn, BetterCrewLinkKai-də qadağa qoyulmasına səbəb olacaqdır."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Overlay",
-			"always_on_top": "BetterCrewLink Üstdə",
+			"always_on_top": "BetterCrewLinkKai Üstdə",
 			"enabled": "Overlay-ı fəallaşdır",
 			"compact": "Yığcam Overlay",
 			"meeting": "Görüş Ovrelay-ı",
@@ -88,7 +88,7 @@
 			"change_server": "Səs Serverini Dəyişdir",
 			"voice_server": "Səs Server",
 			"invalid_url": "Etibarsız URL",
-			"voice_server_warning": "Bu seçim yalnız qabaqcıl istifadəçilər üçündür. Digər serverlər məlumatlarınızı oğurlaya bilər və ya BetterCrewLink çökə bilər.",
+			"voice_server_warning": "Bu seçim yalnız qabaqcıl istifadəçilər üçündür. Digər serverlər məlumatlarınızı oğurlaya bilər və ya BetterCrewLinkKai çökə bilər.",
 			"reset_default": "İlkin vəziyyətinə qaytar"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS Səyyah Overlay-ı",
 			"obs_url": "OBS Səyyah Mənbə URL-si",
 			"voice_server_comp": "Səs Server Uyğunluq Rejimi",
-			"voice_server_comp_warning": "Məsələn, səs serverini BetterCrewLink Voice Server (https://bettercrewl.ink) olaraq dəyişdirməyiniz tövsiyə edilir."
+			"voice_server_comp_warning": "Məsələn, səs serverini BetterCrewLinkKai Voice Server (https://bettercrewl.ink) olaraq dəyişdirməyiniz tövsiyə edilir."
 		},
 		"troubleshooting": {
 			"title": "Problemlərin aradan qaldırılması",
@@ -152,9 +152,9 @@
 		"open_error": "Start the Among Us manually.",
 		"waiting": "Among Us gözlənilir",
 		"error": "XƏTA",
-		"error_admin": "Among Us ilə bağlantı qurula bilmir.\nZəhmət olmasa BetterCrewLink-i Administrator kimi yenidən açın.",
+		"error_admin": "Among Us ilə bağlantı qurula bilmir.\nZəhmət olmasa BetterCrewLinkKai-i Administrator kimi yenidən açın.",
 		"error_platform": "Platforma Aşkarlanmadı",
-		"error_unsupport": "Among Us versiyanız BetterCrewLink tərəfindən dəstəklənmir."
+		"error_unsupport": "Among Us versiyanız BetterCrewLinkKai tərəfindən dəstəklənmir."
 	},
 	"platform": {
 		"steam": "Steam",

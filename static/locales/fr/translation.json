@@ -29,8 +29,8 @@
 				"enabled": "Le Lobby est Publique",
 				"mods": "Mods",
 				"language": "Langue",
-				"enable_warning": "Activer cette option rendra votre lobby public aux autres utilisateurs de BetterCrewLink !",
-				"ban_warning": "Un texte inapproprié entraînera un bannissement de BetterCrewLink."
+				"enable_warning": "Activer cette option rendra votre lobby public aux autres utilisateurs de BetterCrewLinkKai !",
+				"ban_warning": "Un texte inapproprié entraînera un bannissement de BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Overlay",
-			"always_on_top": "BetterCrewLink toujours visible",
+			"always_on_top": "BetterCrewLinkKai toujours visible",
 			"enabled": "Activer l'overlay",
 			"compact": "Overlay compact",
 			"meeting": "Meeting overlay",
@@ -88,7 +88,7 @@
 			"change_server": "Changer de serveur vocal",
 			"voice_server": "Serveur vocal",
 			"invalid_url": "URL invalide",
-			"voice_server_warning": "Cette option est réservée aux utilisateurs avancés. D'autres serveurs peuvent voler vos informations ou planter BetterCrewLink.",
+			"voice_server_warning": "Cette option est réservée aux utilisateurs avancés. D'autres serveurs peuvent voler vos informations ou planter BetterCrewLinkKai.",
 			"reset_default": "Réinitialiser le serveur vocal"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "Navigateur Overlay Obs",
 			"obs_url": "URL de la source du navigateur OBS",
 			"voice_server_comp": "Mode compatibilité VS",
-			"voice_server_comp_warning": "Il est recommandé de simplement changer le serveur vocal pour un serveur vocal BetterCrewLink, par exemple https://bettercrewl.ink."
+			"voice_server_comp_warning": "Il est recommandé de simplement changer le serveur vocal pour un serveur vocal BetterCrewLinkKai, par exemple https://bettercrewl.ink."
 		},
 		"troubleshooting": {
 			"title": "Dépannage",
@@ -152,9 +152,9 @@
 		"open_error": "Lancez Among Us manuellement.",
 		"waiting": "En attente d'Among Us",
 		"error": "ERREUR",
-		"error_admin": "Impossible de se connecter à Among Us.\nVeuillez rouvrir BetterCrewLink en tant qu'administrateur.",
+		"error_admin": "Impossible de se connecter à Among Us.\nVeuillez rouvrir BetterCrewLinkKai en tant qu'administrateur.",
 		"error_platform": "Aucune plateforme détectée",
-		"error_unsupport": "Votre version de Among Us n'est pas supporté par BetterCrewLink."
+		"error_unsupport": "Votre version de Among Us n'est pas supporté par BetterCrewLinkKai."
 	},
 	"platform": {
 		"steam": "Steam",

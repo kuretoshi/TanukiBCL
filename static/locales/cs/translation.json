@@ -29,8 +29,8 @@
 				"enabled": "Lobby je veřejné",
 				"mods": "Módy",
 				"language": "Jazyk",
-				"enable_warning": "Povolením zveřejníte své lobby ostatním BetterCrewLink uživatelům!",
-				"ban_warning": "Nevhodný text povede k zabanování z BetterCrewLink."
+				"enable_warning": "Povolením zveřejníte své lobby ostatním BetterCrewLinkKai uživatelům!",
+				"ban_warning": "Nevhodný text povede k zabanování z BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Překrytí",
-			"always_on_top": "BetterCrewLink vždy navrchu",
+			"always_on_top": "BetterCrewLinkKai vždy navrchu",
 			"enabled": "Povolit překrytí",
 			"compact": "Kompaktní překrytí",
 			"meeting": "Překrytí při schůzích",
@@ -88,7 +88,7 @@
 			"change_server": "Změnit hlasový server",
 			"voice_server": "Hlasový server",
 			"invalid_url": "Neplatná URL",
-			"voice_server_warning": "Tato možnost je určena pouze pro pokročilé uživatele. Ostatní servery mohou ukrást vaše osobní informace nebo shodit BetterCrewLink.",
+			"voice_server_warning": "Tato možnost je určena pouze pro pokročilé uživatele. Ostatní servery mohou ukrást vaše osobní informace nebo shodit BetterCrewLinkKai.",
 			"reset_default": "Obnovit výchozí nastavení"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS Webové Překrytí",
 			"obs_url": "OBS URL Webového Překrytí",
 			"voice_server_comp": "Kompatabilita zvukového serveru",
-			"voice_server_comp_warning": "Doporučujeme pouze změnit hlasový server na BetterCrewLink Voice Server (např: https://bettercrewl.ink.)."
+			"voice_server_comp_warning": "Doporučujeme pouze změnit hlasový server na BetterCrewLinkKai Voice Server (např: https://bettercrewl.ink.)."
 		},
 		"troubleshooting": {
 			"title": "Řešení problémů",
@@ -152,7 +152,7 @@
 		"open_error": "Spusťte Among Us ručně.",
 		"waiting": "Čekání na Among Us",
 		"error": "CHYBA",
-		"error_admin": "Nelze se připojit k Among Us.\nProsím znovu otevřete BetterCrewLink jako správce.",
+		"error_admin": "Nelze se připojit k Among Us.\nProsím znovu otevřete BetterCrewLinkKai jako správce.",
 		"error_platform": "Nebyla detekována žádná platforma",
 		"error_unsupport": "Tvá verze Among Us není podporována BetterCrewlinkem."
 	},

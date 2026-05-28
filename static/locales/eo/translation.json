@@ -29,8 +29,8 @@
 				"enabled": "La ludejo estas publika",
 				"mods": "Modifoj",
 				"language": "Lingvo",
-				"enable_warning": "Ŝaltinte ĉi tion vi igos la ludejon publika por aliaj uzantoj de BetterCrewLink!",
-				"ban_warning": "Maldecaj mesaĝoj kaŭzos forbaron el BetterCrewLink."
+				"enable_warning": "Ŝaltinte ĉi tion vi igos la ludejon publika por aliaj uzantoj de BetterCrewLinkKai!",
+				"ban_warning": "Maldecaj mesaĝoj kaŭzos forbaron el BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Plustavolo",
-			"always_on_top": "BetterCrewLink estu supre",
+			"always_on_top": "BetterCrewLinkKai estu supre",
 			"enabled": "Ŝalti plustavolon",
 			"compact": "Kompaktigi la plustavolon",
 			"meeting": "Renkontiĝa plustavolo",
@@ -88,7 +88,7 @@
 			"change_server": "Ŝanĝi voĉservilon",
 			"voice_server": "Voĉservilo",
 			"invalid_url": "Malĝusta retadreso",
-			"voice_server_warning": "Tiu ĉi agordo evitindas por nespertuloj. Aliaj serviloj povas provi ŝteli viajn informojn aŭ misfunkciigi BetterCrewLink.",
+			"voice_server_warning": "Tiu ĉi agordo evitindas por nespertuloj. Aliaj serviloj povas provi ŝteli viajn informojn aŭ misfunkciigi BetterCrewLinkKai.",
 			"reset_default": "Redefaŭltigi"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "Plustavolo de foliumilo de OBS",
 			"obs_url": "Fonta retadreso de foliumilo de OBS",
 			"voice_server_comp": "Reĝimo de voĉservila kongruo",
-			"voice_server_comp_warning": "Ni rekomendas nur ŝanĝi la voĉservilon al ekz. la voĉservilo de BetterCrewLink (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Ni rekomendas nur ŝanĝi la voĉservilon al ekz. la voĉservilo de BetterCrewLinkKai (https://bettercrewl.ink)."
 		},
 		"troubleshooting": {
 			"title": "Problemsolvado",
@@ -152,9 +152,9 @@
 		"open_error": "Startigu Trompiston permane.",
 		"waiting": "Atendado de la ludo",
 		"error": "ERARO",
-		"error_admin": "Ne eblis konekti al Among Us.\nBonvolu remalfermi BetterCrewLink kiel administranto.",
+		"error_admin": "Ne eblis konekti al Among Us.\nBonvolu remalfermi BetterCrewLinkKai kiel administranto.",
 		"error_platform": "La platformo ne detekteblis",
-		"error_unsupport": "BetterCrewLink ne subtenas vian version de Among Us."
+		"error_unsupport": "BetterCrewLinkKai ne subtenas vian version de Among Us."
 	},
 	"platform": {
 		"steam": "Steam",

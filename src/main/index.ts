@@ -73,7 +73,7 @@ function createMainWindow() {
 	const mainWindowState = windowStateKeeper({});
 
 	const window = new BrowserWindow({
-		title: 'BetterCrewLink',
+		title: 'BetterCrewLinkKai',
 		width: 280,
 		height: 390,
 		maxWidth: 280,
@@ -118,7 +118,7 @@ function createMainWindow() {
 		);
 	}
 	//window.webContents.userAgent = `CrewLink/${crewlinkVersion} (${process.platform})`;
-	window.webContents.userAgent = `BetterCrewLink/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `BetterCrewLinkKai/${appVersion} (${process.platform})`;
 
 	window.on('close', () => {
 		if (!isQuitting) {
@@ -150,7 +150,7 @@ function createMainWindow() {
 
 function createLobbyBrowser() {
 	const window = new BrowserWindow({
-		title: 'BetterCrewLink Browser',
+		title: 'BetterCrewLinkKai Browser',
 		width: 900,
 		height: 500,
 		minWidth: 250,
@@ -190,14 +190,14 @@ function createLobbyBrowser() {
 			})
 		);
 	}
-	window.webContents.userAgent = `BetterCrewLink/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `BetterCrewLinkKai/${appVersion} (${process.platform})`;
 	console.log('Opened app version: ', appVersion);
 	return window;
 }
 
 function createOverlay() {
 	const overlay = new BrowserWindow({
-		title: 'BetterCrewLink Overlay',
+		title: 'BetterCrewLinkKai Overlay',
 		width: 400,
 		height: 300,
 		webPreferences: {

@@ -29,8 +29,8 @@
 				"enabled": "Lobi Terbuka untuk Umum",
 				"mods": "Modifikasi",
 				"language": "Bahasa",
-				"enable_warning": "Menghidupkan ini akan membuat lobi Anda terbuka untuk pengguna BetterCrewLink lainnya!",
-				"ban_warning": "Teks yang tidak pantas akan mengakibatkan pemblokiran (ban) dari BetterCrewLink."
+				"enable_warning": "Menghidupkan ini akan membuat lobi Anda terbuka untuk pengguna BetterCrewLinkKai lainnya!",
+				"ban_warning": "Teks yang tidak pantas akan mengakibatkan pemblokiran (ban) dari BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Overlay",
-			"always_on_top": "BetterCrewLink Di Atas",
+			"always_on_top": "BetterCrewLinkKai Di Atas",
 			"enabled": "Hidupkan Overlay",
 			"compact": "Overlay Kemas",
 			"meeting": "Overlay Meeting",
@@ -88,7 +88,7 @@
 			"change_server": "Ubah Server Suara",
 			"voice_server": "Server Suara",
 			"invalid_url": "URL tidak valid",
-			"voice_server_warning": "Opsi ini hanya untuk pengguna tingkat lanjut. Server lain bisa mencuri info Anda atau merusak BetterCrewLink.",
+			"voice_server_warning": "Opsi ini hanya untuk pengguna tingkat lanjut. Server lain bisa mencuri info Anda atau merusak BetterCrewLinkKai.",
 			"reset_default": "Setel Ulang Bawaan"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "Overlay OBS Browser",
 			"obs_url": "URL OBS Browser Source",
 			"voice_server_comp": "Mode Kompatibilitas Server Suara",
-			"voice_server_comp_warning": "Disarankan untuk hanya mengubah server suara ke Server Suara BetterCrewLink misalnya (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Disarankan untuk hanya mengubah server suara ke Server Suara BetterCrewLinkKai misalnya (https://bettercrewl.ink)."
 		},
 		"troubleshooting": {
 			"title": "Penyelesaian masalah",
@@ -152,9 +152,9 @@
 		"open_error": "Mulai Among Us secara manual.",
 		"waiting": "Menunggu Among Us",
 		"error": "KESALAHAN",
-		"error_admin": "Tidak bisa terhubung ke Among Us.\nHarap buka kembali BetterCrewLink sebagai Administrator.",
+		"error_admin": "Tidak bisa terhubung ke Among Us.\nHarap buka kembali BetterCrewLinkKai sebagai Administrator.",
 		"error_platform": "Tidak Ada Platform yang Terdeteksi",
-		"error_unsupport": "Versi Among Us Anda tidak didukung oleh BetterCrewLink."
+		"error_unsupport": "Versi Among Us Anda tidak didukung oleh BetterCrewLinkKai."
 	},
 	"platform": {
 		"steam": "Steam",

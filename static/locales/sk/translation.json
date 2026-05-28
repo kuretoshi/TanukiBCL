@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Prekrytie",
-			"always_on_top": "BetterCrewLink na vrchu",
+			"always_on_top": "BetterCrewLinkKai na vrchu",
 			"enabled": "Povoliť prekrytie",
 			"compact": "Kompaktné prekrytie",
 			"meeting": "Mítingové prekrytie",
@@ -88,7 +88,7 @@
 			"change_server": "Zmeniť hlasový server",
 			"voice_server": "Hlasový server",
 			"invalid_url": "Neplatná URL",
-			"voice_server_warning": "Táto možnosť je iba pre pokročilých používateľov. Ostatné servery môžu ukradnúť tvoje informácie alebo spadnúť BetterCrewLink.",
+			"voice_server_warning": "Táto možnosť je iba pre pokročilých používateľov. Ostatné servery môžu ukradnúť tvoje informácie alebo spadnúť BetterCrewLinkKai.",
 			"reset_default": "Obnoviť pôvodné nastavenia"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS prekrytie prehliadača",
 			"obs_url": "OBS URL zdroj",
 			"voice_server_comp": "Režim kompatibility HS",
-			"voice_server_comp_warning": "Odporúča sa hlasový server BetterCrewLink (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Odporúča sa hlasový server BetterCrewLinkKai (https://bettercrewl.ink)."
 		},
 		"troubleshooting": {
 			"title": "Riešenie problémov",
@@ -152,9 +152,9 @@
 		"open_error": "Spusti Among Us manuálne.",
 		"waiting": "Čaká sa na Among Us",
 		"error": "CHYBA",
-		"error_admin": "Nepodarilo sa pripojiť k Among Us.\n Prosím, znovu otvor BetterCrewLink ako administrátor.",
+		"error_admin": "Nepodarilo sa pripojiť k Among Us.\n Prosím, znovu otvor BetterCrewLinkKai ako administrátor.",
 		"error_platform": "Nezistená žiadna platforma",
-		"error_unsupport": "Tvoja verzia Among Us nie je BetterCrewLinkom podporovaná."
+		"error_unsupport": "Tvoja verzia Among Us nie je BetterCrewLinkKaiom podporovaná."
 	},
 	"platform": {
 		"steam": "Steam",

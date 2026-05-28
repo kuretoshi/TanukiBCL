@@ -29,8 +29,8 @@
 				"enabled": "로비가 공개 상태입니다",
 				"mods": "모드",
 				"language": "언어",
-				"enable_warning": "다른 BetterCrewLink 사용자들에게 해당 로비를 공개하게 됩니다!",
-				"ban_warning": "부적절한 메시지를 보낼 경우 BetterCrewLink에서 차단당하실 수 있습니다."
+				"enable_warning": "다른 BetterCrewLinkKai 사용자들에게 해당 로비를 공개하게 됩니다!",
+				"ban_warning": "부적절한 메시지를 보낼 경우 BetterCrewLinkKai에서 차단당하실 수 있습니다."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "오버레이",
-			"always_on_top": "BetterCrewLink를 항상 위에 표시",
+			"always_on_top": "BetterCrewLinkKai를 항상 위에 표시",
 			"enabled": "오버레이 활성화",
 			"compact": "간략한 오버레이",
 			"meeting": "회의 오버레이",
@@ -88,7 +88,7 @@
 			"change_server": "음성 서버 변경",
 			"voice_server": "음성 서버",
 			"invalid_url": "유효하지 않은 URL",
-			"voice_server_warning": "이 설정은 고급 사용자용입니다. 다른 서버에서는 정보를 탈취하거나 BetterCrewLink에 오류를 발생시킬 수도 있습니다.",
+			"voice_server_warning": "이 설정은 고급 사용자용입니다. 다른 서버에서는 정보를 탈취하거나 BetterCrewLinkKai에 오류를 발생시킬 수도 있습니다.",
 			"reset_default": "기본값으로 초기화"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS 브라우저 오버레이",
 			"obs_url": "OBS 브라우저 소스 URL",
 			"voice_server_comp": "음성 서버 호환 모드",
-			"voice_server_comp_warning": "예를 들어서 음성 서버를 BetterCrewLink 음성 서버(https://bettercrewl.ink)로 변경하는 것을 권장드립니다."
+			"voice_server_comp_warning": "예를 들어서 음성 서버를 BetterCrewLinkKai 음성 서버(https://bettercrewl.ink)로 변경하는 것을 권장드립니다."
 		},
 		"troubleshooting": {
 			"title": "문제 해결",
@@ -152,9 +152,9 @@
 		"open_error": "Among Us를 수동으로 실행하세요.",
 		"waiting": "Among Us 대기 중",
 		"error": "오류",
-		"error_admin": "Among Us에 연결할 수 없습니다.\n관리자 권한으로 BetterCrewLink를 다시 열어 주세요.",
+		"error_admin": "Among Us에 연결할 수 없습니다.\n관리자 권한으로 BetterCrewLinkKai를 다시 열어 주세요.",
 		"error_platform": "플랫폼을 찾을 수 없음",
-		"error_unsupport": "BetterCrewLink에서 아직 이 버전의 Amoug Us를 지원하지 않습니다."
+		"error_unsupport": "BetterCrewLinkKai에서 아직 이 버전의 Amoug Us를 지원하지 않습니다."
 	},
 	"platform": {
 		"steam": "Steam",

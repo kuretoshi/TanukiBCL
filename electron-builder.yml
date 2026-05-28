@@ -1,5 +1,5 @@
-appId: net.ottomated.crewlink.beta.local
-productName: Better-CrewLink
+appId: net.ottomated.crewlinkkai.beta.local
+productName: Better-CrewLinkKai
 copyright: Copyright © 2021 OhMyGuus
 directories:
   output: dist
@@ -11,6 +11,7 @@ files:
       - app
 
 win:
+  executableName: Better-CrewLinkKai
   publish:
     - github
 nsis:

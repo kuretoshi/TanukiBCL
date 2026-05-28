@@ -29,8 +29,8 @@
 				"enabled": "The Lobby is Public",
 				"mods": "Mods",
 				"language": "Language",
-				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLink users!",
-				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLink."
+				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
+				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Superposició",
-			"always_on_top": "BetterCrewLink on Top",
+			"always_on_top": "BetterCrewLinkKai on Top",
 			"enabled": "Activar Superposició",
 			"compact": "Superposició Compacta",
 			"meeting": "Superposició de Reunions",

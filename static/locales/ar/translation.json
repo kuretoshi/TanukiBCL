@@ -29,8 +29,8 @@
 				"enabled": "الردهة عامة",
 				"mods": "التعديلات",
 				"language": "اللغة",
-				"enable_warning": "تفعيل هذا سيؤدي إلى جعل الردهة الخاصة بك عامة لمستخدمي BetterCrewLink الآخرين!",
-				"ban_warning": "سيؤدي النص الغير مناسب إلى حظر من BetterCrewLink."
+				"enable_warning": "تفعيل هذا سيؤدي إلى جعل الردهة الخاصة بك عامة لمستخدمي BetterCrewLinkKai الآخرين!",
+				"ban_warning": "سيؤدي النص الغير مناسب إلى حظر من BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "تراكب",
-			"always_on_top": "BetterCrewLink على القمة",
+			"always_on_top": "BetterCrewLinkKai على القمة",
 			"enabled": "تمكين التراكب",
 			"compact": "تراكب مضغوط",
 			"meeting": "تراكب الاجتماع",
@@ -88,7 +88,7 @@
 			"change_server": "تغيير خادم الصوت",
 			"voice_server": "خادم الصوت",
 			"invalid_url": "URL غير صالح",
-			"voice_server_warning": "هذا الخيار للمستخدمين المتقدمين فقط. يمكن للخوادم الأخرى سرقة معلوماتك أو تعطل BetterCrewLink.",
+			"voice_server_warning": "هذا الخيار للمستخدمين المتقدمين فقط. يمكن للخوادم الأخرى سرقة معلوماتك أو تعطل BetterCrewLinkKai.",
 			"reset_default": "إعادة تعيين إلى الافتراضي"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "تراكب متصفح OBS",
 			"obs_url": "عنوان URL لمصدر متصفح OBS",
 			"voice_server_comp": "وضع التوافق مع خادم الصوت",
-			"voice_server_comp_warning": "يوصى بتغيير خادم الصوت إلى خادم صوت BetterCrewLink (https://bettercrewl.ink) على سبيل المثال."
+			"voice_server_comp_warning": "يوصى بتغيير خادم الصوت إلى خادم صوت BetterCrewLinkKai (https://bettercrewl.ink) على سبيل المثال."
 		},
 		"troubleshooting": {
 			"title": "استكشاف الأخطاء وإصلاحها",
@@ -152,9 +152,9 @@
 		"open_error": "ابدأ Among Us يدوياً.",
 		"waiting": "انتظار Among Us",
 		"error": "خطأ",
-		"error_admin": "تعذر الاتصال بـ Among Us.\nالرجاء إعادة فتح BetterCrewLink كمسؤول.",
+		"error_admin": "تعذر الاتصال بـ Among Us.\nالرجاء إعادة فتح BetterCrewLinkKai كمسؤول.",
 		"error_platform": "لم يتم اكتشاف أي منصة",
-		"error_unsupport": "الإصدار الخاص بك من Among Us غير مدعوم من قبل BetterCrewLink."
+		"error_unsupport": "الإصدار الخاص بك من Among Us غير مدعوم من قبل BetterCrewLinkKai."
 	},
 	"platform": {
 		"steam": "Steam",

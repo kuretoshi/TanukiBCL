@@ -29,8 +29,8 @@
 				"enabled": "Poczekalnia jest publiczna",
 				"mods": "Modyfikacje",
 				"language": "Język",
-				"enable_warning": "Włączenie tego sprawi, że Twoja poczekalnia stanie się publiczna dla innych użytkowników BetterCrewLink!",
-				"ban_warning": "Nieodpowiednia nazwa spowoduje otrzymanie blokady od BetterCrewLink."
+				"enable_warning": "Włączenie tego sprawi, że Twoja poczekalnia stanie się publiczna dla innych użytkowników BetterCrewLinkKai!",
+				"ban_warning": "Nieodpowiednia nazwa spowoduje otrzymanie blokady od BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Nakładka",
-			"always_on_top": "BetterCrewLink na wierzchu",
+			"always_on_top": "BetterCrewLinkKai na wierzchu",
 			"enabled": "Włącz nakładkę",
 			"compact": "Schowaj nakładkę",
 			"meeting": "Nakładka na spotkania",
@@ -88,7 +88,7 @@
 			"change_server": "Zmień serwer głosowy",
 			"voice_server": "Serwer głosowy",
 			"invalid_url": "Nieprawidłowy adres URL",
-			"voice_server_warning": "Ta opcja jest tylko dla zaawansowanych użytkowników. Inne serwery mogą ukraść twoje informacje lub spowodować awarię BetterCrewLink.",
+			"voice_server_warning": "Ta opcja jest tylko dla zaawansowanych użytkowników. Inne serwery mogą ukraść twoje informacje lub spowodować awarię BetterCrewLinkKai.",
 			"reset_default": "Przywróć domyślne ustawienia"
 		},
 		"beta": {
@@ -152,9 +152,9 @@
 		"open_error": "Uruchom Among Us ręcznie.",
 		"waiting": "Oczekiwanie na uruchomienie Among Us",
 		"error": "BŁĄD",
-		"error_admin": "Nie można połączyć się z Among Us.\nProszę otworzyć BetterCrewLink jako administrator.",
+		"error_admin": "Nie można połączyć się z Among Us.\nProszę otworzyć BetterCrewLinkKai jako administrator.",
 		"error_platform": "Nie wykryto platformy",
-		"error_unsupport": "BetterCrewLink nie wspiera twojej wersji Among Us."
+		"error_unsupport": "BetterCrewLinkKai nie wspiera twojej wersji Among Us."
 	},
 	"platform": {
 		"steam": "Steam",

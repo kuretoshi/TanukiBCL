@@ -29,8 +29,8 @@
 				"enabled": "Відкрита кімната",
 				"mods": "Моди",
 				"language": "Мова",
-				"enable_warning": "Це відкриє кімнату для інших користувачів BetterCrewLink!",
-				"ban_warning": "Недоречні висловлювання приведуть до заборони використання BetterCrewLink."
+				"enable_warning": "Це відкриє кімнату для інших користувачів BetterCrewLinkKai!",
+				"ban_warning": "Недоречні висловлювання приведуть до заборони використання BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Оверлей",
-			"always_on_top": "BetterCrewLink на передньому плані",
+			"always_on_top": "BetterCrewLinkKai на передньому плані",
 			"enabled": "Увімкнути оверлей",
 			"compact": "Компактний оверлей",
 			"meeting": "Оверлей на зборах",
@@ -88,7 +88,7 @@
 			"change_server": "Змінити голосовий сервер",
 			"voice_server": "Голосовий сервер",
 			"invalid_url": "Неправильний URL",
-			"voice_server_warning": "Це налаштування тільки для просунутих користувачів. Інші сервери можуть вкрасти ваші дані або викликати падіння BetterCrewLink.",
+			"voice_server_warning": "Це налаштування тільки для просунутих користувачів. Інші сервери можуть вкрасти ваші дані або викликати падіння BetterCrewLinkKai.",
 			"reset_default": "Скинути налаштування"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "Оверлей OBS-браузера",
 			"obs_url": "URL OBS-браузера",
 			"voice_server_comp": "Режим сумісності ГС",
-			"voice_server_comp_warning": "Рекомендується просто змінити голосовий сервер, наприклад, на Голосовий сервер BetterCrewLink (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Рекомендується просто змінити голосовий сервер, наприклад, на Голосовий сервер BetterCrewLinkKai (https://bettercrewl.ink)."
 		},
 		"troubleshooting": {
 			"title": "Вирішення проблем",
@@ -152,9 +152,9 @@
 		"open_error": "Запустіть Among Us вручну.",
 		"waiting": "Очікування Among Us",
 		"error": "ПОМИЛКА",
-		"error_admin": "Неможливо під'єднатися до Among Us.\nБудь ласка, відкрийте BetterCrewLink знову як адміністратор.",
+		"error_admin": "Неможливо під'єднатися до Among Us.\nБудь ласка, відкрийте BetterCrewLinkKai знову як адміністратор.",
 		"error_platform": "Не виявлено платформи",
-		"error_unsupport": "Ваша версія Among Us не підтримується BetterCrewLink."
+		"error_unsupport": "Ваша версія Among Us не підтримується BetterCrewLinkKai."
 	},
 	"platform": {
 		"steam": "Steam",

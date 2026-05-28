@@ -29,8 +29,8 @@
 				"enabled": "A lobby publikus",
 				"mods": "Modok",
 				"language": "Nyelv",
-				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLink users!",
-				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLink."
+				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
+				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
 			}
 		},
 		"customplatforms": {
@@ -66,7 +66,7 @@
 		},
 		"overlay": {
 			"title": "Overlay",
-			"always_on_top": "BetterCrewLink on Top",
+			"always_on_top": "BetterCrewLinkKai on Top",
 			"enabled": "Enable Overlay",
 			"compact": "Compact Overlay",
 			"meeting": "Meeting Overlay",
@@ -88,7 +88,7 @@
 			"change_server": "Change Voice Server",
 			"voice_server": "Hangátviteli szerverek",
 			"invalid_url": "Érvénytelen URL",
-			"voice_server_warning": "This option is for advanced users only. Other servers can steal your info or crash BetterCrewLink.",
+			"voice_server_warning": "This option is for advanced users only. Other servers can steal your info or crash BetterCrewLinkKai.",
 			"reset_default": "Alapértékek visszaállítása"
 		},
 		"beta": {
@@ -110,7 +110,7 @@
 			"obs_overlay": "OBS Böngésző Overlay",
 			"obs_url": "OBS Böngésző Overlay Link",
 			"voice_server_comp": "VS Kompatibilitási mód használata",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLink Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
 		},
 		"troubleshooting": {
 			"title": "Hibaelhárítás",
@@ -152,9 +152,9 @@
 		"open_error": "Start the Among Us manually.",
 		"waiting": "Waiting for Among Us",
 		"error": "HIBA",
-		"error_admin": "Couldn't connect to Among Us.\nPlease re-open BetterCrewLink as Administrator.",
+		"error_admin": "Couldn't connect to Among Us.\nPlease re-open BetterCrewLinkKai as Administrator.",
 		"error_platform": "No platform detected",
-		"error_unsupport": "Your version of Among Us is unsupported by BetterCrewLink."
+		"error_unsupport": "Your version of Among Us is unsupported by BetterCrewLinkKai."
 	},
 	"platform": {
 		"steam": "Steam",
