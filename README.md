@@ -94,7 +94,7 @@ npm.cmd run compile
 .\node_modules\.bin\electron-builder.cmd --win --x64 --config.npmRebuild=false
 ```
 
-生成物は `dist\Better-CrewLinkKai Setup 3.1.5-5.exe` に出力されます。
+生成物は `dist\Better-CrewLinkKai-Setup-3.1.5-6.exe` に出力されます。
 
 ### Windows 32bit / 64bit ビルド
 

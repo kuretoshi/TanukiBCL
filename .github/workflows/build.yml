@@ -15,10 +15,10 @@ jobs:
         include:
          - os: windows-latest
            dist: 'dist'
-           installer: 'dist/Better-CrewLink Setup*.exe'
+           installer: 'dist/Better-CrewLinkKai-Setup*.exe'
          - os: ubuntu-latest
            dist: 'dist:linux'
-           installer: 'dist/Better-CrewLink-*.AppImage'
+           installer: 'dist/Better-CrewLinkKai-*.AppImage'
 
 
     steps:

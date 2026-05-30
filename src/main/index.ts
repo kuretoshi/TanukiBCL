@@ -9,7 +9,7 @@ import { format as formatUrl } from 'url';
 import './hook';
 import { overlayWindow } from 'electron-overlay-window';
 import { initializeIpcHandlers, initializeIpcListeners } from './ipc-handlers';
-import { IpcRendererMessages, IpcHandlerMessages } from '../common/ipc-messages';
+import { AutoUpdaterState, IpcRendererMessages, IpcHandlerMessages } from '../common/ipc-messages';
 import { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
 import { protocol } from 'electron';
 import Store from 'electron-store';
@@ -22,7 +22,9 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 const devTools = (isDevelopment || args.dev === 1) && true;
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
-const shouldCheckForUpdates = !isDevelopment && !rawAppVersion.includes('-');
+const shouldCheckForUpdates = !isDevelopment;
+let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
+let hasCheckedForUpdates = false;
 
 declare global {
 	var mainWindow: BrowserWindow | null;
@@ -67,6 +69,43 @@ function closeAppWindows() {
 			/* empty */
 		}
 	}
+}
+
+function sendAutoUpdaterState(state: AutoUpdaterState) {
+	latestAutoUpdaterState = { ...latestAutoUpdaterState, ...state };
+	try {
+		global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, latestAutoUpdaterState);
+	} catch {
+		/* empty */
+	}
+}
+
+function isMissingUpdateMetadataError(err: Error | unknown): boolean {
+	const message = err instanceof Error ? err.message : String(err);
+	return message.includes('404') && message.includes('latest.yml');
+}
+
+function sendAutoUpdaterError(err: Error | unknown) {
+	if (isMissingUpdateMetadataError(err)) {
+		sendAutoUpdaterState({
+			state: 'unavailable',
+		});
+		return;
+	}
+
+	sendAutoUpdaterState({
+		state: 'error',
+		error: err instanceof Error ? err.message : String(err),
+	});
+}
+
+function checkForUpdates() {
+	if (!shouldCheckForUpdates || hasCheckedForUpdates) {
+		return;
+	}
+
+	hasCheckedForUpdates = true;
+	autoUpdater.checkForUpdates().catch(sendAutoUpdaterError);
 }
 
 function createMainWindow() {
@@ -119,6 +158,12 @@ function createMainWindow() {
 	}
 	//window.webContents.userAgent = `CrewLink/${crewlinkVersion} (${process.platform})`;
 	window.webContents.userAgent = `BetterCrewLinkKai/${appVersion} (${process.platform})`;
+	window.webContents.once('did-finish-load', () => {
+		if (latestAutoUpdaterState.state !== 'unavailable') {
+			sendAutoUpdaterState(latestAutoUpdaterState);
+		}
+		checkForUpdates();
+	});
 
 	window.on('close', () => {
 		if (!isQuitting) {
@@ -249,38 +294,26 @@ if (!gotTheLock) {
 	app.quit();
 } else {
 	autoUpdater.autoDownload = false;
-	if (shouldCheckForUpdates) {
-		autoUpdater.checkForUpdates();
-	}
+	autoUpdater.allowPrerelease = true;
 	autoUpdater.on('update-available', (info: UpdateInfo) => {
-		try {
-			global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, {
-				state: 'available',
-				info: info,
-			});
-		} catch (e) {
-			/* Empty block */
-		}
+		sendAutoUpdaterState({
+			state: 'available',
+			info: info,
+		});
 	});
-	autoUpdater.on('error', (err: string) => {
-		try {
-			global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, {
-				state: 'error',
-				error: err,
-			});
-		} catch (e) {
-			/*empty*/
-		}
+	autoUpdater.on('update-not-available', () => {
+		sendAutoUpdaterState({
+			state: 'unavailable',
+		});
+	});
+	autoUpdater.on('error', (err: Error) => {
+		sendAutoUpdaterError(err);
 	});
 	autoUpdater.on('download-progress', (progress: ProgressInfo) => {
-		try {
-			global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, {
-				state: 'downloading',
-				progress,
-			});
-		} catch (e) {
-			/*empty*/
-		}
+		sendAutoUpdaterState({
+			state: 'downloading',
+			progress,
+		});
 	});
 	autoUpdater.on('update-downloaded', () => {
 		autoUpdater.quitAndInstall();

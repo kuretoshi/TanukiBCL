@@ -271,7 +271,7 @@ export default function App({ t }): JSX.Element {
 											<Button
 												color="grey"
 												onClick={() => {
-													shell.openExternal("https://github.com/OhMyGuus/BetterCrewLink/releases/latest");
+													shell.openExternal("https://github.com/kuretoshi/BetterCrewLink/releases/latest");
 												}}
 											>
 												Download Manually

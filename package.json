@@ -1,11 +1,11 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.1.5-5",
+	"version": "3.1.5-6",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/OhMyGuus/BetterCrewLink.git"
+		"url": "https://github.com/kuretoshi/BetterCrewLink.git"
 	},
 	"funding": {
 		"type": "individual",

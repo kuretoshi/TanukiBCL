@@ -132,6 +132,10 @@ const DEFAULT_ICE_CONFIG_TURN: RTCConfiguration = {
 	],
 };
 
+const PEER_RECONNECT_DELAY_MS = 1500;
+const PEER_TRACK_STALL_RECONNECT_MS = 4000;
+const PEER_RELAY_FALLBACK_AFTER_ATTEMPTS = 2;
+
 export interface VoiceProps {
 	t: (key: string) => string;
 	error: string;
@@ -260,6 +264,8 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const [peerConnections, setPeerConnections] = useState<PeerConnections>({});
 	const peerConnectionsRef = useRef<PeerConnections>({});
 	const reconnectTimers = useRef<{ [peer: string]: number }>({});
+	const reconnectAttempts = useRef<{ [peer: string]: number }>({});
+	const stalledAudioTimers = useRef<{ [peer: string]: number }>({});
 	const intentionalDisconnects = useRef<{ [peer: string]: boolean }>({});
 	const convolverBuffer = useRef<AudioBuffer | null>(null);
 	const playerSocketIdsRef = useRef<numberStringMap>({});
@@ -619,10 +625,18 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		}
 	}
 
+	function clearStalledAudioTimer(peer: string) {
+		if (stalledAudioTimers.current[peer]) {
+			window.clearTimeout(stalledAudioTimers.current[peer]);
+			delete stalledAudioTimers.current[peer];
+		}
+	}
+
 	function removePeerConnection(peer: string) {
 		delete peerConnectionsRef.current[peer];
 		setPeerConnections({ ...peerConnectionsRef.current });
 		setAudioConnected((old) => ({ ...old, [peer]: false }));
+		clearStalledAudioTimer(peer);
 		disconnectAudioElement(peer);
 	}
 
@@ -978,10 +992,12 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		});
 
 		socket.on('setClient', (socketId: string, client: Client) => {
-			setSocketClients((old) => ({ ...old, [socketId]: client }));
+			socketClientsRef.current = { ...socketClientsRef.current, [socketId]: client };
+			setSocketClients({ ...socketClientsRef.current });
 		});
 
 		socket.on('setClients', (clients: SocketClientMap) => {
+			socketClientsRef.current = clients;
 			setSocketClients(clients);
 		});
 
@@ -1143,7 +1159,56 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						removePeerConnection(peer);
 					}
 					createPeerConnection(peer, initiator, client);
-				}, 1500);
+				}, PEER_RECONNECT_DELAY_MS);
+			}
+
+			function getPeerIceConfig(peer: string): RTCConfiguration {
+				if (
+					settingsRef.current.natFix ||
+					reconnectAttempts.current[peer] >= PEER_RELAY_FALLBACK_AFTER_ATTEMPTS
+				) {
+					return DEFAULT_ICE_CONFIG_TURN;
+				}
+
+				return iceConfig;
+			}
+
+			function markPeerUnstable(peer: string) {
+				reconnectAttempts.current[peer] = (reconnectAttempts.current[peer] || 0) + 1;
+			}
+
+			function markPeerHealthy(peer: string) {
+				reconnectAttempts.current[peer] = 0;
+			}
+
+			function watchRemoteAudioTrack(peer: string, client: Client, initiator: boolean, stream: MediaStream) {
+				clearStalledAudioTimer(peer);
+				const track = stream.getAudioTracks()[0];
+				if (!track) {
+					markPeerUnstable(peer);
+					schedulePeerReconnect(peer, client, initiator, true);
+					return;
+				}
+
+				track.onmute = () => {
+					clearStalledAudioTimer(peer);
+					stalledAudioTimers.current[peer] = window.setTimeout(() => {
+						delete stalledAudioTimers.current[peer];
+						console.log('Remote audio track stayed muted, reconnecting:', peer);
+						markPeerUnstable(peer);
+						schedulePeerReconnect(peer, client, initiator, true);
+					}, PEER_TRACK_STALL_RECONNECT_MS);
+				};
+				track.onunmute = () => {
+					clearStalledAudioTimer(peer);
+					markPeerHealthy(peer);
+				};
+				track.onended = () => {
+					clearStalledAudioTimer(peer);
+					console.log('Remote audio track ended, reconnecting:', peer);
+					markPeerUnstable(peer);
+					schedulePeerReconnect(peer, client, initiator, true);
+				};
 			}
 
 			function createPeerConnection(peer: string, initiator: boolean, client: Client) {
@@ -1160,7 +1225,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					stream,
 					initiator, // @ts-ignore-line
 					iceRestartEnabled: true,
-					config: settingsRef.current.natFix ? DEFAULT_ICE_CONFIG_TURN : iceConfig,
+					config: getPeerIceConfig(peer),
 				});
 
 				peerConnectionsRef.current[peer] = connection;
@@ -1186,11 +1251,25 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						const state = rtcConnection.iceConnectionState;
 						console.log('ICE connection state:', peer, state);
 						if (state === 'failed') {
+							markPeerUnstable(peer);
 							removePeerConnection(peer);
 							connection.destroy();
 							schedulePeerReconnect(peer, client, initiator);
 						} else if (state === 'disconnected') {
+							markPeerUnstable(peer);
 							schedulePeerReconnect(peer, client, initiator, true);
+						} else if (state === 'connected' || state === 'completed') {
+							clearStalledAudioTimer(peer);
+						}
+					};
+					rtcConnection.onconnectionstatechange = () => {
+						const state = rtcConnection.connectionState;
+						console.log('Peer connection state:', peer, state);
+						if (state === 'failed' || state === 'disconnected') {
+							markPeerUnstable(peer);
+							schedulePeerReconnect(peer, client, initiator, true);
+						} else if (state === 'connected') {
+							clearStalledAudioTimer(peer);
 						}
 					};
 				}
@@ -1198,6 +1277,8 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				connection.on('stream', async (stream: MediaStream) => {
 					console.log('ONSTREAM');
 
+					markPeerHealthy(peer);
+					watchRemoteAudioTrack(peer, client, initiator, stream);
 					setAudioConnected((old) => ({ ...old, [peer]: true }));
 					const dummyAudio = new Audio();
 					dummyAudio.srcObject = stream;
@@ -1286,19 +1367,22 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					delete intentionalDisconnects.current[peer];
 					removePeerConnection(peer);
 					if (!wasIntentional) {
+						markPeerUnstable(peer);
 						schedulePeerReconnect(peer, client, initiator);
 					}
 				});
 				connection.on('error', (err) => {
 					console.log('Peer error:', peer, err);
+					markPeerUnstable(peer);
 					schedulePeerReconnect(peer, client, initiator, true);
 				});
 				return connection;
 			}
 
 			socket.on('join', async (peer: string, client: Client) => {
+				socketClientsRef.current = { ...socketClientsRef.current, [peer]: client };
+				setSocketClients({ ...socketClientsRef.current });
 				createPeerConnection(peer, true, client);
-				setSocketClients((old) => ({ ...old, [peer]: client }));
 			});
 
 			socket.on('signal', ({ data, from, client }: { data: Peer.SignalData; from: string, client: Client }) => {
@@ -1315,6 +1399,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					return;
 				}
 				let connection: Peer.Instance;
+				if (!socketClientsRef.current[from] && client) {
+					socketClientsRef.current = { ...socketClientsRef.current, [from]: client };
+					setSocketClients({ ...socketClientsRef.current });
+				}
 				if (!socketClientsRef.current[from]) {
 					console.warn('SIGNAL FROM UNKOWN SOCKET..');
 					return;
@@ -1345,6 +1433,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				disconnectPeer(k);
 			});
 			Object.keys(reconnectTimers.current).forEach(clearReconnectTimer);
+			Object.keys(stalledAudioTimers.current).forEach(clearStalledAudioTimer);
 			connectionStuff.current.socket?.close();
 
 			audioListener?.destroy();

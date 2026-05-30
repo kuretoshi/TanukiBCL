@@ -13,11 +13,18 @@ files:
 win:
   executableName: Better-CrewLinkKai
   publish:
-    - github
+    - provider: github
+      owner: kuretoshi
+      repo: BetterCrewLink
+      releaseType: release
 nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
   include: resources/installer.nsh
 linux:
   target:
     - "AppImage"
   publish:
-    - github
+    - provider: github
+      owner: kuretoshi
+      repo: BetterCrewLink
+      releaseType: release

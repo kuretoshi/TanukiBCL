@@ -11,10 +11,14 @@ jobs:
         include:
          - os: windows-latest
            dist: 'publish'
-           installer: 'dist/Better-CrewLink Setup*.exe'
+           installer: |
+             dist/Better-CrewLinkKai-Setup*.exe
+             dist/latest.yml
          - os: ubuntu-latest
            dist: 'publish:linux'
-           installer: 'dist/Better-CrewLink-*.AppImage'
+           installer: |
+             dist/Better-CrewLinkKai-*.AppImage
+             dist/latest-linux.yml
 
     steps:
       - name: Check out Git repository
