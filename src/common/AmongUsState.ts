@@ -35,6 +35,12 @@ export interface Player {
 	petId: number;
 	skinId: string;
 	visorId: string;
+	currentOutfit: number;
+	appearanceName: string;
+	appearanceColorId: number;
+	appearanceHatId: string;
+	appearanceSkinId: string;
+	appearanceVisorId: string;
 	appearanceId: string;
 	disconnected: boolean;
 	roleTeam: number;

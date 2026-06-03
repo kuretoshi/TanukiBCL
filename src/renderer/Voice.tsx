@@ -312,7 +312,16 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	function applyVoiceEffect(gain: AudioNode, effect: VoiceDisguiseEffect, destination: AudioNode, player: Player) {
 		console.log('Apply voice disguise effect->', player.name);
 		try {
-			gain.disconnect(destination);
+			try {
+				gain.disconnect();
+			} catch {
+				// Already disconnected.
+			}
+			try {
+				effect.output.disconnect();
+			} catch {
+				// Already disconnected.
+			}
 			gain.connect(effect.input);
 			effect.output.connect(destination);
 		} catch {
@@ -323,8 +332,16 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	function restoreVoiceEffect(gain: AudioNode, effect: VoiceDisguiseEffect, destination: AudioNode, player: Player) {
 		console.log('Restore voice disguise effect->', player.name);
 		try {
-			effect.output.disconnect(destination);
-			gain.disconnect(effect.input);
+			try {
+				effect.output.disconnect();
+			} catch {
+				// Already disconnected.
+			}
+			try {
+				gain.disconnect();
+			} catch {
+				// Already disconnected.
+			}
 			gain.connect(destination);
 		} catch {
 			console.log('error with restoring voice disguise effect: ', player.name);
@@ -332,11 +349,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}
 
 	function restoreTransientEffects(audio: AudioNodes, player: Player) {
-		const { gain, muffle, reverb, voiceEffect, destination } = audio;
+		const { gain, muffle, reverb, destination } = audio;
 
 		if (audio.voiceEffectConnected) {
-			audio.voiceEffectConnected = false;
-			restoreVoiceEffect(gain, voiceEffect, destination, player);
+			restoreVoiceDisguiseRoute(audio, player);
 		}
 		if (audio.reverbConnected) {
 			audio.reverbConnected = false;
@@ -348,8 +364,30 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		}
 	}
 
+	function restoreVoiceDisguiseRoute(audio: AudioNodes, player: Player) {
+		restoreVoiceEffect(audio.gain, audio.voiceEffect, audio.destination, player);
+		audio.voiceEffectConnected = false;
+		audio.reverbConnected = false;
+		audio.muffleConnected = false;
+	}
+
 	function getAppearanceKey(player: Player): string {
 		return player.appearanceId || `${player.colorId}|${player.hatId}|${player.skinId}|${player.visorId}`;
+	}
+
+	function hasCurrentAppearanceChanged(player: Player): boolean {
+		return (
+			player.appearanceColorId !== player.colorId ||
+			player.appearanceHatId !== player.hatId ||
+			player.appearanceSkinId !== player.skinId ||
+			player.appearanceVisorId !== player.visorId
+		);
+	}
+
+	function hasAppearanceNameChanged(player: Player): boolean {
+		const originalName = (player.name || '').trim();
+		const appearanceName = (player.appearanceName || '').trim();
+		return Boolean(originalName && appearanceName && appearanceName !== originalName);
 	}
 
 	function isVoiceDisguiseEffectActive(state: AmongUsState, player: Player): boolean {
@@ -357,12 +395,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			return false;
 		}
 
-		const baselineAppearance = appearanceBaselineRef.current[player.clientId];
-		if (!baselineAppearance || player.disconnected || player.bugged || player.isDead) {
+		if (player.disconnected || player.bugged || player.isDead) {
 			return false;
 		}
 
-		return getAppearanceKey(player) !== baselineAppearance;
+		if (state.mushroomMixupSabotaged) {
+			return hasCurrentAppearanceChanged(player);
+		}
+
+		return hasAppearanceNameChanged(player);
 	}
 
 	function canHearGhosts(player: Player): boolean {
@@ -393,6 +434,9 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			restoreTransientEffects(audio, other);
 			return 0;
 		};
+		if (audio.voiceEffectConnected && !isVoiceDisguiseEffectActive(state, other)) {
+			restoreVoiceDisguiseRoute(audio, other);
+		}
 
 		if (other.disconnected || other.isDummy) {
 			return muteAudio();
@@ -411,7 +455,12 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				if (lobbySettings.meetingGhostOnly) {
 					endGain = 0;
 				}
-				if (!me.isDead && lobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor) {
+				if (
+					!me.isDead &&
+					lobbySettings.commsSabotage &&
+					state.comsSabotaged &&
+					!me.isImpostor
+				) {
 					endGain = 0;
 				}
 
@@ -560,8 +609,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			}
 		}
 		if (audio.voiceEffectConnected && !voiceEffectEnabled) {
-			audio.voiceEffectConnected = false;
-			restoreVoiceEffect(gain, voiceEffect, destination, other);
+			restoreVoiceDisguiseRoute(audio, other);
 		}
 		if (endGain <= 0) {
 			restoreTransientEffects(audio, other);
@@ -860,6 +908,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		if (!gameState.players) return;
 
 		if (gameState.gameState === GameState.TASKS) {
+			if (gameState.mushroomMixupSabotaged) {
+				return;
+			}
+
 			if (Object.keys(appearanceBaselineRef.current).length === 0) {
 				appearanceBaselineRef.current = gameState.players.reduce((baseline: AppearanceBaseline, player) => {
 					if (!player.disconnected && !player.bugged) {
@@ -1677,7 +1729,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						<div>
 							<div className={classes.left}>
 								{myPlayer && gameState?.gameState !== GameState.MENU && (
-									<span className={classes.username}>{myPlayer.name}</span>
+									<span className={classes.username}>{myPlayer.appearanceName || myPlayer.name}</span>
 								)}
 								<span
 									className={classes.code}

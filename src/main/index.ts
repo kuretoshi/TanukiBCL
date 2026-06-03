@@ -23,6 +23,12 @@ const devTools = (isDevelopment || args.dev === 1) && true;
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
 const shouldCheckForUpdates = !isDevelopment;
+const overlayTargetName = String(args['target-name'] || args.targetName || args['target-window'] || args.targetWindow || 'Among Us');
+const allowMultiInstance =
+	args['multi-instance'] === true ||
+	args.multiInstance === true ||
+	process.env.BETTERCREWLINK_ALLOW_MULTI_INSTANCE === '1' ||
+	/multi[-_ ]?instance/i.test(process.execPath);
 let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
 let hasCheckedForUpdates = false;
 
@@ -284,12 +290,12 @@ function createOverlay() {
 		);
 	}
 	overlay.setIgnoreMouseEvents(true);
-	overlayWindow.attachTo(overlay, 'Among Us');
+	overlayWindow.attachTo(overlay, overlayTargetName);
 	overlay.setBackgroundColor('#00000000');
 	return overlay;
 }
 
-const gotTheLock = app.requestSingleInstanceLock();
+const gotTheLock = allowMultiInstance || app.requestSingleInstanceLock();
 if (!gotTheLock) {
 	app.quit();
 } else {

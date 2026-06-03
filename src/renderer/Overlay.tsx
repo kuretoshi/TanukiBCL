@@ -140,7 +140,9 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 
 	const avatars: JSX.Element[] = [];
 	const isOnSide = positionParse == 'right' || positionParse == 'left';
-	const showName = isOnSide && (!compactOverlay || position === 'right1' || position === 'left1');
+	const isAnonymousAppearance = gameState.mushroomMixupSabotaged || gameState.camouflaged;
+	const showName =
+		!isAnonymousAppearance && isOnSide && (!compactOverlay || position === 'right1' || position === 'left1');
 	const classnames: string[] = ['overlay-wrapper'];
 	if (gameState.gameState == GameState.UNKNOWN || gameState.gameState == GameState.MENU) {
 		classnames.push('gamestate_menu');
@@ -193,6 +195,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 		}
 		const talking =
 			!player.inVent && (voiceState.otherTalking[player.clientId] || (player.isLocal && voiceState.localTalking));
+		const displayName = player.appearanceName || player.name;
 		// const audio = voiceState.audioConnected[peer];
 		avatars.push(
 			<div key={player.id} className="player_wrapper">
@@ -223,7 +226,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 							opacity: (position === 'right1' || position === 'left1') && !talking ? 0 : 1,
 						}}
 					>
-						<small>{player.name}</small>
+						<small>{displayName}</small>
 					</span>
 				)}
 			</div>

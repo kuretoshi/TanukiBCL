@@ -33,6 +33,12 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
 	appVersion = app.getVersion();
 }
+const args = require('minimist')(process.argv); // eslint-disable-line
+const targetProcessName = String(
+	args['target-exe'] || args.targetExe || args['target-process'] || args.targetProcess || 'Among Us.exe'
+);
+const targetProcessId = Number(args['target-pid'] || args.targetPid || 0);
+const targetProcessIndex = Math.max(0, Number(args['target-index'] || args.targetIndex || 0));
 
 interface ValueType<T> {
 	read(buffer: BufferSource, offset: number): T;
@@ -90,11 +96,14 @@ export default class GameReader {
 	}
 
 	async checkProcessOpen(): Promise<void> {
-		const processesOpen = getProcesses().filter((p) => p.szExeFile === 'Among Us.exe');
+		const processesOpen = getProcesses()
+			.filter((p) => p.szExeFile === targetProcessName)
+			.filter((p) => !targetProcessId || p.th32ProcessID === targetProcessId)
+			.sort((a, b) => a.th32ProcessID - b.th32ProcessID);
 		let error = '';
 		const reset = this.amongUs && processesOpen.filter((o) => o.th32ProcessID === this.pid).length === 0;
 		if ((!this.amongUs || reset) && processesOpen.length > 0) {
-			for (const processOpen of processesOpen) {
+			for (const processOpen of processesOpen.slice(targetProcessIndex, targetProcessIndex + 1)) {
 				try {
 					this.pid = processOpen.th32ProcessID;
 					this.amongUs = openProcess(processOpen.th32ProcessID);
@@ -275,14 +284,13 @@ export default class GameReader {
 				if (state === GameState.TASKS) {
 					const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
 					const activePlayerCount = activePlayers.length;
-					const shiftedPlayers = activePlayers.filter((player) => player.shiftedColor !== -1);
+					const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
 					const shiftedPlayerCount = shiftedPlayers.length;
 					const mushroomMixupThreshold = Math.min(2, Math.max(1, activePlayerCount - 1));
 					mushroomMixupSabotaged = map === MapType.FUNGLE && shiftedPlayerCount >= mushroomMixupThreshold;
 					const camouflageThreshold = Math.max(2, activePlayerCount - 1);
 					const shiftedColors = new Set(shiftedPlayers.map((player) => player.shiftedColor));
 					camouflaged =
-						this.loadedMod.id === 'SUPER_NEW_ROLES' &&
 						activePlayerCount >= 3 &&
 						shiftedPlayerCount >= camouflageThreshold &&
 						shiftedColors.size === 1;
@@ -293,7 +301,7 @@ export default class GameReader {
 					const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
 
 					if (systemsPtr !== 0 && state === GameState.TASKS) {
-						this.readDictionary(systemsPtr, 47, (k, v) => {
+						this.readDictionary(systemsPtr, 64, (k, v) => {
 							const key = this.readMemory<number>('int32', k);
 							if (key === 14) {
 								const value = this.readMemory<number>('ptr', v);
@@ -310,6 +318,7 @@ export default class GameReader {
 									case MapType.MIRA_HQ: {
 										comsSabotaged =
 											this.readMemory<number>('uint32', value, this.offsets!.hqHudSystemType_CompletedConsoles) < 2;
+										break;
 									}
 								}
 							} else if (key === 18 && map === MapType.MIRA_HQ) {
@@ -444,6 +453,17 @@ export default class GameReader {
 
 	private isValidColorId(colorId: number): boolean {
 		return colorId >= 0 && colorId < this.playercolors.length;
+	}
+
+	private hasDisguisedAppearance(player: Player): boolean {
+		return (
+			player.currentOutfit > 0 &&
+			player.currentOutfit <= 10 &&
+			(player.appearanceColorId !== player.colorId ||
+				player.appearanceHatId !== player.hatId ||
+				player.appearanceSkinId !== player.skinId ||
+				player.appearanceVisorId !== player.visorId)
+		);
 	}
 
 	private normalizePlayerColors(players: Player[]): void {
@@ -1156,6 +1176,7 @@ export default class GameReader {
 		const isDummy = this.readMemory<boolean>('boolean', data.objectPtr, this.offsets.player.isDummy);
 		let name = 'error';
 		let shiftedColor = -1;
+		let currentName = '';
 		let currentColor = -1;
 		let currentHat = '';
 		let currentSkin = '';
@@ -1163,7 +1184,7 @@ export default class GameReader {
 		if (data.hasOwnProperty('name')) {
 			name = this.readString(data.name, 1000).split(/<.*?>/).join('');
 		} else {
-			this.readDictionary(data.outfitsPtr, 6, (k, v, i) => {
+			this.readDictionary(data.outfitsPtr, 12, (k, v, i) => {
 				const key = this.readMemory<number>('int32', k);
 				const val = this.readMemory<number>('ptr', v);
 				if (key === 0 && i == 0) {
@@ -1176,6 +1197,8 @@ export default class GameReader {
 					if (currentOutfit == 0 || currentOutfit > 10)
 						return;
 				} else if (key === currentOutfit) {
+					const currentNamePtr = this.readMemory<number>('pointer', val, this.offsets!.player.outfit.playerName); // 0x40
+					currentName = this.readString(currentNamePtr, 1000).split(/<.*?>/).join('');
 					currentColor = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
 					currentHat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId));
 					currentSkin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
@@ -1209,6 +1232,7 @@ export default class GameReader {
 		const nameHash = this.hashCode(name);
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
 		const visibleColorId = currentColor === this.rainbowColor ? RainbowColorId : currentColor;
+		const appearanceName = currentName || name;
 		const appearanceColor = visibleColorId >= 0 ? visibleColorId : colorId;
 		const appearanceHat = currentHat || data.hat || '';
 		const appearanceSkin = currentSkin || data.skin || '';
@@ -1224,6 +1248,12 @@ export default class GameReader {
 			petId: data.pet ?? '',
 			skinId: data.skin ?? '',
 			visorId: data.visor ?? '',
+			currentOutfit,
+			appearanceName,
+			appearanceColorId: appearanceColor,
+			appearanceHatId: appearanceHat,
+			appearanceSkinId: appearanceSkin,
+			appearanceVisorId: appearanceVisor,
 			appearanceId: `${appearanceColor}|${appearanceHat}|${appearanceSkin}|${appearanceVisor}`,
 			disconnected: data.disconnected != 0,
 			roleTeam: data.impostor,

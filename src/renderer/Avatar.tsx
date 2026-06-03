@@ -115,6 +115,11 @@ const Avatar: React.FC<AvatarProps> = function ({
 }: AvatarProps) {
 	const classes = useStyles();
 	let icon;
+	const displayColor = player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
+	const displayHat = player.appearanceHatId || player.hatId;
+	const displaySkin = player.appearanceSkinId || player.skinId;
+	const displayVisor = player.appearanceVisorId || player.visorId;
+	const displayName = player.appearanceName || player.name;
 	deafened = deafened === true || socketConfig?.isMuted === true || socketConfig?.volume === 0;
 	switch (connectionState) {
 		case 'connected':
@@ -137,10 +142,10 @@ const Avatar: React.FC<AvatarProps> = function ({
 	const canvas = (
 		<Canvas
 			className={classes.canvas}
-			color={player.colorId}
-			hat={showHat === false ? '' : player.hatId}
-			visor={showHat === false ? '' : player.visorId}
-			skin={player.skinId}
+			color={displayColor}
+			hat={showHat === false ? '' : displayHat}
+			visor={showHat === false ? '' : displayVisor}
+			skin={displaySkin}
 			isAlive={isAlive}
 			lookLeft={lookLeft === true}
 			borderColor={talking ? borderColor : showborder === true ? '#ccbdcc86' : 'transparent'}
@@ -163,7 +168,7 @@ const Avatar: React.FC<AvatarProps> = function ({
 				mouseOutDelay={300}
 				content={
 					<div className={classes.innerTooltip}>
-						<b>{player.name}</b>
+						<b>{displayName}</b>
 						<Grid container spacing={0} className={classes.slidecontainer}>
 							<Grid item>
 								<IconButton
