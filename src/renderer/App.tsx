@@ -241,12 +241,12 @@ export default function App({ t }): JSX.Element {
 								<Settings t={t} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 								<Dialog fullWidth open={updaterState.state !== 'unavailable' && diaOpen}>
 									{updaterState.state === 'available' && updaterState.info && (
-										<DialogTitle>Update v{updaterState.info.version}</DialogTitle>
+										<DialogTitle>アップデート v{updaterState.info.version}</DialogTitle>
 									)}
 									{updaterState.state === 'error' && (
-										<DialogTitle>Updater Error</DialogTitle>
+										<DialogTitle>アップデートエラー</DialogTitle>
 									)}
-									{updaterState.state === 'downloading' && <DialogTitle>Updating...</DialogTitle>}
+									{updaterState.state === 'downloading' && <DialogTitle>アップデート中...</DialogTitle>}
 									<DialogContent>
 										{updaterState.state === 'downloading' && updaterState.progress && (
 											<>
@@ -259,7 +259,7 @@ export default function App({ t }): JSX.Element {
 										{updaterState.state === 'available' && (
 											<>
 												<LinearProgress variant={'indeterminate'} />
-												<DialogContentText>Update now or later?</DialogContentText>
+												<DialogContentText>新しいバージョンがあります。今すぐアップデートしますか？</DialogContentText>
 											</>
 										)}
 										{updaterState.state === 'error' && (
@@ -274,7 +274,7 @@ export default function App({ t }): JSX.Element {
 													shell.openExternal("https://github.com/kuretoshi/BetterCrewLink/releases/latest");
 												}}
 											>
-												Download Manually
+												手動でダウンロード
 											</Button>
 											<Button
 												color="grey"
@@ -282,7 +282,7 @@ export default function App({ t }): JSX.Element {
 													setDiaOpen(false);
 												}}
 											>
-												Skip
+												スキップ
 											</Button>
 										</DialogActions>
 									)}
@@ -293,14 +293,14 @@ export default function App({ t }): JSX.Element {
 													ipcRenderer.send('update-app');
 												}}
 											>
-												Now
+												今すぐ
 											</Button>
 											<Button
 												onClick={() => {
 													setDiaOpen(false);
 												}}
 											>
-												Later
+												あとで
 											</Button>
 										</DialogActions>
 									)}

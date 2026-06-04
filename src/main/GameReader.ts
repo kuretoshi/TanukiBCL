@@ -234,7 +234,7 @@ export default class GameReader {
 			this.isLocalGame = lobbyCodeInt === 32; // is local game
 			let lightRadius = 1;
 			let comsSabotaged = false;
-			let mushroomMixupSabotaged = false;
+			let mixupSabotaged = false;
 			let camouflaged = false;
 			let currentCamera = CameraLocation.NONE;
 			let map = MapType.UNKNOWN;
@@ -283,17 +283,10 @@ export default class GameReader {
 				map = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId);
 				if (state === GameState.TASKS) {
 					const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
-					const activePlayerCount = activePlayers.length;
 					const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
 					const shiftedPlayerCount = shiftedPlayers.length;
-					const mushroomMixupThreshold = Math.min(2, Math.max(1, activePlayerCount - 1));
-					mushroomMixupSabotaged = map === MapType.FUNGLE && shiftedPlayerCount >= mushroomMixupThreshold;
-					const camouflageThreshold = Math.max(2, activePlayerCount - 1);
-					const shiftedColors = new Set(shiftedPlayers.map((player) => player.shiftedColor));
-					camouflaged =
-						activePlayerCount >= 3 &&
-						shiftedPlayerCount >= camouflageThreshold &&
-						shiftedColors.size === 1;
+					const mixupThreshold = 1;
+					mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
 				}
 				if (state === GameState.TASKS) {
 					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
@@ -418,7 +411,7 @@ export default class GameReader {
 				hostId: hostId,
 				clientId: clientId,
 				comsSabotaged,
-				mushroomMixupSabotaged,
+				mixupSabotaged,
 				camouflaged,
 				currentCamera,
 				lightRadius,
@@ -455,14 +448,40 @@ export default class GameReader {
 		return colorId >= 0 && colorId < this.playercolors.length;
 	}
 
+	private normalizeHatId(hatId: string): string {
+		return hatId === 'hat_NoHat' ? '' : hatId;
+	}
+
+	private normalizeSkinId(skinId: string): string {
+		return skinId === 'skin_None' ? '' : skinId;
+	}
+
+	private normalizeVisorId(visorId: string): string {
+		return visorId === 'visor_EmptyVisor' ? '' : visorId;
+	}
+
+	private getAppearanceKey(colorId: number, hatId: string, skinId: string, visorId: string): string {
+		return [
+			colorId,
+			this.normalizeHatId(hatId || ''),
+			this.normalizeSkinId(skinId || ''),
+			this.normalizeVisorId(visorId || ''),
+		].join('|');
+	}
+
 	private hasDisguisedAppearance(player: Player): boolean {
+		const originalAppearance = this.getAppearanceKey(player.colorId, player.hatId, player.skinId, player.visorId);
+		const displayAppearance = this.getAppearanceKey(
+			player.appearanceColorId,
+			player.appearanceHatId,
+			player.appearanceSkinId,
+			player.appearanceVisorId
+		);
+
 		return (
 			player.currentOutfit > 0 &&
 			player.currentOutfit <= 10 &&
-			(player.appearanceColorId !== player.colorId ||
-				player.appearanceHatId !== player.hatId ||
-				player.appearanceSkinId !== player.skinId ||
-				player.appearanceVisorId !== player.visorId)
+			displayAppearance !== originalAppearance
 		);
 	}
 
@@ -1181,6 +1200,7 @@ export default class GameReader {
 		let currentHat = '';
 		let currentSkin = '';
 		let currentVisor = '';
+		let hasCurrentOutfit = false;
 		if (data.hasOwnProperty('name')) {
 			name = this.readString(data.name, 1000).split(/<.*?>/).join('');
 		} else {
@@ -1204,6 +1224,7 @@ export default class GameReader {
 					currentSkin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
 					currentVisor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId));
 					shiftedColor = currentColor;
+					hasCurrentOutfit = true;
 				}
 			});
 
@@ -1232,11 +1253,12 @@ export default class GameReader {
 		const nameHash = this.hashCode(name);
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
 		const visibleColorId = currentColor === this.rainbowColor ? RainbowColorId : currentColor;
+		const hasDisplayOutfit = currentOutfit > 0 && currentOutfit <= 10 && hasCurrentOutfit;
 		const appearanceName = currentName || name;
-		const appearanceColor = visibleColorId >= 0 ? visibleColorId : colorId;
-		const appearanceHat = currentHat || data.hat || '';
-		const appearanceSkin = currentSkin || data.skin || '';
-		const appearanceVisor = currentVisor || data.visor || '';
+		const appearanceColor = hasDisplayOutfit && visibleColorId >= 0 ? visibleColorId : colorId;
+		const appearanceHat = hasDisplayOutfit ? currentHat : data.hat || '';
+		const appearanceSkin = hasDisplayOutfit ? currentSkin : data.skin || '';
+		const appearanceVisor = hasDisplayOutfit ? currentVisor : data.visor || '';
 		return {
 			ptr,
 			id: data.id,

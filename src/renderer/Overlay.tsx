@@ -140,7 +140,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 
 	const avatars: JSX.Element[] = [];
 	const isOnSide = positionParse == 'right' || positionParse == 'left';
-	const isAnonymousAppearance = gameState.mushroomMixupSabotaged || gameState.camouflaged;
+	const isAnonymousAppearance = gameState.mixupSabotaged || gameState.camouflaged;
 	const showName =
 		!isAnonymousAppearance && isOnSide && (!compactOverlay || position === 'right1' || position === 'left1');
 	const classnames: string[] = ['overlay-wrapper'];

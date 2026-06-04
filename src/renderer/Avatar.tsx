@@ -115,10 +115,14 @@ const Avatar: React.FC<AvatarProps> = function ({
 }: AvatarProps) {
 	const classes = useStyles();
 	let icon;
-	const displayColor = player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
-	const displayHat = player.appearanceHatId || player.hatId;
-	const displaySkin = player.appearanceSkinId || player.skinId;
-	const displayVisor = player.appearanceVisorId || player.visorId;
+	const normalizeHatId = (hatId: string | undefined) => (hatId === 'hat_NoHat' ? '' : hatId || '');
+	const normalizeSkinId = (skinId: string | undefined) => (skinId === 'skin_None' ? '' : skinId || '');
+	const normalizeVisorId = (visorId: string | undefined) => (visorId === 'visor_EmptyVisor' ? '' : visorId || '');
+	const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
+	const displayColor = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
+	const displayHat = normalizeHatId(hasDisplayOutfit ? player.appearanceHatId : player.hatId);
+	const displaySkin = normalizeSkinId(hasDisplayOutfit ? player.appearanceSkinId : player.skinId);
+	const displayVisor = normalizeVisorId(hasDisplayOutfit ? player.appearanceVisorId : player.visorId);
 	const displayName = player.appearanceName || player.name;
 	deafened = deafened === true || socketConfig?.isMuted === true || socketConfig?.volume === 0;
 	switch (connectionState) {
@@ -376,7 +380,7 @@ function Canvas({
 						}}
 					/>
 
-					<img src={hatImg.skin} className={classes.skin} onError={onerror} onLoad={onload} />
+					{hatImg.skin && <img src={hatImg.skin} className={classes.skin} onError={onerror} onLoad={onload} />}
 					{overflow && hatElement}
 				</div>
 				{!overflow && hatElement}

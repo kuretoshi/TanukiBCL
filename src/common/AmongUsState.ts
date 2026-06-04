@@ -11,7 +11,7 @@ export interface AmongUsState {
 	clientId: number;
 	hostId: number;
 	comsSabotaged: boolean;
-	mushroomMixupSabotaged: boolean;
+	mixupSabotaged: boolean;
 	camouflaged: boolean;
 	currentCamera: CameraLocation;
 	map: MapType;
