@@ -1096,87 +1096,85 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					<>
 						<Divider />
 						<Typography variant="h6">{t('settings.beta.title')}</Typography>
+						<div>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.mobilehost')}
+								checked={settings.mobileHost}
+								onChange={(_, checked: boolean) => setSettings('mobileHost', checked)}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.vad_enabled')}
+								checked={settings.vadEnabled}
+								onChange={(_, checked: boolean) => {
+									openWarningDialog(
+										t('settings.warning'),
+										t('settings.beta.vad_enabled_warning'),
+										() => setSettings('vadEnabled', checked),
+										!checked
+									);
+								}}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.hardware_acceleration')}
+								checked={settings.hardware_acceleration}
+								onChange={(_, checked: boolean) => {
+									openWarningDialog(
+										t('settings.warning'),
+										t('settings.beta.hardware_acceleration_warning'),
+										() => {
+											setSettings('hardware_acceleration', checked);
+											ipcRenderer.send("relaunch");
+										},
+										!checked
+									);
+								}}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.echocancellation')}
+								checked={settings.echoCancellation}
+								onChange={(_, checked: boolean) => setSettings('echoCancellation', checked)}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.spatial_audio')}
+								checked={settings.enableSpatialAudio}
+								onChange={(_, checked: boolean) => setSettings('enableSpatialAudio', checked)}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.noiseSuppression')}
+								checked={settings.noiseSuppression}
+								onChange={(_, checked: boolean) => setSettings('noiseSuppression', checked)}
+								control={<Checkbox />}
+							/>
+							<FormControlLabel
+								className={classes.formLabel}
+								label={t('settings.beta.oldsampledebug')}
+								checked={settings.oldSampleDebug}
+								onChange={(_, checked: boolean) => {
+									openWarningDialog(
+										t('settings.warning'),
+										t('settings.beta.oldsampledebug_warning'),
+										() => {
+											setSettings('oldSampleDebug', checked);
+										},
+										checked
+									);
+								}}
+								control={<Checkbox />}
+							/>
+						</div>
 					</>
 				)}
-				<div>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.mobilehost')}
-						checked={settings.mobileHost}
-						onChange={(_, checked: boolean) => setSettings('mobileHost', checked)}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.vad_enabled')}
-						checked={settings.vadEnabled}
-						onChange={(_, checked: boolean) => {
-							openWarningDialog(
-								t('settings.warning'),
-								t('settings.beta.vad_enabled_warning'),
-								() => setSettings('vadEnabled', checked),
-								!checked
-							);
-						}}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.hardware_acceleration')}
-						checked={settings.hardware_acceleration}
-						onChange={(_, checked: boolean) => {
-							openWarningDialog(
-								t('settings.warning'),
-								t('settings.beta.hardware_acceleration_warning'),
-								() => {
-									setSettings('hardware_acceleration', checked);
-									ipcRenderer.send("relaunch");
-								},
-								!checked
-							);
-						}}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.echocancellation')}
-						checked={settings.echoCancellation}
-						onChange={(_, checked: boolean) => setSettings('echoCancellation', checked)}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.spatial_audio')}
-						checked={settings.enableSpatialAudio}
-						onChange={(_, checked: boolean) => setSettings('enableSpatialAudio', checked)}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.noiseSuppression')}
-						checked={settings.noiseSuppression}
-						onChange={(_, checked: boolean) => setSettings('noiseSuppression', checked)}
-						control={<Checkbox />}
-					/>
-					<FormControlLabel
-						className={classes.formLabel}
-						label={t('settings.beta.oldsampledebug')}
-						checked={settings.oldSampleDebug}
-						onChange={(_, checked: boolean) => {
-							openWarningDialog(
-								t('settings.warning'),
-								t('settings.beta.oldsampledebug_warning'),
-								() => {
-									setSettings('oldSampleDebug', checked);
-								},
-								checked
-							);
-
-
-						}}
-						control={<Checkbox />}
-					/>
-				</div>
 				<TextField
 					fullWidth
 					select

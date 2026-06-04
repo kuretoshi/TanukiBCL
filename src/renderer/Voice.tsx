@@ -26,6 +26,8 @@ import { validateClientPeerConfig } from './validateClientPeerConfig';
 // @ts-ignore
 import reverbOgx from 'arraybuffer-loader!../../static/sounds/reverb.ogx'; // @ts-ignore
 import radioOnSound from '../../static/sounds/radio_on.wav'; // @ts-ignore
+import liteCrewmateImage from '../../static/images/lite/crew.png'; // @ts-ignore
+import liteVisorImage from '../../static/images/lite/visor.png'; // @ts-ignore
 
 import { CameraLocation, AmongUsMaps, MapType } from '../common/AmongusMap';
 import { ObsVoiceState } from '../common/ObsOverlay';
@@ -63,6 +65,7 @@ interface VoiceAvatarProps {
 	muted?: boolean;
 	connectionState?: 'disconnected' | 'novoice' | 'connected';
 	socketConfig?: SocketConfig;
+	showborder?: boolean;
 	isUsingRadio?: boolean;
 	onConfigChange?: () => void;
 	mod: any;
@@ -251,13 +254,18 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 		props.socketConfig?.isMuted === true ||
 		props.socketConfig?.volume === 0;
 	const background = props.colorPalette?.[0] || '#6b7280';
-	const border =
+	const avatarBorderColor =
 		props.talking && props.connectionState === 'connected'
 			? props.borderColor
-			: props.connectionState === 'disconnected'
-				? '#56525f'
-				: '#2d2933';
+			: props.showborder === true
+				? '#ccbdcc86'
+				: 'transparent';
 	const scale = props.size / 100;
+	const borderWidth = Math.max(2, props.size / 40);
+	const imageWidth = Math.round(81 * scale);
+	const imageHeight = Math.round(100 * scale);
+	const imageLeft = Math.round(9 * scale);
+	const imageTop = Math.round(0 * scale);
 
 	return (
 		<div
@@ -266,25 +274,84 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 				position: 'relative',
 				width: props.size,
 				height: props.size,
-				borderRadius: '50%',
 				boxSizing: 'border-box',
-				border: `${Math.max(2, Math.round(4 * scale))}px solid ${border}`,
-				background,
+				borderRadius: '50%',
+				borderStyle: 'solid',
+				borderWidth,
+				borderColor: avatarBorderColor,
+				transition: 'border-color .2s ease-out, box-shadow .2s ease-out',
+				boxShadow:
+					props.talking && props.connectionState === 'connected'
+						? `0 0 ${Math.max(6, Math.round(10 * scale))}px ${props.borderColor}`
+						: 'none',
 				opacity: props.isAlive ? 1 : 0.45,
 				margin: '0 auto',
+				cursor: 'pointer',
 			}}
 		>
 			<div
 				style={{
 					position: 'absolute',
-					inset: `${Math.round(18 * scale)}px ${Math.round(12 * scale)}px auto auto`,
-					width: `${Math.round(34 * scale)}px`,
-					height: `${Math.round(18 * scale)}px`,
-					borderRadius: `${Math.round(12 * scale)}px`,
-					background: '#bfe8ee',
-					border: `${Math.max(1, Math.round(3 * scale))}px solid #27343a`,
+					left: Math.round(17 * scale),
+					bottom: Math.round(2 * scale),
+					width: Math.round(67 * scale),
+					height: Math.round(13 * scale),
+					borderRadius: '50%',
+					background: 'rgba(0, 0, 0, 0.32)',
 				}}
 			/>
+			<div
+				style={{
+					position: 'absolute',
+					left: imageLeft,
+					top: imageTop,
+					width: imageWidth,
+					height: imageHeight,
+					filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
+				}}
+			>
+				<div
+					style={{
+						position: 'absolute',
+						inset: 0,
+						background,
+						WebkitMaskImage: `url(${liteCrewmateImage})`,
+						maskImage: `url(${liteCrewmateImage})`,
+						WebkitMaskRepeat: 'no-repeat',
+						maskRepeat: 'no-repeat',
+						WebkitMaskSize: 'contain',
+						maskSize: 'contain',
+						WebkitMaskPosition: 'center',
+						maskPosition: 'center',
+					}}
+				/>
+				<img
+					src={liteCrewmateImage}
+					alt=""
+					style={{
+						position: 'absolute',
+						inset: 0,
+						width: '100%',
+						height: '100%',
+						objectFit: 'contain',
+						mixBlendMode: 'multiply',
+						opacity: 0.72,
+						pointerEvents: 'none',
+					}}
+				/>
+				<img
+					src={liteVisorImage}
+					alt=""
+					style={{
+						position: 'absolute',
+						inset: 0,
+						width: '100%',
+						height: '100%',
+						objectFit: 'contain',
+						pointerEvents: 'none',
+					}}
+				/>
+			</div>
 			{(isMuted || props.isUsingRadio) && (
 				<div
 					style={{

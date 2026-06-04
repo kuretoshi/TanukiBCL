@@ -20,7 +20,7 @@
 		"postinstall": "electron-builder install-app-deps",
 		"lint": "eslint src",
 		"dev": "electron-webpack dev",
-		"compile": "electron-webpack",
+		"compile": "set NODE_ENV=production&& electron-webpack",
 		"dist": "yarn compile && electron-builder --win --x64 --ia32",
 		"dist:32": "yarn compile && electron-builder --win --ia32",
 		"dist:64": "yarn compile && electron-builder --win --x64",

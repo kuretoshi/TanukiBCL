@@ -1,4 +1,6 @@
 appId: net.ottomated.crewlinkkai.lite
+extraMetadata:
+  name: bettercrewlinkkailite
 productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
@@ -20,7 +22,7 @@ win:
       channel: lite
 nsis:
   artifactName: ${productName}-Setup-${version}.${ext}
-  include: resources/installer.nsh
+  include: resources/installer-lite.nsh
 linux:
   target:
     - "AppImage"
