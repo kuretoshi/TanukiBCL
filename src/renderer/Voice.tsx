@@ -34,10 +34,15 @@ import { ObsVoiceState } from '../common/ObsOverlay';
 import Footer from './Footer';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import Slider from '@mui/material/Slider';
 import VolumeOff from '@mui/icons-material/VolumeOff';
 import VolumeUp from '@mui/icons-material/VolumeUp';
 import Mic from '@mui/icons-material/Mic';
 import MicOff from '@mui/icons-material/MicOff';
+import WifiOff from '@mui/icons-material/WifiOff';
+import LinkOff from '@mui/icons-material/LinkOff';
+import ErrorOutline from '@mui/icons-material/ErrorOutline';
+import Tooltip from 'react-tooltip-lite';
 import adapter from 'webrtc-adapter';
 import { VADOptions } from './vad';
 import { pushToTalkOptions } from './settings/SettingsStore';
@@ -248,11 +253,6 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 		);
 	}
 
-	const isMuted =
-		props.muted === true ||
-		props.deafened === true ||
-		props.socketConfig?.isMuted === true ||
-		props.socketConfig?.volume === 0;
 	const background = props.colorPalette?.[0] || '#6b7280';
 	const avatarBorderColor =
 		props.talking && props.connectionState === 'connected'
@@ -266,8 +266,28 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 	const imageHeight = Math.round(100 * scale);
 	const imageLeft = Math.round(9 * scale);
 	const imageTop = Math.round(0 * scale);
+	const iconSize = Math.max(18, Math.round(30 * scale));
+	const iconFontSize = Math.max(14, Math.round(20 * scale));
+	const displayName = props.player.appearanceName || props.player.name;
+	let statusIcon: React.ReactNode = null;
 
-	return (
+	if (props.player.bugged) {
+		statusIcon = <ErrorOutline style={{ fontSize: iconFontSize, color: 'white' }} />;
+	} else if (props.connectionState === 'disconnected') {
+		statusIcon = <WifiOff style={{ fontSize: iconFontSize, color: 'white' }} />;
+	} else if (props.connectionState === 'novoice') {
+		statusIcon = <LinkOff style={{ fontSize: iconFontSize, color: 'white' }} />;
+	} else if (props.connectionState === 'connected') {
+		if (props.deafened === true || props.socketConfig?.isMuted === true || props.socketConfig?.volume === 0) {
+			statusIcon = <VolumeOff style={{ fontSize: iconFontSize, color: 'white' }} />;
+		} else if (props.muted === true) {
+			statusIcon = <MicOff style={{ fontSize: iconFontSize, color: 'white' }} />;
+		} else if (props.isUsingRadio) {
+			statusIcon = <VolumeUp style={{ fontSize: iconFontSize, color: 'white' }} />;
+		}
+	}
+
+	const avatar = (
 		<div
 			onClick={props.onConfigChange}
 			style={{
@@ -350,31 +370,84 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 						objectFit: 'contain',
 						pointerEvents: 'none',
 					}}
-				/>
+					/>
 			</div>
-			{(isMuted || props.isUsingRadio) && (
+			{statusIcon && (
 				<div
 					style={{
 						position: 'absolute',
 						right: -4,
 						top: -4,
-						width: Math.max(18, Math.round(30 * scale)),
-						height: Math.max(18, Math.round(30 * scale)),
+						width: iconSize,
+						height: iconSize,
 						borderRadius: '50%',
-						background: '#ea3c2a',
+						background: props.connectionState === 'novoice' ? '#e67e22' : '#ea3c2a',
+						border: props.connectionState === 'novoice' ? '2px solid #694900' : '2px solid #690a00',
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
+						zIndex: 10,
 					}}
 				>
-					{isMuted ? (
-						<MicOff style={{ fontSize: Math.max(14, Math.round(20 * scale)), color: 'white' }} />
-					) : (
-						<VolumeUp style={{ fontSize: Math.max(14, Math.round(20 * scale)), color: 'white' }} />
-					)}
+					{statusIcon}
 				</div>
 			)}
 		</div>
+	);
+
+	if (!props.socketConfig) {
+		return avatar;
+	}
+
+	return (
+		<Tooltip
+			mouseOutDelay={300}
+			content={
+				<div style={{ textAlign: 'center' }}>
+					<b>{displayName}</b>
+					<Grid container spacing={0} style={{ minWidth: 80 }}>
+						<Grid item>
+							<IconButton
+								onClick={() => {
+									if (props.socketConfig) {
+										props.socketConfig.isMuted = !props.socketConfig.isMuted;
+										props.onConfigChange?.();
+									}
+								}}
+								style={{ margin: '1px 1px 0px 0px' }}
+								size="large">
+								{props.socketConfig.isMuted ? (
+									<VolumeOff color="primary" />
+								) : (
+									<VolumeUp color="primary" />
+								)}
+							</IconButton>
+						</Grid>
+						<Grid item xs>
+							<Slider
+								size="small"
+								value={props.socketConfig.volume}
+								min={0}
+								max={2}
+								step={0.02}
+								onChange={(_, newValue: number | number[]) => {
+									if (props.socketConfig) {
+										props.socketConfig.volume = newValue as number;
+									}
+								}}
+								valueLabelDisplay="auto"
+								valueLabelFormat={(value) => Math.floor(value * 100) + '%'}
+								onMouseLeave={() => props.onConfigChange?.()}
+								aria-labelledby="continuous-slider"
+							/>
+						</Grid>
+					</Grid>
+				</div>
+			}
+			padding={5}
+		>
+			{avatar}
+		</Tooltip>
 	);
 };
 
