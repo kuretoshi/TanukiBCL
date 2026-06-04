@@ -1,6 +1,7 @@
 import Store from 'electron-store';
 import { GamePlatform } from '../../common/GamePlatform';
 import { ILobbySettings, ISettings, SocketConfig } from '../../common/ISettings';
+import { getVariantStoreName, isLiteRuntime } from '../../common/appVariant';
 
 export enum pushToTalkOptions {
 	VOICE,
@@ -8,7 +9,10 @@ export enum pushToTalkOptions {
 	PUSH_TO_MUTE,
 }
 
+const isLiteSettingsStore = isLiteRuntime();
+
 export const SettingsStore = new Store<ISettings>({
+	name: getVariantStoreName(),
 	migrations: {
 		'2.0.6': (store) => {
 			if (
@@ -166,7 +170,7 @@ export const SettingsStore = new Store<ISettings>({
 		},
 		enableOverlay: {
 			type: 'boolean',
-			default: true,
+			default: !isLiteSettingsStore,
 		},
 		crewVolumeAsGhost: {
 			type: 'number',
@@ -214,7 +218,7 @@ export const SettingsStore = new Store<ISettings>({
 		},
 		hardware_acceleration: {
 			type: 'boolean',
-			default: true,
+			default: !isLiteSettingsStore,
 		},
 		enableSpatialAudio: {
 			type: 'boolean',

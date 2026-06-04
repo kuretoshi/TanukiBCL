@@ -3,9 +3,10 @@ import GameReader from './GameReader';
 import { keyboardWatcher } from 'node-keyboard-watcher';
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
+import { getVariantStoreName } from '../common/appVariant';
 import { IpcHandlerMessages, IpcMessages, IpcRendererMessages, IpcSyncMessages } from '../common/ipc-messages';
 
-const store = new Store<ISettings>();
+const store = new Store<ISettings>({ name: getVariantStoreName() });
 
 const currentPlayerConfigMap = store.get('playerConfigMap', {});
 const playerConfigMapLength = Object.keys(currentPlayerConfigMap).length;

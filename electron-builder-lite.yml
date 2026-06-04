@@ -1,0 +1,32 @@
+appId: net.ottomated.crewlinkkai.lite
+productName: BetterCrewLinkKaiLite
+copyright: Copyright © 2021 OhMyGuus
+directories:
+  output: dist-lite
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+
+win:
+  executableName: BetterCrewLinkKaiLite
+  publish:
+    - provider: github
+      owner: kuretoshi
+      repo: BetterCrewLink
+      releaseType: release
+      channel: lite
+nsis:
+  artifactName: ${productName}-Setup-${version}.${ext}
+  include: resources/installer.nsh
+linux:
+  target:
+    - "AppImage"
+  publish:
+    - provider: github
+      owner: kuretoshi
+      repo: BetterCrewLink
+      releaseType: release
+      channel: lite

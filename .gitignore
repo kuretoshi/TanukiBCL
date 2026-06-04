@@ -1,5 +1,6 @@
 .DS_Store
 dist/
+dist-lite/
 node_modules/
 .tools/
 thumbs.db

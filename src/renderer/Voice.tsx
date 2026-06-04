@@ -1,6 +1,5 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import io, { Socket } from 'socket.io-client';
-import Avatar from './Avatar';
 import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsContext } from './contexts';
 import {
 	AmongUsState,
@@ -16,7 +15,7 @@ import {
 import Peer from 'simple-peer';
 import { ipcRenderer } from 'electron';
 import VAD from './vad';
-import { ISettings, playerConfigMap, ILobbySettings } from '../common/ISettings';
+import { ISettings, playerConfigMap, ILobbySettings, SocketConfig } from '../common/ISettings';
 import { IpcRendererMessages, IpcMessages, IpcOverlayMessages, IpcHandlerMessages } from '../common/ipc-messages';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
@@ -49,6 +48,26 @@ import {
 } from './voiceEffect';
 
 console.log(adapter.browserDetails.browser);
+
+const isLiteApp =
+	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
+const RichAvatar = lazy(() => import('./Avatar'));
+
+interface VoiceAvatarProps {
+	talking: boolean;
+	borderColor: string;
+	isAlive: boolean;
+	player: Player;
+	size: number;
+	deafened?: boolean;
+	muted?: boolean;
+	connectionState?: 'disconnected' | 'novoice' | 'connected';
+	socketConfig?: SocketConfig;
+	isUsingRadio?: boolean;
+	onConfigChange?: () => void;
+	mod: any;
+	colorPalette?: string[];
+}
 
 export interface ExtendedAudioElement extends HTMLAudioElement {
 	setSinkId: (sinkId: string) => Promise<void>;
@@ -216,6 +235,81 @@ const useStyles = makeStyles((theme) => ({
 	},
 	left: { float: 'left' },
 }));
+
+const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProps) {
+	if (!isLiteApp) {
+		return (
+			<Suspense fallback={null}>
+				<RichAvatar {...props} />
+			</Suspense>
+		);
+	}
+
+	const isMuted =
+		props.muted === true ||
+		props.deafened === true ||
+		props.socketConfig?.isMuted === true ||
+		props.socketConfig?.volume === 0;
+	const background = props.colorPalette?.[0] || '#6b7280';
+	const border =
+		props.talking && props.connectionState === 'connected'
+			? props.borderColor
+			: props.connectionState === 'disconnected'
+				? '#56525f'
+				: '#2d2933';
+	const scale = props.size / 100;
+
+	return (
+		<div
+			onClick={props.onConfigChange}
+			style={{
+				position: 'relative',
+				width: props.size,
+				height: props.size,
+				borderRadius: '50%',
+				boxSizing: 'border-box',
+				border: `${Math.max(2, Math.round(4 * scale))}px solid ${border}`,
+				background,
+				opacity: props.isAlive ? 1 : 0.45,
+				margin: '0 auto',
+			}}
+		>
+			<div
+				style={{
+					position: 'absolute',
+					inset: `${Math.round(18 * scale)}px ${Math.round(12 * scale)}px auto auto`,
+					width: `${Math.round(34 * scale)}px`,
+					height: `${Math.round(18 * scale)}px`,
+					borderRadius: `${Math.round(12 * scale)}px`,
+					background: '#bfe8ee',
+					border: `${Math.max(1, Math.round(3 * scale))}px solid #27343a`,
+				}}
+			/>
+			{(isMuted || props.isUsingRadio) && (
+				<div
+					style={{
+						position: 'absolute',
+						right: -4,
+						top: -4,
+						width: Math.max(18, Math.round(30 * scale)),
+						height: Math.max(18, Math.round(30 * scale)),
+						borderRadius: '50%',
+						background: '#ea3c2a',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+					}}
+				>
+					{isMuted ? (
+						<MicOff style={{ fontSize: Math.max(14, Math.round(20 * scale)), color: 'white' }} />
+					) : (
+						<VolumeUp style={{ fontSize: Math.max(14, Math.round(20 * scale)), color: 'white' }} />
+					)}
+				</div>
+			)}
+		</div>
+	);
+};
 
 const defaultlocalLobbySettings: ILobbySettings = {
 	maxDistance: 5.32,
@@ -922,6 +1016,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const updateLobby = () => {
 		console.log(gameState);
 		if (
+			isLiteApp ||
 			!gameState ||
 			!hostRef.current.isHost ||
 			!gameState.lobbyCode ||
@@ -1828,7 +1923,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					{myPlayer && gameState.lobbyCode !== 'MENU' && (
 						<>
 							<div className={classes.avatarWrapper}>
-								<Avatar
+								<VoiceAvatar
 									deafened={deafenedState}
 									muted={mutedState}
 									player={myPlayer}
@@ -1839,6 +1934,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 									isAlive={!myPlayer.isDead}
 									size={100}
 									mod={gameState.mod}
+									colorPalette={playerColors[myPlayer.colorId]}
 								/>
 							</div>
 						</>
@@ -1882,7 +1978,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					</div>
 				)}
 				{gameState.lobbyCode && <Divider />}
-				{displayedLobbyCode === 'MENU' && (
+				{displayedLobbyCode === 'MENU' && !isLiteApp && (
 					<div className={classes.top}>
 						<Button
 							style={{ margin: '10px' }}
@@ -1917,7 +2013,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 							return (
 								<Grid item key={player.id} xs={getPlayersPerRow(otherPlayers.length)}>
-									<Avatar
+									<VoiceAvatar
 										connectionState={!connected ? 'disconnected' : audio ? 'connected' : 'novoice'}
 										player={player}
 										talking={!player.inVent && otherTalking[player.clientId]}
@@ -1932,6 +2028,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 										socketConfig={socketConfig}
 										onConfigChange={() => setSetting(`playerConfigMap.${player.nameHash}`, playerConfigs[player.nameHash])}
 										mod={gameState.mod}
+										colorPalette={playerColors[player.colorId]}
 									/>
 								</Grid>
 							);

@@ -200,6 +200,9 @@ const keys = new Set([
 	'LControl',
 ]);
 
+const isLiteSettings =
+	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
+
 export interface SettingsProps {
 	t: TFunction;
 	open: boolean;
@@ -449,30 +452,34 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					</Dialog>
 				</div>
 
-				<Typography variant="h6">{t('settings.lobbysettings.title')}</Typography>
-				<div>
-					<Typography id="input-slider" className={classes.sliderLabel} gutterBottom>
-						{(canChangeLobbySettings ? localLobbySettingsBuffer.visionHearing : hostLobbySettings.visionHearing)
-							? t('settings.lobbysettings.voicedistance_impostor')
-							: t('settings.lobbysettings.voicedistance')}
-						: {canChangeLobbySettings ? localLobbySettingsBuffer.maxDistance.toFixed(1) : hostLobbySettings.maxDistance.toFixed(1)}
-					</Typography>
-					<DisabledTooltip
-						disabled={!canChangeLobbySettings}
-						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
-					>
-						<Slider
-							size="small"
-							disabled={!canChangeLobbySettings}
-							value={canChangeLobbySettings ? localLobbySettingsBuffer.maxDistance : hostLobbySettings.maxDistance}
-							min={1}
-							max={10}
-							step={0.1}
-							onChange={(_, newValue: number | number[]) => updateLocalLobbySettingsBuffer({ maxDistance: newValue as number })}
-						/>
-					</DisabledTooltip>
-				</div>
-				<div>
+				{!isLiteSettings && (
+					<>
+						<Typography variant="h6">{t('settings.lobbysettings.title')}</Typography>
+						<div>
+							<Typography id="input-slider" className={classes.sliderLabel} gutterBottom>
+								{(canChangeLobbySettings ? localLobbySettingsBuffer.visionHearing : hostLobbySettings.visionHearing)
+									? t('settings.lobbysettings.voicedistance_impostor')
+									: t('settings.lobbysettings.voicedistance')}
+								: {canChangeLobbySettings ? localLobbySettingsBuffer.maxDistance.toFixed(1) : hostLobbySettings.maxDistance.toFixed(1)}
+							</Typography>
+							<DisabledTooltip
+								disabled={!canChangeLobbySettings}
+								title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
+							>
+								<Slider
+									size="small"
+									disabled={!canChangeLobbySettings}
+									value={canChangeLobbySettings ? localLobbySettingsBuffer.maxDistance : hostLobbySettings.maxDistance}
+									min={1}
+									max={10}
+									step={0.1}
+									onChange={(_, newValue: number | number[]) =>
+										updateLocalLobbySettingsBuffer({ maxDistance: newValue as number })
+									}
+								/>
+							</DisabledTooltip>
+						</div>
+						<div>
 					<DisabledTooltip
 						disabled={!canChangeLobbySettings}
 						title={isInMenuOrLobby ? t('settings.lobbysettings.gamehostonly') : t('settings.lobbysettings.inlobbyonly')}
@@ -721,8 +728,10 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 						/>
 					</DisabledTooltip>
 					{/* </FormGroup> */}
-				</div>
-				<Divider />
+						</div>
+						<Divider />
+					</>
+				)}
 				<Typography variant="h6">{t('settings.audio.title')}</Typography>
 				<TextField
 					select
@@ -1083,8 +1092,12 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					onSaveURLs={ServerURLsInputCallback}
 					className={classes.dialog}
 				/>
-				<Divider />
-				<Typography variant="h6">{t('settings.beta.title')}</Typography>
+				{!isLiteSettings && (
+					<>
+						<Divider />
+						<Typography variant="h6">{t('settings.beta.title')}</Typography>
+					</>
+				)}
 				<div>
 					<FormControlLabel
 						className={classes.formLabel}
@@ -1223,7 +1236,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					)}
 				</div>
 				<Divider />
-				<Typography variant="h6">{t('settings.troubleshooting.title')}</Typography>
+				{!isLiteSettings && <Typography variant="h6">{t('settings.troubleshooting.title')}</Typography>}
 				<div>
 					<DisabledTooltip disabled={!canResetSettings} title={t('settings.troubleshooting.warning')}>
 						<Button

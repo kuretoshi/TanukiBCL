@@ -24,8 +24,10 @@
 		"dist": "yarn compile && electron-builder --win --x64 --ia32",
 		"dist:32": "yarn compile && electron-builder --win --ia32",
 		"dist:64": "yarn compile && electron-builder --win --x64",
+		"dist:lite": "yarn compile && electron-builder --win --x64 --config electron-builder-lite.yml",
 		"dist:linux": "yarn compile && electron-builder --linux --x64",
 		"publish": "yarn compile && electron-builder --win --x64 --ia32 --publish always ",
+		"publish:lite": "yarn compile && electron-builder --win --x64 --config electron-builder-lite.yml --publish always",
 		"publish:linux": "yarn compile && electron-builder --x64 --linux --publish always"
 	},
 	"dependencies": {

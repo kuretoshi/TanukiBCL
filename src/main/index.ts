@@ -14,15 +14,22 @@ import { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
 import { protocol } from 'electron';
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
-import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
+import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
 import { GenerateHat } from './avatarGenerator';
 const args = require('minimist')(process.argv); // eslint-disable-line
 const isDevelopment = process.env.NODE_ENV !== 'production';
-const devTools = (isDevelopment || args.dev === 1) && true;
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
 const shouldCheckForUpdates = !isDevelopment;
+const isLiteApp =
+	process.env.BETTERCREWLINK_LITE === '1' ||
+	/lite/i.test(process.execPath) ||
+	/lite/i.test(app.getName());
+const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
+const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
+app.setName(appDisplayName);
+app.setAppUserModelId(isLiteApp ? 'net.ottomated.crewlinkkai.lite' : 'net.ottomated.crewlinkkai.beta.local');
 const overlayTargetName = String(args['target-name'] || args.targetName || args['target-window'] || args.targetWindow || 'Among Us');
 const allowMultiInstance =
 	args['multi-instance'] === true ||
@@ -40,11 +47,11 @@ declare global {
 // global reference to mainWindow (necessary to prevent window from being garbage collected)
 global.mainWindow = null;
 global.overlay = null;
-const store = new Store<ISettings>();
+const store = new Store<ISettings>({ name: getVariantStoreName() });
 let isQuitting = false;
 app.commandLine.appendSwitch('disable-pinch');
 
-if (platform() === 'linux' || !store.get('hardware_acceleration', true)) {
+if (isLiteApp || platform() === 'linux' || !store.get('hardware_acceleration', true)) {
 	app.disableHardwareAcceleration();
 
 }
@@ -88,7 +95,7 @@ function sendAutoUpdaterState(state: AutoUpdaterState) {
 
 function isMissingUpdateMetadataError(err: Error | unknown): boolean {
 	const message = err instanceof Error ? err.message : String(err);
-	return message.includes('404') && message.includes('latest.yml');
+	return message.includes('404') && (message.includes('latest.yml') || message.includes('lite.yml'));
 }
 
 function sendAutoUpdaterError(err: Error | unknown) {
@@ -118,7 +125,7 @@ function createMainWindow() {
 	const mainWindowState = windowStateKeeper({});
 
 	const window = new BrowserWindow({
-		title: 'BetterCrewLinkKai',
+		title: appDisplayName,
 		width: 280,
 		height: 390,
 		maxWidth: 280,
@@ -148,7 +155,9 @@ function createMainWindow() {
 	}
 
 	if (isDevelopment) {
-		window.loadURL(`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=app`);
+		window.loadURL(
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=app&lite=${isLiteApp ? '1' : '0'}`
+		);
 	} else {
 		window.loadURL(
 			formatUrl({
@@ -157,13 +166,14 @@ function createMainWindow() {
 				query: {
 					version: appVersion,
 					view: 'app',
+					lite: isLiteApp ? '1' : '0',
 				},
 				slashes: true,
 			})
 		);
 	}
 	//window.webContents.userAgent = `CrewLink/${crewlinkVersion} (${process.platform})`;
-	window.webContents.userAgent = `BetterCrewLinkKai/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `${appDisplayName}/${appVersion} (${process.platform})`;
 	window.webContents.once('did-finish-load', () => {
 		if (latestAutoUpdaterState.state !== 'unavailable') {
 			sendAutoUpdaterState(latestAutoUpdaterState);
@@ -201,7 +211,7 @@ function createMainWindow() {
 
 function createLobbyBrowser() {
 	const window = new BrowserWindow({
-		title: 'BetterCrewLinkKai Browser',
+		title: `${appDisplayName} Browser`,
 		width: 900,
 		height: 500,
 		minWidth: 250,
@@ -227,7 +237,9 @@ function createLobbyBrowser() {
 	// 	});
 	// }
 	if (isDevelopment) {
-		window.loadURL(`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=lobbies`);
+		window.loadURL(
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=lobbies&lite=${isLiteApp ? '1' : '0'}`
+		);
 	} else {
 		window.loadURL(
 			formatUrl({
@@ -236,19 +248,20 @@ function createLobbyBrowser() {
 				query: {
 					version: appVersion,
 					view: 'lobbies',
+					lite: isLiteApp ? '1' : '0',
 				},
 				slashes: true,
 			})
 		);
 	}
-	window.webContents.userAgent = `BetterCrewLinkKai/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `${appDisplayName}/${appVersion} (${process.platform})`;
 	console.log('Opened app version: ', appVersion);
 	return window;
 }
 
 function createOverlay() {
 	const overlay = new BrowserWindow({
-		title: 'BetterCrewLinkKai Overlay',
+		title: `${appDisplayName} Overlay`,
 		width: 400,
 		height: 300,
 		webPreferences: {
@@ -274,7 +287,7 @@ function createOverlay() {
 
 	if (isDevelopment) {
 		overlay.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${appVersion}&view=overlay`
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${appVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}`
 		);
 	} else {
 		overlay.loadURL(
@@ -284,6 +297,7 @@ function createOverlay() {
 				query: {
 					version: appVersion,
 					view: 'overlay',
+					lite: isLiteApp ? '1' : '0',
 				},
 				slashes: true,
 			})
@@ -299,7 +313,8 @@ const gotTheLock = allowMultiInstance || app.requestSingleInstanceLock();
 if (!gotTheLock) {
 	app.quit();
 } else {
-	autoUpdater.autoDownload = false;
+	autoUpdater.channel = isLiteApp ? 'lite' : 'latest';
+	autoUpdater.autoDownload = isLiteApp;
 	autoUpdater.allowPrerelease = true;
 	autoUpdater.on('update-available', (info: UpdateInfo) => {
 		sendAutoUpdaterState({
@@ -376,10 +391,12 @@ if (!gotTheLock) {
 		initializeIpcHandlers();
 		global.mainWindow = createMainWindow();
 
-		if (isDevelopment)
+		if (isDevelopment && !isLiteApp) {
+			const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
 			installExtension(REACT_DEVELOPER_TOOLS)
 				.then((name: string) => console.log(`Added Extension:  ${name}`))
 				.catch((err: string) => console.log('An error occurred: ', err));
+		}
 	});
 
 	app.on('second-instance', () => {
@@ -395,6 +412,9 @@ if (!gotTheLock) {
 	});
 
 	ipcMain.on(IpcHandlerMessages.OPEN_LOBBYBROWSER, () => {
+		if (isLiteApp) {
+			return;
+		}
 		if (!global.lobbyBrowser) {
 			global.lobbyBrowser = createLobbyBrowser();
 		} else {

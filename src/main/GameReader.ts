@@ -33,6 +33,10 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
 	appVersion = app.getVersion();
 }
+const appDisplayName =
+	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
+		? 'BetterCrewLinkKaiLite'
+		: 'BetterCrewLinkKai';
 const args = require('minimist')(process.argv); // eslint-disable-line
 const targetProcessName = String(
 	args['target-exe'] || args.targetExe || args['target-process'] || args.targetProcess || 'Among Us.exe'
@@ -826,7 +830,7 @@ export default class GameReader {
 
 		this.writeString(
 			shellCodeAddr + 0xd5,
-			`<size=85%><color=#BA68C8>BetterCrewLinkKai v${appVersion}</color></size>\n<size=60%><color=#BA68C8>https://bettercrewlink.app</color></size><size=85%>\nPing: {0}ms</size>`
+			`<size=85%><color=#BA68C8>${appDisplayName} v${appVersion}</color></size>\n<size=60%><color=#BA68C8>https://bettercrewlink.app</color></size><size=85%>\nPing: {0}ms</size>`
 		);
 
 		writeBuffer(this.amongUs!.handle, shellCodeAddr, Buffer.from(shellcode));

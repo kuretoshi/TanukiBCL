@@ -1,9 +1,7 @@
-import React, { Dispatch, SetStateAction, useEffect, useState, useRef } from 'react';
-import Voice from './Voice';
+import React, { Dispatch, SetStateAction, Suspense, lazy, useEffect, useState, useRef } from 'react';
 import Menu from './Menu';
 import { ipcRenderer, shell } from 'electron';
 import { AmongUsState } from '../common/AmongUsState';
-import Settings from './settings/Settings';
 import SettingsStore, { setSetting, setLobbySetting } from './settings/SettingsStore';
 import { GameStateContext, SettingsContext, PlayerColorContext, HostSettingsContext } from './contexts';
 import { ThemeProvider, Theme, StyledEngineProvider } from '@mui/material/styles';
@@ -38,6 +36,8 @@ import './language/i18n';
 import { withNamespaces } from 'react-i18next';
 import { ISettings } from '../common/ISettings';
 
+const Voice = lazy(() => import('./Voice'));
+const Settings = lazy(() => import('./settings/Settings'));
 
 declare module '@mui/styles/defaultTheme' {
 	// eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -46,10 +46,13 @@ declare module '@mui/styles/defaultTheme' {
 
 
 let appVersion = '';
+let isLiteApp = false;
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 	appVersion = ' v' + query.get('version') || '';
+	isLiteApp = query.get('lite') === '1';
 }
+const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
 
 const useStyles = makeStyles(() => ({
 	root: {
@@ -94,7 +97,7 @@ const RawTitleBar: React.FC<TitleBarProps> = function ({ settingsOpen, setSettin
 	return (
 		<div className={classes.root}>
 			<span className={classes.title}>
-				BetterCrewLinkKai{appVersion}
+				{appDisplayName}{appVersion}
 			</span>
 			<IconButton
 				className={classes.button}
@@ -226,7 +229,11 @@ export default function App({ t }): JSX.Element {
 			page = <Menu t={t} error={error} />;
 			break;
 		case AppState.VOICE:
-			page = <Voice t={t} error={error} />;
+			page = (
+				<Suspense fallback={null}>
+					<Voice t={t} error={error} />
+				</Suspense>
+			);
 			break;
 	}
 
@@ -238,7 +245,11 @@ export default function App({ t }): JSX.Element {
 						<StyledEngineProvider injectFirst>
 							<ThemeProvider theme={theme}>
 								<TitleBar settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
-								<Settings t={t} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+								{settingsOpen && (
+									<Suspense fallback={null}>
+										<Settings t={t} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+									</Suspense>
+								)}
 								<Dialog fullWidth open={updaterState.state !== 'unavailable' && diaOpen}>
 									{updaterState.state === 'available' && updaterState.info && (
 										<DialogTitle>アップデート v{updaterState.info.version}</DialogTitle>

@@ -1,6 +1,7 @@
 import Store from 'electron-store';
 import fetch from 'node-fetch';
 import Errors from '../common/Errors';
+import { getVariantStoreName } from '../common/appVariant';
 
 export interface IOffsetsLookup {
 	patterns: {
@@ -140,8 +141,8 @@ interface IOffsetsStore {
 const BASE_URL = "https://raw.githubusercontent.com/OhMyGuus/BetterCrewlink-Offsets/main";
 const BASE_URL_error = "https://cdn.jsdelivr.net/gh/OhMyGuus/BetterCrewlink-Offsets@main";
 
-const store = new Store<IOffsetsStore>({name: "offsets"});
-const lookupStore = new Store<IOffsetsLookup>({name: "lookup"});
+const store = new Store<IOffsetsStore>({ name: getVariantStoreName('offsets') });
+const lookupStore = new Store<IOffsetsLookup>({ name: getVariantStoreName('lookup') });
 
 async function fetchOffsetLookupJson(error: boolean = false): Promise<IOffsetsLookup> {
     const url = error ? BASE_URL_error : BASE_URL;
