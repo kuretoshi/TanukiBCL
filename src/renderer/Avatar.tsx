@@ -23,27 +23,6 @@ import VolumeUp from '@mui/icons-material/VolumeUp';
 import IconButton from '@mui/material/IconButton';
 import Grid from '@mui/material/Grid';
 import { ModsType } from '../common/Mods';
-// @ts-ignore
-import liteCrewmateImage from '../../static/images/lite/crew.png';
-// @ts-ignore
-import liteVisorImage from '../../static/images/lite/visor.png';
-
-const isLiteApp =
-	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
-const liteDefaultPlayerColors = [
-	['#C51111', '#7A0838'],
-	['#132ED1', '#09158E'],
-	['#117F2D', '#0A4D2E'],
-	['#ED54BA', '#AB2BAD'],
-	['#EF7D0D', '#B33E15'],
-	['#F5F557', '#C38823'],
-	['#3F474E', '#1E1F26'],
-	['#FFFFFF', '#8394BF'],
-	['#6B2FBB', '#3B177C'],
-	['#71491E', '#5E2615'],
-	['#38FEDC', '#24A8BE'],
-	['#50EF39', '#15A742'],
-];
 
 const useStyles = makeStyles(() => ({
 	canvas: {
@@ -78,16 +57,6 @@ const useStyles = makeStyles(() => ({
 	},
 	innerTooltip: {
 		textAlign: 'center',
-	},
-	radio: {
-		position: 'absolute',
-		left: '70%',
-		top: '80%',
-		width: '30px',
-		transform: 'translate(-50%, -50%)',
-		fill: 'white',
-		padding: 2,
-		zIndex: 12,
 	},
 }));
 
@@ -144,7 +113,6 @@ const Avatar: React.FC<AvatarProps> = function ({
 	overflow = false,
 	onConfigChange,
 	mod,
-	colorPalette,
 }: AvatarProps) {
 	const classes = useStyles();
 	let icon;
@@ -175,102 +143,6 @@ const Avatar: React.FC<AvatarProps> = function ({
 	}
 	if (player.bugged) {
 		icon = <ErrorOutline className={classes.icon} style={{ background: 'red', borderColor: '' }} />;
-	}
-	if (isLiteApp) {
-		const liteColor = colorPalette?.[0] || liteDefaultPlayerColors[displayColor]?.[0] || '#6b7280';
-		const liteBorderColor = talking ? borderColor : showborder === true ? '#ccbdcc86' : 'transparent';
-		const liteAvatar = (
-			<div
-				className={classes.relative}
-				onClick={onConfigChange}
-				style={{
-					width: '100%',
-					paddingBottom: '100%',
-					borderRadius: '50%',
-					borderStyle: 'solid',
-					borderWidth: Math.max(2, size / 40),
-					borderColor: liteBorderColor,
-					boxSizing: 'border-box',
-					transition: 'border-color .2s ease-out, box-shadow .2s ease-out',
-					boxShadow: talking ? `0 0 ${Math.max(6, Math.round(size / 10))}px ${borderColor}` : 'none',
-					opacity: isAlive ? 1 : 0.45,
-					cursor: 'pointer',
-					transform: lookLeft ? 'scaleX(-1)' : 'scaleX(1)',
-				}}
-			>
-				<div
-					style={{
-						position: 'absolute',
-						left: '17%',
-						bottom: '2%',
-						width: '67%',
-						height: '13%',
-						borderRadius: '50%',
-						background: 'rgba(0, 0, 0, 0.32)',
-					}}
-				/>
-				<div
-					style={{
-						position: 'absolute',
-						left: '9%',
-						top: 0,
-						width: '81%',
-						height: '100%',
-						filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
-					}}
-				>
-					<div
-						style={{
-							position: 'absolute',
-							inset: 0,
-							background: liteColor,
-							WebkitMaskImage: `url(${liteCrewmateImage})`,
-							maskImage: `url(${liteCrewmateImage})`,
-							WebkitMaskRepeat: 'no-repeat',
-							maskRepeat: 'no-repeat',
-							WebkitMaskSize: 'contain',
-							maskSize: 'contain',
-							WebkitMaskPosition: 'center',
-							maskPosition: 'center',
-						}}
-					/>
-					<img
-						src={liteCrewmateImage}
-						alt=""
-						style={{
-							position: 'absolute',
-							inset: 0,
-							width: '100%',
-							height: '100%',
-							objectFit: 'contain',
-							mixBlendMode: 'multiply',
-							opacity: 0.72,
-							pointerEvents: 'none',
-						}}
-					/>
-					<img
-						src={liteVisorImage}
-						alt=""
-						style={{
-							position: 'absolute',
-							inset: 0,
-							width: '100%',
-							height: '100%',
-							objectFit: 'contain',
-							pointerEvents: 'none',
-						}}
-					/>
-				</div>
-				{isUsingRadio && <img src={RadioSVG} className={classes.radio} />}
-			</div>
-		);
-
-		return (
-			<div className={classes.relative}>
-				{liteAvatar}
-				{icon}
-			</div>
-		);
 	}
 	const canvas = (
 		<Canvas

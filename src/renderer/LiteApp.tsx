@@ -1,19 +1,8 @@
-import React, { Dispatch, SetStateAction, Suspense, lazy, useEffect, useState, useRef } from 'react';
-import Menu from './Menu';
-import { ipcRenderer, shell } from 'electron';
-import { AmongUsState } from '../common/AmongUsState';
-import SettingsStore, { setSetting, setLobbySetting } from './settings/SettingsStore';
-import { GameStateContext, SettingsContext, PlayerColorContext, HostSettingsContext } from './contexts';
+import React, { Dispatch, SetStateAction, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
+import { ipcRenderer } from 'electron';
 import { ThemeProvider, Theme, StyledEngineProvider } from '@mui/material/styles';
 import makeStyles from '@mui/styles/makeStyles';
-import {
-	AutoUpdaterState,
-	IpcHandlerMessages,
-	IpcMessages,
-	IpcRendererMessages,
-	IpcSyncMessages,
-} from '../common/ipc-messages';
-import theme from './theme';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshSharpIcon from '@mui/icons-material/RefreshSharp';
 import CloseIcon from '@mui/icons-material/Close';
@@ -26,33 +15,53 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import prettyBytes from 'pretty-bytes';
-import { IpcOverlayMessages } from '../common/ipc-messages';
-import ReactDOM from 'react-dom';
-import './css/index.css';
-import 'source-code-pro/source-code-pro.css';
-import 'typeface-varela/index.css';
-import { DEFAULT_PLAYERCOLORS } from '../main/avatarGenerator';
-import './language/i18n';
 import { withNamespaces } from 'react-i18next';
+import { AmongUsState } from '../common/AmongUsState';
+import {
+	AutoUpdaterState,
+	IpcHandlerMessages,
+	IpcMessages,
+	IpcOverlayMessages,
+	IpcRendererMessages,
+	IpcSyncMessages,
+} from '../common/ipc-messages';
+import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsContext } from './contexts';
+import SettingsStore, { setLobbySetting, setSetting } from './settings/SettingsStore';
 import { ISettings } from '../common/ISettings';
+import Menu from './Menu';
+import theme from './theme';
+import './css/index.css';
+import 'typeface-varela/index.css';
+import './language/i18n';
 
 const Voice = lazy(() => import('./Voice'));
-const Settings = lazy(() => import('./settings/Settings'));
+const LiteSettings = lazy(() => import('./LiteSettings'));
 
 declare module '@mui/styles/defaultTheme' {
 	// eslint-disable-next-line @typescript-eslint/no-empty-interface
-	interface DefaultTheme extends Theme { }
+	interface DefaultTheme extends Theme {}
 }
 
+const litePlayerColors = [
+	['#C51111', '#7A0838'],
+	['#132ED1', '#09158E'],
+	['#117F2D', '#0A4D2E'],
+	['#ED54BA', '#AB2BAD'],
+	['#EF7D0D', '#B33E15'],
+	['#F5F557', '#C38823'],
+	['#3F474E', '#1E1F26'],
+	['#FFFFFF', '#8394BF'],
+	['#6B2FBB', '#3B177C'],
+	['#71491E', '#5E2615'],
+	['#38FEDC', '#24A8BE'],
+	['#50EF39', '#15A742'],
+];
 
 let appVersion = '';
-let isLiteApp = false;
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 	appVersion = ' v' + query.get('version') || '';
-	isLiteApp = query.get('lite') === '1';
 }
-const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
 
 const useStyles = makeStyles(() => ({
 	root: {
@@ -92,13 +101,11 @@ interface TitleBarProps {
 	setSettingsOpen: Dispatch<SetStateAction<boolean>>;
 }
 
-const RawTitleBar: React.FC<TitleBarProps> = function ({ settingsOpen, setSettingsOpen }: TitleBarProps) {
+const TitleBar: React.FC<TitleBarProps> = React.memo(function ({ settingsOpen, setSettingsOpen }: TitleBarProps) {
 	const classes = useStyles();
 	return (
 		<div className={classes.root}>
-			<span className={classes.title}>
-				{appDisplayName}{appVersion}
-			</span>
+			<span className={classes.title}>BetterCrewLinkKaiLite{appVersion}</span>
 			<IconButton
 				className={classes.button}
 				style={{ left: 0 }}
@@ -128,31 +135,30 @@ const RawTitleBar: React.FC<TitleBarProps> = function ({ settingsOpen, setSettin
 			</IconButton>
 		</div>
 	);
-};
-
-const TitleBar = React.memo(RawTitleBar);
+});
 
 enum AppState {
 	MENU,
 	VOICE,
 }
+
 // @ts-ignore
-export default function App({ t }): JSX.Element {
+function LiteApp({ t }): JSX.Element {
 	const [state, setState] = useState<AppState>(AppState.MENU);
 	const [gameState, setGameState] = useState<AmongUsState>({} as AmongUsState);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [diaOpen, setDiaOpen] = useState(true);
 	const [error, setError] = useState('');
-	const [updaterState, setUpdaterState] = useState<AutoUpdaterState>({
-		state: 'unavailable',
-	});
-	const playerColors = useRef<string[][]>(DEFAULT_PLAYERCOLORS);
+	const [updaterState, setUpdaterState] = useState<AutoUpdaterState>({ state: 'unavailable' });
+	const playerColors = useRef<string[][]>(litePlayerColors);
 	const overlayInitCount = useRef<number>(0);
-
 	const [settings, setSettings] = useState(SettingsStore.store);
 	const [hostLobbySettings, setHostLobbySettings] = useState(settings.localLobbySettings);
+
 	useEffect(() => {
-		SettingsStore.onDidAnyChange((newValue, _) => { setSettings(newValue as ISettings) });
+		SettingsStore.onDidAnyChange((newValue) => {
+			setSettings(newValue as ISettings);
+		});
 	}, []);
 
 	useEffect(() => {
@@ -162,31 +168,28 @@ export default function App({ t }): JSX.Element {
 	}, [overlayInitCount.current]);
 
 	useEffect(() => {
+		let shouldInit = true;
 		const onOpen = (_: Electron.IpcRendererEvent, isOpen: boolean) => {
 			setState(isOpen ? AppState.VOICE : AppState.MENU);
 		};
 		const onState = (_: Electron.IpcRendererEvent, newState: AmongUsState) => {
 			setGameState(newState);
 		};
-
-		const onError = (_: Electron.IpcRendererEvent, error: string) => {
+		const onError = (_: Electron.IpcRendererEvent, newError: string) => {
 			shouldInit = false;
-			setError(error);
+			setError(newError);
 		};
-		const onAutoUpdaterStateChange = (_: Electron.IpcRendererEvent, state: AutoUpdaterState) => {
-			setUpdaterState((old) => ({ ...old, ...state }));
+		const onAutoUpdaterStateChange = (_: Electron.IpcRendererEvent, nextState: AutoUpdaterState) => {
+			setUpdaterState((old) => ({ ...old, ...nextState }));
 		};
 		const onColorsChange = (_: Electron.IpcRendererEvent, colors: string[][]) => {
-			console.log('RECIEVED COLORS');
 			playerColors.current = colors;
 			ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, colors);
 		};
-
 		const onOverlayInit = () => {
 			overlayInitCount.current++;
 		};
 
-		let shouldInit = true;
 		ipcRenderer
 			.invoke(IpcHandlerMessages.START_HOOK)
 			.then(() => {
@@ -194,12 +197,13 @@ export default function App({ t }): JSX.Element {
 					setGameState(ipcRenderer.sendSync(IpcSyncMessages.GET_INITIAL_STATE));
 				}
 			})
-			.catch((error: Error) => {
+			.catch((hookError: Error) => {
 				if (shouldInit) {
 					shouldInit = false;
-					setError(error.message);
+					setError(hookError.message);
 				}
 			});
+
 		ipcRenderer.on(IpcRendererMessages.AUTO_UPDATER_STATE, onAutoUpdaterStateChange);
 		ipcRenderer.on(IpcRendererMessages.NOTIFY_GAME_OPENED, onOpen);
 		ipcRenderer.on(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, onState);
@@ -226,19 +230,14 @@ export default function App({ t }): JSX.Element {
 		ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_SETTINGS_CHANGED, SettingsStore.store);
 	}, [settings]);
 
-	let page;
-	switch (state) {
-		case AppState.MENU:
-			page = <Menu t={t} error={error} />;
-			break;
-		case AppState.VOICE:
-			page = (
-				<Suspense fallback={null}>
-					<Voice t={t} error={error} />
-				</Suspense>
-			);
-			break;
-	}
+	const page =
+		state === AppState.VOICE ? (
+			<Suspense fallback={null}>
+				<Voice t={t} error={error} />
+			</Suspense>
+		) : (
+			<Menu t={t} error={error} />
+		);
 
 	return (
 		<PlayerColorContext.Provider value={playerColors.current}>
@@ -250,21 +249,19 @@ export default function App({ t }): JSX.Element {
 								<TitleBar settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
 								{settingsOpen && (
 									<Suspense fallback={null}>
-										<Settings t={t} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+										<LiteSettings t={t} open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 									</Suspense>
 								)}
 								<Dialog fullWidth open={updaterState.state !== 'unavailable' && diaOpen}>
 									{updaterState.state === 'available' && updaterState.info && (
 										<DialogTitle>アップデート v{updaterState.info.version}</DialogTitle>
 									)}
-									{updaterState.state === 'error' && (
-										<DialogTitle>アップデートエラー</DialogTitle>
-									)}
+									{updaterState.state === 'error' && <DialogTitle>アップデートエラー</DialogTitle>}
 									{updaterState.state === 'downloading' && <DialogTitle>アップデート中...</DialogTitle>}
 									<DialogContent>
 										{updaterState.state === 'downloading' && updaterState.progress && (
 											<>
-												<LinearProgress variant={'determinate'} value={updaterState.progress.percent} />
+												<LinearProgress variant="determinate" value={updaterState.progress.percent} />
 												<DialogContentText>
 													{prettyBytes(updaterState.progress.transferred)} / {prettyBytes(updaterState.progress.total)}
 												</DialogContentText>
@@ -272,7 +269,7 @@ export default function App({ t }): JSX.Element {
 										)}
 										{updaterState.state === 'available' && (
 											<>
-												<LinearProgress variant={'indeterminate'} />
+												<LinearProgress variant="indeterminate" />
 												<DialogContentText>新しいバージョンがあります。今すぐアップデートしますか？</DialogContentText>
 											</>
 										)}
@@ -282,44 +279,19 @@ export default function App({ t }): JSX.Element {
 									</DialogContent>
 									{updaterState.state === 'error' && (
 										<DialogActions>
-											<Button
-												color="grey"
-												onClick={() => {
-													shell.openExternal("https://github.com/kuretoshi/BetterCrewLink/releases/latest");
-												}}
-											>
-												手動でダウンロード
-											</Button>
-											<Button
-												color="grey"
-												onClick={() => {
-													setDiaOpen(false);
-												}}
-											>
-												スキップ
+											<Button color="grey" onClick={() => setDiaOpen(false)}>
+												閉じる
 											</Button>
 										</DialogActions>
 									)}
 									{updaterState.state === 'available' && (
 										<DialogActions>
-											<Button
-												onClick={() => {
-													ipcRenderer.send('update-app');
-												}}
-											>
-												今すぐ
-											</Button>
-											<Button
-												onClick={() => {
-													setDiaOpen(false);
-												}}
-											>
-												あとで
-											</Button>
+											<Button onClick={() => ipcRenderer.send('update-app')}>今すぐ</Button>
+											<Button onClick={() => setDiaOpen(false)}>あとで</Button>
 										</DialogActions>
 									)}
 								</Dialog>
-								{page}
+								{!settingsOpen && page}
 							</ThemeProvider>
 						</StyledEngineProvider>
 					</SettingsContext.Provider>
@@ -328,7 +300,8 @@ export default function App({ t }): JSX.Element {
 		</PlayerColorContext.Provider>
 	);
 }
+
 // @ts-ignore
-const App2 = withNamespaces()(App);
+const App2 = withNamespaces()(LiteApp);
 // @ts-ignore
 ReactDOM.render(<App2 />, document.getElementById('app'));

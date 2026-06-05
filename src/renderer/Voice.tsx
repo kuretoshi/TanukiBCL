@@ -1188,6 +1188,9 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}, [gameState.isHost]);
 
 	useEffect(() => {
+		if (isLiteApp) {
+			return;
+		}
 		updateLobby();
 	}, [
 		gameState.gameState,
