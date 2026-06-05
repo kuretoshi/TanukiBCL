@@ -320,7 +320,9 @@ const gotTheLock = allowMultiInstance || app.requestSingleInstanceLock();
 if (!gotTheLock) {
 	app.quit();
 } else {
-	autoUpdater.channel = isLiteApp ? 'lite' : 'latest';
+	if (isLiteApp) {
+		autoUpdater.channel = 'lite';
+	}
 	autoUpdater.autoDownload = isLiteApp;
 	autoUpdater.allowPrerelease = true;
 	autoUpdater.on('update-available', (info: UpdateInfo) => {
