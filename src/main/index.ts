@@ -30,6 +30,13 @@ const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
 const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
 app.setName(appDisplayName);
 app.setAppUserModelId(isLiteApp ? 'net.ottomated.crewlinkkai.lite' : 'net.ottomated.crewlinkkai.beta.local');
+if (isLiteApp) {
+	autoUpdater.setFeedURL({
+		provider: 'generic',
+		url: 'https://github.com/kuretoshi/BetterCrewLink/releases/latest/download',
+		channel: 'lite',
+	});
+}
 const overlayTargetName = String(args['target-name'] || args.targetName || args['target-window'] || args.targetWindow || 'Among Us');
 const allowMultiInstance =
 	args['multi-instance'] === true ||
