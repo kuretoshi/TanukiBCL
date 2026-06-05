@@ -1,13 +1,17 @@
-import React, { useEffect, useMemo, useState, CSSProperties } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState, CSSProperties } from 'react';
 import { ipcRenderer } from 'electron';
 import { AmongUsState, GameState, VoiceState } from '../common/AmongUsState';
 import { IpcOverlayMessages, IpcMessages } from '../common/ipc-messages';
 import ReactDOM from 'react-dom';
 import makeStyles from '@mui/styles/makeStyles';
 import './css/overlay.css';
-import Avatar from './Avatar';
+import LiteAvatar from './LiteAvatar';
 import { ISettings } from '../common/ISettings';
 import { DEFAULT_PLAYERCOLORS } from '../main/avatarGenerator';
+
+const isLiteOverlay =
+	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
+const RichAvatar = lazy(() => import('./Avatar'));
 
 interface UseStylesProps {
 	height: number;
@@ -201,29 +205,34 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 		const displayName = player.appearanceName || player.name;
 		const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
 		const displayColorId = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
+		const avatarProps = {
+			player,
+			showborder: isOnSide && !compactOverlay,
+			muted: voiceState.muted && player.isLocal,
+			deafened: voiceState.deafened && player.isLocal,
+			connectionState: 'connected' as const,
+			talking,
+			borderColor: !player.isLocal || player.shiftedColor == -1 ? '#2ecc71' : 'gray',
+			isUsingRadio: voiceState.impostorRadioClientId == player.clientId,
+			isAlive: !voiceState.otherDead[player.clientId] || (player.isLocal && !player.isDead),
+			size: 100,
+			lookLeft: !(positionParse === 'left' || positionParse === 'bottom_left'),
+			overflow: isOnSide && !showName,
+			showHat: true,
+			mod: voiceState.mod,
+			colorPalette: playerColors[displayColorId],
+		};
 		// const audio = voiceState.audioConnected[peer];
 		avatars.push(
 			<div key={player.id} className="player_wrapper">
 				<div>
-					<Avatar
-						key={player.id}
-						// connectionState={!connected ? 'disconnected' : audio ? 'connected' : 'novoice'}
-						player={player}
-						showborder={isOnSide && !compactOverlay}
-						muted={voiceState.muted && player.isLocal}
-						deafened={voiceState.deafened && player.isLocal}
-						connectionState={'connected'}
-						talking={talking}
-						borderColor={!player.isLocal || player.shiftedColor == -1 ? '#2ecc71' : 'gray'}
-						isUsingRadio={voiceState.impostorRadioClientId == player.clientId}
-						isAlive={!voiceState.otherDead[player.clientId] || (player.isLocal && !player.isDead)}
-						size={100}
-						lookLeft={!(positionParse === 'left' || positionParse === 'bottom_left')}
-						overflow={isOnSide && !showName}
-						showHat={true}
-						mod={voiceState.mod}
-						colorPalette={playerColors[displayColorId]}
-					/>
+					{isLiteOverlay ? (
+						<LiteAvatar key={player.id} {...avatarProps} />
+					) : (
+						<Suspense fallback={null}>
+							<RichAvatar key={player.id} {...avatarProps} />
+						</Suspense>
+					)}
 				</div>
 				{showName && (
 					<span

@@ -1,4 +1,4 @@
-import React, { ReactChild, useCallback, useContext, useEffect, useReducer, useState } from 'react';
+import React, { ReactChild, lazy, useCallback, useContext, useEffect, useReducer, useState } from 'react';
 import { SettingsContext, GameStateContext, HostSettingsContext } from '../contexts';
 import MicrophoneSoundBar from './MicrophoneSoundBar';
 import TestSpeakersButton from './TestSpeakersButton';
@@ -28,8 +28,9 @@ import i18next, { TFunction } from 'i18next';
 import languages from '../language/languages';
 import ServerURLInput from './ServerURLInput';
 import MuiDivider from '@mui/material/Divider';
-import PublicLobbySettings from './PublicLobbySettings';
 import SettingsStore, { pushToTalkOptions } from './SettingsStore';
+
+const PublicLobbySettings = lazy(() => import('./PublicLobbySettings'));
 
 interface StyleInput {
 	open: boolean;
@@ -249,6 +250,14 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 	// Used to buffer changes that are only sent out on settings close
 	const [localLobbySettingsBuffer, setLocalLobbySettingsBuffer] = useState(settings.localLobbySettings);
 	const updateLocalLobbySettingsBuffer = (newValues: Partial<ILobbySettings>) => setLocalLobbySettingsBuffer((oldState) => { return { ...oldState, ...newValues } });
+	const savePendingSettings = useCallback(() => {
+		setSettings('localLobbySettings', localLobbySettingsBuffer);
+	}, [localLobbySettingsBuffer, setSettings]);
+
+	useEffect(() => {
+		window.addEventListener('crewlink-save-settings-before-reload', savePendingSettings);
+		return () => window.removeEventListener('crewlink-save-settings-before-reload', savePendingSettings);
+	}, [savePendingSettings]);
 
 	useEffect(() => {
 		setUnsavedCount((s) => s + 1);
@@ -417,7 +426,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 					className={classes.back}
 					size="small"
 					onClick={() => {
-						setSettings('localLobbySettings', localLobbySettingsBuffer);
+						savePendingSettings();
 						if (unsaved) {
 							onClose();
 							location.reload();
