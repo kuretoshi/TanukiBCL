@@ -1,7 +1,11 @@
 appId: net.ottomated.crewlinkkai.lite
 extraMetadata:
   name: bettercrewlinkkailite
+<<<<<<< HEAD
   version: 3.1.5-91
+=======
+  version: 3.1.5-9
+>>>>>>> 7c448db590407cf5c8973bd7daf4d9f1fcaf42bd
 productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
