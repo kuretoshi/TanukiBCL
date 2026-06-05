@@ -262,10 +262,11 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 				: 'transparent';
 	const scale = props.size / 100;
 	const borderWidth = Math.max(2, props.size / 40);
-	const imageWidth = Math.round(81 * scale);
-	const imageHeight = Math.round(100 * scale);
-	const imageLeft = Math.round(9 * scale);
-	const imageTop = Math.round(0 * scale);
+	const avatarImageScale = props.size >= 80 ? 0.9 : 1;
+	const imageWidth = Math.round(81 * scale * avatarImageScale);
+	const imageHeight = Math.round(100 * scale * avatarImageScale);
+	const imageLeft = Math.round((props.size - imageWidth) / 2);
+	const imageTop = Math.round((props.size - imageHeight) / 2);
 	const iconSize = Math.max(18, Math.round(30 * scale));
 	const iconFontSize = Math.max(14, Math.round(20 * scale));
 	const displayName = props.player.appearanceName || props.player.name;
@@ -2072,7 +2073,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 									isUsingRadio={myPlayer?.isImpostor && impostorRadioClientId.current === myPlayer.clientId}
 									talking={talking}
 									isAlive={!myPlayer.isDead}
-									size={100}
+									size={isLiteApp ? 80 : 100}
 									mod={gameState.mod}
 									colorPalette={playerColors[myPlayer.colorId]}
 								/>

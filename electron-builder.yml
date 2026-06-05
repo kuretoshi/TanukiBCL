@@ -9,6 +9,9 @@ files:
     filter:
       - package.json
       - app
+extraFiles:
+  - from: Better-CrewLinkKai-target-pid.ps1
+    to: Better-CrewLinkKai-target-pid.ps1
 
 win:
   executableName: Better-CrewLinkKai

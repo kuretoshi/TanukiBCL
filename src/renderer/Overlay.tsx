@@ -115,6 +115,7 @@ const Overlay: React.FC = function () {
 					gameState={gameState}
 					position={settings.overlayPosition}
 					compactOverlay={settings.compactOverlay}
+					playerColors={playerColors}
 				/>
 			)}
 		</>
@@ -126,6 +127,7 @@ interface AvatarOverlayProps {
 	gameState: AmongUsState;
 	position: ISettings['overlayPosition'];
 	compactOverlay: boolean;
+	playerColors: string[][];
 }
 
 const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
@@ -133,6 +135,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 	gameState,
 	position,
 	compactOverlay,
+	playerColors,
 }: AvatarOverlayProps) => {
 	if (!gameState.players) return null;
 
@@ -196,6 +199,8 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 		const talking =
 			!player.inVent && (voiceState.otherTalking[player.clientId] || (player.isLocal && voiceState.localTalking));
 		const displayName = player.appearanceName || player.name;
+		const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
+		const displayColorId = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
 		// const audio = voiceState.audioConnected[peer];
 		avatars.push(
 			<div key={player.id} className="player_wrapper">
@@ -217,6 +222,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 						overflow={isOnSide && !showName}
 						showHat={true}
 						mod={voiceState.mod}
+						colorPalette={playerColors[displayColorId]}
 					/>
 				</div>
 				{showName && (
