@@ -30,7 +30,7 @@ const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
 const appDisplayName = isLiteApp ? 'タヌキのベタクルLite' : 'タヌキのベタクル';
 const internalAppName = isLiteApp ? 'TanukiBCLLite' : 'TanukiBCL';
 app.setName(appDisplayName);
-app.setAppUserModelId(isLiteApp ? 'io.kuretoshi.tanukibcl.lite' : 'io.kuretoshi.tanukibcl');
+app.setAppUserModelId(isLiteApp ? 'net.ottomated.crewlinkkai.lite' : 'net.ottomated.crewlinkkai.beta.local');
 if (isLiteApp) {
 	autoUpdater.setFeedURL({
 		provider: 'generic',

@@ -1,6 +1,6 @@
 !macro customInit
-  StrCmp $INSTDIR "$LocalAppData\Programs\tanukibcl" 0 +2
-    StrCpy $INSTDIR "$LocalAppData\Programs\tanukibcllite"
+  StrCmp $INSTDIR "$LocalAppData\Programs\bettercrewlinkkai" 0 +2
+    StrCpy $INSTDIR "$LocalAppData\Programs\bettercrewlinkkailite"
 !macroend
 
 !macro customCheckAppRunning

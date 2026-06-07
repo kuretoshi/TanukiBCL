@@ -1,5 +1,5 @@
-appId: io.kuretoshi.tanukibcl
-productName: TanukiBCL
+appId: net.ottomated.crewlinkkai.beta.local
+productName: Better-CrewLinkKai
 copyright: Copyright © 2021 OhMyGuus
 directories:
   output: dist

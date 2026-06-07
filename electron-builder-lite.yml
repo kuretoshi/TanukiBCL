@@ -1,8 +1,8 @@
-appId: io.kuretoshi.tanukibcl.lite
+appId: net.ottomated.crewlinkkai.lite
 extraMetadata:
-  name: tanukibcllite
+  name: bettercrewlinkkailite
   version: 3.1.6-12
-productName: TanukiBCLLite
+productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
   output: dist-lite
