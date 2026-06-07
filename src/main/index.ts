@@ -169,16 +169,14 @@ function createMainWindow() {
 		title: appDisplayName,
 		width: 280,
 		height: 390,
-		maxWidth: 280,
 		minWidth: 280,
-		maxHeight: 390,
 		minHeight: 390,
 		x: mainWindowState.x,
 		y: mainWindowState.y,
-		resizable: false,
+		resizable: true,
 		frame: false,
 		fullscreenable: false,
-		maximizable: false,
+		maximizable: true,
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false

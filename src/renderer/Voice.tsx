@@ -2304,7 +2304,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 									deafened={deafenedState}
 									muted={mutedState}
 									player={myPlayer}
-									borderColor={myPlayer?.shiftedColor == -1 ? '#2ecc71' : 'gray'}
+									borderColor="#2ecc71"
 									connectionState={connected ? 'connected' : 'disconnected'}
 									isUsingRadio={myPlayer?.isImpostor && impostorRadioClientId.current === myPlayer.clientId}
 									talking={talking}

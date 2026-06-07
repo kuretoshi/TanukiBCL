@@ -1231,7 +1231,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 								fullWidth
 								spellCheck={false}
 								label={t('settings.streaming.obs_url')}
-								value={`${settings.serverURL.includes('https') ? 'https' : 'http'}://obs.bettercrewlink.app/?compact=${settings.compactOverlay ? '1' : '0'
+								value={`https://kuretoshi.github.io/BetterCrewlink-obs_fix/?compact=${settings.compactOverlay ? '1' : '0'
 									}&position=${settings.overlayPosition}&meeting=${settings.meetingOverlay ? '1' : '0'}&secret=${settings.obsSecret
 									}&server=${settings.serverURL}`}
 								variant="outlined"

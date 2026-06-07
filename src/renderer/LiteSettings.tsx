@@ -574,7 +574,7 @@ const LiteSettings: React.FC<LiteSettingsProps> = function ({ t, open, onClose }
 						label={t('settings.streaming.obs_url')}
 						variant="outlined"
 						color="secondary"
-						value={`${settings.serverURL.includes('https') ? 'https' : 'http'}://obs.bettercrewlink.app/?compact=${
+						value={`https://kuretoshi.github.io/BetterCrewlink-obs_fix/?compact=${
 							settings.compactOverlay ? '1' : '0'
 						}&position=${settings.overlayPosition}&meeting=${settings.meetingOverlay ? '1' : '0'}&secret=${
 							settings.obsSecret || ''
