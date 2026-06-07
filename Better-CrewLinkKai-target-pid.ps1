@@ -9,19 +9,16 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($ExePath)) {
 	$candidates = @(
-		"$PSScriptRoot\Better-CrewLinkKai.exe",
-		"$PSScriptRoot\BetterCrewLinkKai.exe",
-		"$env:LOCALAPPDATA\Programs\bettercrewlinkkai\Better-CrewLinkKai.exe",
-		"$env:LOCALAPPDATA\Programs\bettercrewlinkkai\BetterCrewLinkKai.exe",
-		"$PSScriptRoot\dist\win-unpacked\Better-CrewLinkKai.exe",
-		"$PSScriptRoot\dist\win-unpacked\BetterCrewLinkKai.exe"
+		"$PSScriptRoot\TanukiBCL.exe",
+		"$env:LOCALAPPDATA\Programs\tanukibcl\TanukiBCL.exe",
+		"$PSScriptRoot\dist\win-unpacked\TanukiBCL.exe"
 	)
 
 	$ExePath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 }
 
 if ([string]::IsNullOrWhiteSpace($ExePath) -or !(Test-Path -LiteralPath $ExePath)) {
-	throw "BetterCrewLinkKai executable was not found. Pass -ExePath explicitly."
+	throw "TanukiBCL executable was not found. Pass -ExePath explicitly."
 }
 
 $arguments = @(
@@ -30,5 +27,5 @@ $arguments = @(
 	"--target-name=$Title"
 )
 
-Write-Host "Launching BetterCrewLinkKai: $ExePath"
+Write-Host "Launching TanukiBCL: $ExePath"
 Start-Process -FilePath $ExePath -ArgumentList $arguments

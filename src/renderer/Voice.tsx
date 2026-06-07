@@ -760,13 +760,17 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}
 
 	function isAirshipMeetingAudioFallback(state: AmongUsState): boolean {
-		return (
-			state.gameState === GameState.TASKS &&
-			state.map === MapType.AIRSHIP &&
+		const hasMeetingHudSignal =
 			!!state.debug &&
 			state.debug.meetingHudCachePtr !== 0 &&
 			state.debug.meetingHudState >= 0 &&
-			state.debug.meetingHudState < 4
+			state.debug.meetingHudState < 4;
+		const hasOutfitSignal = !!state.debug?.airshipMeetingByOutfit;
+
+		return (
+			state.gameState === GameState.TASKS &&
+			state.map === MapType.AIRSHIP &&
+			(hasMeetingHudSignal || hasOutfitSignal)
 		);
 	}
 

@@ -1,3 +1,3 @@
 !macro customCheckAppRunning
-  DetailPrint "Skipping app-running check for Better-CrewLinkKai local build."
+  DetailPrint "Skipping app-running check for TanukiBCL local build."
 !macroend

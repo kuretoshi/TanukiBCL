@@ -58,6 +58,8 @@ const litePlayerColors = [
 	['#50EF39', '#15A742'],
 ];
 
+const appDisplayName = 'タヌキのベタクルLite';
+
 let appVersion = '';
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
@@ -106,7 +108,7 @@ const TitleBar: React.FC<TitleBarProps> = React.memo(function ({ settingsOpen, s
 	const classes = useStyles();
 	return (
 		<div className={classes.root}>
-			<span className={classes.title}>BetterCrewLinkKaiLite{appVersion}</span>
+			<span className={classes.title}>{appDisplayName}{appVersion}</span>
 			<IconButton
 				className={classes.button}
 				style={{ left: 0 }}

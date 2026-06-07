@@ -1,6 +1,6 @@
-# BetterCrewLinkKai
+# タヌキのベタクル
 
-BetterCrewLinkKaiは、Among Us 向け近接ボイスチャットアプリ [BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink) をベースに、日本語環境で使いやすいよう調整している非公式フォークです。
+タヌキのベタクルは、Among Us 向け近接ボイスチャットアプリ [BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink) をベースに、日本語環境で使いやすいよう調整している非公式フォークです。
 
 元プロジェクトは [CrewLink](https://github.com/ottomated/CrewLink) のフォークで、このリポジトリもその流れを引き継いでいます。Among Us、Innersloth、CrewLink、BetterCrewLink の公式プロジェクトとは別の非公式版です。
 
@@ -27,15 +27,15 @@ BetterCrewLinkKaiは、Among Us 向け近接ボイスチャットアプリ [Bett
 
 配布版を使う場合は、このフォークの Releases から最新版をダウンロードしてください。
 
-[Releases](https://github.com/kuretoshi/BetterCrewLink/releases)
+[Releases](https://github.com/kuretoshi/TanukiBCL/releases)
 
-Windows では `Better-CrewLinkKai Setup x.x.x.exe` を実行してインストールします。Among Us の状態を読むためにプロセスへアクセスするため、環境によってはセキュリティソフトの警告が出る場合があります。
+Windows では `TanukiBCL-Setup-x.x.x.exe` を実行してインストールします。Among Us の状態を読むためにプロセスへアクセスするため、環境によってはセキュリティソフトの警告が出る場合があります。
 
 ## 使い方
 
-1. BetterCrewLinkKai を起動します。
+1. タヌキのベタクル を起動します。
 2. Among Us を起動します。
-3. 同じロビーにいる参加者も BetterCrewLinkKai を起動します。
+3. 同じロビーにいる参加者も タヌキのベタクル を起動します。
 4. 必要に応じてマイク、スピーカー、音量、ボイスエフェクトを設定します。
 
 全員が同じボイスサーバーを使っている必要があります。接続できない場合は、設定のサーバー URL やネットワーク状態を確認してください。
@@ -66,8 +66,8 @@ https://discord.gg/cUX5KUkZPD
 ### セットアップ
 
 ```powershell
-git clone https://github.com/kuretoshi/BetterCrewLink.git
-cd BetterCrewLink
+git clone https://github.com/kuretoshi/TanukiBCL.git
+cd TanukiBCL
 nvm use 16.14.2
 npm.cmd install -g yarn@1.22.22
 yarn.cmd install --frozen-lockfile --ignore-scripts
@@ -94,7 +94,7 @@ npm.cmd run compile
 .\node_modules\.bin\electron-builder.cmd --win --x64 --config.npmRebuild=false
 ```
 
-生成物は `dist\Better-CrewLinkKai-Setup-3.1.5-6.exe` に出力されます。
+生成物は `dist\TanukiBCL-Setup-X.X.X.exe` に出力されます。
 
 ### Windows 32bit / 64bit ビルド
 

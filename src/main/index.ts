@@ -27,9 +27,10 @@ const isLiteApp =
 	/lite/i.test(process.execPath) ||
 	/lite/i.test(app.getName());
 const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
-const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
+const appDisplayName = isLiteApp ? 'タヌキのベタクルLite' : 'タヌキのベタクル';
+const internalAppName = isLiteApp ? 'TanukiBCLLite' : 'TanukiBCL';
 app.setName(appDisplayName);
-app.setAppUserModelId(isLiteApp ? 'net.ottomated.crewlinkkai.lite' : 'net.ottomated.crewlinkkai.beta.local');
+app.setAppUserModelId(isLiteApp ? 'io.kuretoshi.tanukibcl.lite' : 'io.kuretoshi.tanukibcl');
 if (isLiteApp) {
 	autoUpdater.setFeedURL({
 		provider: 'generic',
@@ -208,7 +209,7 @@ function createMainWindow() {
 		);
 	}
 	//window.webContents.userAgent = `CrewLink/${crewlinkVersion} (${process.platform})`;
-	window.webContents.userAgent = `${appDisplayName}/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `${internalAppName}/${appVersion} (${process.platform})`;
 	window.webContents.once('did-finish-load', () => {
 		if (latestAutoUpdaterState.state !== 'unavailable') {
 			sendAutoUpdaterState(latestAutoUpdaterState);
@@ -289,7 +290,7 @@ function createLobbyBrowser() {
 			})
 		);
 	}
-	window.webContents.userAgent = `${appDisplayName}/${appVersion} (${process.platform})`;
+	window.webContents.userAgent = `${internalAppName}/${appVersion} (${process.platform})`;
 	console.log('Opened app version: ', appVersion);
 	return window;
 }

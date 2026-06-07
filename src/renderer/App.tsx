@@ -47,13 +47,11 @@ declare module '@mui/styles/defaultTheme' {
 
 
 let appVersion = '';
-let isLiteApp = false;
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 	appVersion = ' v' + query.get('version') || '';
-	isLiteApp = query.get('lite') === '1';
 }
-const appDisplayName = isLiteApp ? 'BetterCrewLinkKaiLite' : 'BetterCrewLinkKai';
+const appDisplayName = 'タヌキのベタクル';
 
 const useStyles = makeStyles(() => ({
 	root: {

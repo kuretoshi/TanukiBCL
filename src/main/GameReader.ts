@@ -35,8 +35,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 const appDisplayName =
 	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
-		? 'BetterCrewLinkKaiLite'
-		: 'BetterCrewLinkKai';
+		? 'タヌキのベタクルLite'
+		: 'タヌキのベタクル';
 const KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS = [
 	44757884, // Among Us 17.4 / Super New Roles
 ];

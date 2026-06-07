@@ -1,8 +1,8 @@
 !macro customInit
-  StrCmp $INSTDIR "$LocalAppData\Programs\bettercrewlinkkai" 0 +2
-    StrCpy $INSTDIR "$LocalAppData\Programs\bettercrewlinkkailite"
+  StrCmp $INSTDIR "$LocalAppData\Programs\tanukibcl" 0 +2
+    StrCpy $INSTDIR "$LocalAppData\Programs\tanukibcllite"
 !macroend
 
 !macro customCheckAppRunning
-  DetailPrint "Skipping app-running check for BetterCrewLinkKaiLite local build."
+  DetailPrint "Skipping app-running check for TanukiBCLLite local build."
 !macroend

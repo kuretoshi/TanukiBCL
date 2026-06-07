@@ -1,5 +1,5 @@
-appId: net.ottomated.crewlinkkai.beta.local
-productName: Better-CrewLinkKai
+appId: io.kuretoshi.tanukibcl
+productName: TanukiBCL
 copyright: Copyright © 2021 OhMyGuus
 directories:
   output: dist
@@ -11,10 +11,10 @@ files:
       - app
 extraFiles:
   - from: Better-CrewLinkKai-target-pid.ps1
-    to: Better-CrewLinkKai-target-pid.ps1
+    to: TanukiBCL-target-pid.ps1
 
 win:
-  executableName: Better-CrewLinkKai
+  executableName: TanukiBCL
   publish:
     - provider: github
       owner: kuretoshi
