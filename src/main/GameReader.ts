@@ -37,7 +37,15 @@ const appDisplayName =
 	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
 		? 'BetterCrewLinkKaiLite'
 		: 'BetterCrewLinkKai';
+const KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS = [
+	44757884, // Among Us 17.4 / Super New Roles
+];
 const args = require('minimist')(process.argv); // eslint-disable-line
+const voiceDebugEnabled =
+	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
+	args['debug-voice'] ||
+	args.debugVoice ||
+	/debug/i.test(process.execPath);
 const targetProcessName = String(
 	args['target-exe'] || args.targetExe || args['target-process'] || args.targetProcess || 'Among Us.exe'
 );
@@ -93,6 +101,8 @@ export default class GameReader {
 	oldMeetingHud = false;
 	playercolors: string[][] = [];
 	stablePlayerColors: Record<string, number> = {};
+	initPatternDebug = '';
+	debugBaselines: Record<string, Record<number, number>> = {};
 
 	constructor(sendIPC: Electron.WebContents['send']) {
 		this.is_linux = platform() === 'linux';
@@ -245,6 +255,12 @@ export default class GameReader {
 			let maxPlayers = 10;
 			const closedDoors: number[] = [];
 			let localPlayer = undefined;
+			let localObjectFlags = '';
+			let localObjectDiffs = '';
+			let localPlayerDiffs = '';
+			let innerNetDiffs = '';
+			let airshipMeetingByOutfit = false;
+			let currentOutfits = '';
 			if (
 				this.currentServer === '' ||
 				(this.oldGameState != state &&
@@ -277,6 +293,14 @@ export default class GameReader {
 				if (localPlayer) {
 					this.fixPingMessage();
 					lightRadius = this.readMemory<number>('float', localPlayer.objectPtr, this.offsets.lightRadius, -1);
+					if (voiceDebugEnabled) {
+						localObjectFlags = this.readLocalObjectFlags(localPlayer.objectPtr);
+						localObjectDiffs = this.readDebugIntDiffs('obj', localPlayer.objectPtr, 0, 240);
+						localPlayerDiffs = this.readDebugIntDiffs('plr', localPlayer.ptr, 0, 140);
+					}
+				}
+				if (voiceDebugEnabled) {
+					innerNetDiffs = this.readDebugIntDiffs('net', innerNetClient, 0, 220);
 				}
 				const gameOptionsPtr = this.readMemory<number>(
 					'ptr',
@@ -291,6 +315,14 @@ export default class GameReader {
 					const shiftedPlayerCount = shiftedPlayers.length;
 					const mixupThreshold = 1;
 					mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
+					if (voiceDebugEnabled) {
+						currentOutfits = activePlayers.map((player) => `${player.id}:${player.currentOutfit}`).join(',');
+						airshipMeetingByOutfit =
+							map === MapType.AIRSHIP &&
+							activePlayers.length >= 2 &&
+							activePlayers.every((player) => player.currentOutfit === 1) &&
+							!mixupSabotaged;
+					}
 				}
 				if (state === GameState.TASKS) {
 					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
@@ -426,6 +458,26 @@ export default class GameReader {
 				currentServer: this.currentServer,
 				maxPlayers,
 				oldMeetingHud: this.oldMeetingHud,
+				...(voiceDebugEnabled
+					? {
+						debug: {
+							rawGameState: gameState,
+							meetingHud,
+							meetingHudCachePtr: meetingHud_cachePtr,
+							meetingHudState,
+							onlineScene: this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.onlineScene, -1),
+							mainMenuScene: this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.mainMenuScene, -1),
+							localTaskPtr: localPlayer?.taskPtr || 0,
+							localObjectFlags,
+							initPatternDebug: this.initPatternDebug,
+							airshipMeetingByOutfit,
+							currentOutfits,
+							localObjectDiffs,
+							localPlayerDiffs,
+							innerNetDiffs,
+						},
+					}
+					: {}),
 			};
 			//	const stateHasChanged = !equal(this.lastState, newState);
 			if (state !== GameState.MENU || this.oldGameState !== GameState.MENU) {
@@ -439,9 +491,76 @@ export default class GameReader {
 			this.oldGameState = state;
 			if (state === GameState.MENU) {
 				this.stablePlayerColors = {};
+				this.debugBaselines = {};
 			}
 		}
 		return null;
+	}
+
+	private readDebugIntDiffs(key: string, address: number, start: number, end: number): string {
+		if (!address) return '';
+		const current: Record<number, number> = {};
+		for (let offset = start; offset <= end; offset += 4) {
+			current[offset] = this.readMemory<number>('int32', address + offset, undefined, 0);
+		}
+		if (!this.debugBaselines[key]) {
+			this.debugBaselines[key] = current;
+			return 'base';
+		}
+		const baseline = this.debugBaselines[key];
+		return Object.keys(current)
+			.map((offsetText) => Number(offsetText))
+			.filter((offset) => current[offset] !== baseline[offset])
+			.slice(0, 28)
+			.map((offset) => `${offset}:${baseline[offset]}>${current[offset]}`)
+			.join(' ');
+	}
+
+	private readLocalObjectFlags(objectPtr: number): string {
+		if (!this.offsets || !objectPtr) return '';
+		const offsets = [
+			56,
+			60,
+			64,
+			68,
+			72,
+			76,
+			80,
+			84,
+			88,
+			92,
+			96,
+			100,
+			104,
+			108,
+			112,
+			116,
+			120,
+			124,
+			128,
+			132,
+			136,
+			140,
+			144,
+			148,
+			152,
+			156,
+			160,
+			164,
+			168,
+			172,
+			176,
+			180,
+			184,
+			188,
+			192,
+		];
+		return offsets
+			.map((offset) => {
+				const value = this.readMemory<number>('byte', objectPtr + offset, undefined, 0);
+				return `${offset}:${value}`;
+			})
+			.join(' ');
 	}
 
 	private getStableColorKey(player: Player): string {
@@ -618,16 +737,33 @@ export default class GameReader {
 				this.offsets.signatures.gameOptionsManager.patternOffset,
 				this.offsets.signatures.gameOptionsManager.addressOffset
 			);
-			this.offsets.gameoptionsData[0] = gameOptionsManager;
+			this.offsets.gameoptionsData[0] = this.patternResultOrFallback(gameOptionsManager, this.offsets.gameoptionsData[0]);
 		}else{
-			this.offsets.gameoptionsData[0] = playerControl;
+			this.offsets.gameoptionsData[0] = this.patternResultOrFallback(playerControl, this.offsets.gameoptionsData[0]);
 		}
-		this.offsets.palette[0] = palette;
-		this.offsets.meetingHud[0] = meetingHud;
-		this.offsets.allPlayersPtr[0] = gameData;
-		this.offsets.innerNetClient.base[0] = innerNetClient;
-		this.offsets.shipStatus[0] = shipStatus;
-		this.offsets.miniGame[0] = miniGame;
+		const originalOffsets = {
+			innerNetClient: this.offsets.innerNetClient.base[0],
+			meetingHud: this.offsets.meetingHud[0],
+			gameData: this.offsets.allPlayersPtr[0],
+			shipStatus: this.offsets.shipStatus[0],
+			miniGame: this.offsets.miniGame[0],
+			palette: this.offsets.palette[0],
+			playerControl: playerControl,
+		};
+		this.offsets.palette[0] = this.patternResultOrFallback(palette, this.offsets.palette[0]);
+		this.offsets.meetingHud[0] = this.resolveMeetingHudOffset(meetingHud, this.offsets.meetingHud[0]);
+		this.offsets.allPlayersPtr[0] = this.patternResultOrFallback(gameData, this.offsets.allPlayersPtr[0]);
+		this.offsets.innerNetClient.base[0] = this.patternResultOrFallback(innerNetClient, this.offsets.innerNetClient.base[0]);
+		this.offsets.shipStatus[0] = this.patternResultOrFallback(shipStatus, this.offsets.shipStatus[0]);
+		this.offsets.miniGame[0] = this.patternResultOrFallback(miniGame, this.offsets.miniGame[0]);
+		this.initPatternDebug = [
+			`inc=${this.formatPatternDebug(innerNetClient, originalOffsets.innerNetClient, this.offsets.innerNetClient.base[0])}`,
+			`meet=${this.formatPatternDebug(meetingHud, originalOffsets.meetingHud, this.offsets.meetingHud[0])}`,
+			`data=${this.formatPatternDebug(gameData, originalOffsets.gameData, this.offsets.allPlayersPtr[0])}`,
+			`ship=${this.formatPatternDebug(shipStatus, originalOffsets.shipStatus, this.offsets.shipStatus[0])}`,
+			`mini=${this.formatPatternDebug(miniGame, originalOffsets.miniGame, this.offsets.miniGame[0])}`,
+			`pal=${this.formatPatternDebug(palette, originalOffsets.palette, this.offsets.palette[0])}`,
+		].join(' ');
 		if (!this.is_64bit) {
 			this.offsets.connectFunc = this.findPattern(
 				this.offsets.signatures.connectFunc.sig,
@@ -1113,6 +1249,25 @@ export default class GameReader {
 		return this.is_64bit || relative
 			? offsetAddr + instruction_location + addressOffset
 			: offsetAddr - this.gameAssembly.modBaseAddr;
+	}
+
+	private patternResultOrFallback(value: number, fallback: number): number {
+		return Number.isFinite(value) && value > 0 ? value : fallback;
+	}
+
+	private resolveMeetingHudOffset(patternValue: number, fallback: number): number {
+		if (Number.isFinite(patternValue) && patternValue > 0) {
+			return patternValue;
+		}
+		if (this.is_64bit) {
+			return fallback;
+		}
+		return KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS[0] || fallback;
+	}
+
+	private formatPatternDebug(value: number, fallback: number, applied: number): string {
+		const raw = Number.isFinite(value) ? value : -1;
+		return `${raw}>${applied}${applied === fallback && raw !== fallback ? 'f' : ''}`;
 	}
 
 	IntToGameCode(input: number): string {

@@ -22,6 +22,22 @@ export interface AmongUsState {
 	maxPlayers: number;
 	mod: ModsType;
 	oldMeetingHud: boolean;
+	debug?: {
+		rawGameState: number;
+		meetingHud: number;
+		meetingHudCachePtr: number;
+		meetingHudState: number;
+		onlineScene: number;
+		mainMenuScene: number;
+		localTaskPtr: number;
+		localObjectFlags: string;
+		initPatternDebug: string;
+		airshipMeetingByOutfit: boolean;
+		currentOutfits: string;
+		localObjectDiffs: string;
+		localPlayerDiffs: string;
+		innerNetDiffs: string;
+	};
 }
 
 export interface Player {

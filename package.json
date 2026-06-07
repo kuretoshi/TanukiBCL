@@ -1,10 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-<<<<<<< HEAD
-	"version": "3.1.5-91",
-=======
-	"version": "3.1.5-9",
->>>>>>> 7c448db590407cf5c8973bd7daf4d9f1fcaf42bd
+	"version": "3.1.6",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"repository": {

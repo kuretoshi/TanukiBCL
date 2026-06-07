@@ -28,6 +28,7 @@ import {
 import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsContext } from './contexts';
 import SettingsStore, { setLobbySetting, setSetting } from './settings/SettingsStore';
 import { ISettings } from '../common/ISettings';
+import { defaultLobbySettings } from '../common/defaultLobbySettings';
 import Menu from './Menu';
 import theme from './theme';
 import './css/index.css';
@@ -153,7 +154,7 @@ function LiteApp({ t }): JSX.Element {
 	const playerColors = useRef<string[][]>(litePlayerColors);
 	const overlayInitCount = useRef<number>(0);
 	const [settings, setSettings] = useState(SettingsStore.store);
-	const [hostLobbySettings, setHostLobbySettings] = useState(settings.localLobbySettings);
+	const [hostLobbySettings, setHostLobbySettings] = useState(defaultLobbySettings);
 
 	useEffect(() => {
 		SettingsStore.onDidAnyChange((newValue) => {

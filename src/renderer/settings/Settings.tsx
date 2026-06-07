@@ -246,13 +246,22 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 	const [hostLobbySettings] = useContext(HostSettingsContext);
 	const [unsavedCount, setUnsavedCount] = useState(0);
 	const unsaved = unsavedCount > 1;
+	const canChangeLobbySettings =
+		gameState?.gameState === GameState.MENU || (gameState?.isHost && gameState?.gameState === GameState.LOBBY);
+	const canResetSettings =
+		gameState?.gameState === undefined ||
+		!gameState?.isHost ||
+		gameState.gameState === GameState.MENU ||
+		gameState.gameState === GameState.LOBBY;
 
 	// Used to buffer changes that are only sent out on settings close
 	const [localLobbySettingsBuffer, setLocalLobbySettingsBuffer] = useState(settings.localLobbySettings);
 	const updateLocalLobbySettingsBuffer = (newValues: Partial<ILobbySettings>) => setLocalLobbySettingsBuffer((oldState) => { return { ...oldState, ...newValues } });
 	const savePendingSettings = useCallback(() => {
-		setSettings('localLobbySettings', localLobbySettingsBuffer);
-	}, [localLobbySettingsBuffer, setSettings]);
+		if (canChangeLobbySettings) {
+			setSettings('localLobbySettings', localLobbySettingsBuffer);
+		}
+	}, [canChangeLobbySettings, localLobbySettingsBuffer, setSettings]);
 
 	useEffect(() => {
 		window.addEventListener('crewlink-save-settings-before-reload', savePendingSettings);
@@ -374,14 +383,6 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 	}, [settings.language]);
 
 	const isInMenuOrLobby = gameState?.gameState === GameState.LOBBY || gameState?.gameState === GameState.MENU;
-	const canChangeLobbySettings =
-		gameState?.gameState === GameState.MENU || (gameState?.isHost && gameState?.gameState === GameState.LOBBY);
-	const canResetSettings =
-		gameState?.gameState === undefined ||
-		!gameState?.isHost ||
-		gameState.gameState === GameState.MENU ||
-		gameState.gameState === GameState.LOBBY;
-
 	const [warningDialog, setWarningDialog] = React.useState({ open: false } as IConfirmDialog);
 
 	const handleWarningDialogClose = (confirm: boolean) => {

@@ -15,7 +15,7 @@ import {
 import Peer from 'simple-peer';
 import { ipcRenderer } from 'electron';
 import VAD from './vad';
-import { ISettings, playerConfigMap, ILobbySettings, SocketConfig } from '../common/ISettings';
+import { ISettings, playerConfigMap, SocketConfig } from '../common/ISettings';
 import { IpcRendererMessages, IpcMessages, IpcOverlayMessages, IpcHandlerMessages } from '../common/ipc-messages';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
@@ -30,6 +30,7 @@ import liteCrewmateImage from '../../static/images/lite/crew.png'; // @ts-ignore
 import liteVisorImage from '../../static/images/lite/visor.png'; // @ts-ignore
 
 import { CameraLocation, AmongUsMaps, MapType } from '../common/AmongusMap';
+import { defaultLobbySettings } from '../common/defaultLobbySettings';
 import { ObsVoiceState } from '../common/ObsOverlay';
 import Footer from './Footer';
 import Button from '@mui/material/Button';
@@ -149,6 +150,37 @@ interface AppearanceBaseline {
 
 type VoiceDisguiseMode = 'none' | 'mixup';
 
+const voiceDebugEnabled =
+	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
+	process.argv.some((arg) => arg === '--debug-voice' || arg === '--debugVoice') ||
+	/debug/i.test(process.execPath);
+
+interface VoiceDebugOverlayState {
+	map: string | number;
+	gameState: string | undefined;
+	audioGameState: string | undefined;
+	airshipMeetingAudioFallback: boolean;
+	meetingHud: number | undefined;
+	meetingHudCachePtr: number | undefined;
+	meetingHudState: number | undefined;
+	rawGameState: number | undefined;
+	onlineScene: number | undefined;
+	mainMenuScene: number | undefined;
+	localTaskPtr: number | undefined;
+	localObjectFlags: string | undefined;
+	initPatternDebug: string | undefined;
+	airshipMeetingByOutfit: boolean | undefined;
+	currentOutfits: string | undefined;
+	localObjectDiffs: string | undefined;
+	localPlayerDiffs: string | undefined;
+	innerNetDiffs: string | undefined;
+	remoteName?: string;
+	baseGain?: number;
+	finalGain?: number;
+	possibleBlocks: string[];
+	updatedAt: number;
+}
+
 const DEFAULT_ICE_CONFIG: RTCConfiguration = {
 	iceTransportPolicy: 'all',
 	iceServers: [
@@ -242,6 +274,23 @@ const useStyles = makeStyles((theme) => ({
 		display: 'grid',
 	},
 	left: { float: 'left' },
+	debugOverlay: {
+		position: 'fixed',
+		left: 4,
+		right: 4,
+		bottom: 4,
+		zIndex: 10000,
+		padding: '4px 6px',
+		borderRadius: 4,
+		background: 'rgba(0, 0, 0, 0.82)',
+		color: '#00ff8a',
+		fontFamily: "'Source Code Pro', monospace",
+		fontSize: 10,
+		lineHeight: 1.25,
+		pointerEvents: 'none',
+		whiteSpace: 'pre-wrap',
+		textShadow: '0 1px 1px #000',
+	},
 }));
 
 const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProps) {
@@ -452,24 +501,6 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 	);
 };
 
-const defaultlocalLobbySettings: ILobbySettings = {
-	maxDistance: 5.32,
-	haunting: false,
-	thirdPartyHaunting: false,
-	hearImpostorsInVents: false,
-	impostersHearImpostersInvent: false,
-	impostorRadioEnabled: false,
-	commsSabotage: false,
-	voiceEffectEnabled: true,
-	deadOnly: false,
-	hearThroughCameras: false,
-	wallsBlockAudio: false,
-	meetingGhostOnly: false,
-	visionHearing: false,
-	publicLobby_on: false,
-	publicLobby_title: '',
-	publicLobby_language: 'en',
-};
 const radioOnAudio = new Audio();
 radioOnAudio.src = radioOnSound;
 radioOnAudio.volume = 0.02;
@@ -515,6 +546,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const intentionalDisconnects = useRef<{ [peer: string]: boolean }>({});
 	const convolverBuffer = useRef<AudioBuffer | null>(null);
 	const playerSocketIdsRef = useRef<numberStringMap>({});
+	const gameStateDebugRef = useRef<string>('');
+	const gameStateDebugTimeRef = useRef<number>(0);
+	const voiceAvailabilityDebugRef = useRef<Record<string, string>>({});
+	const voiceAvailabilityDebugTimeRef = useRef<Record<string, number>>({});
 	const classes = useStyles();
 
 	const [connect, setConnect] = useState<{
@@ -532,6 +567,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const [deafenedState, setDeafened] = useState(false);
 	const [mutedState, setMuted] = useState(false);
 	const [connected, setConnected] = useState(false);
+	const [voiceDebugOverlay, setVoiceDebugOverlay] = useState<VoiceDebugOverlayState | null>(null);
 
 	function applyEffect(gain: AudioNode, effectNode: AudioNode, destination: AudioNode, player: Player) {
 		console.log('Apply effect->', effectNode);
@@ -723,6 +759,190 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		);
 	}
 
+	function isAirshipMeetingAudioFallback(state: AmongUsState): boolean {
+		return (
+			state.gameState === GameState.TASKS &&
+			state.map === MapType.AIRSHIP &&
+			!!state.debug &&
+			state.debug.meetingHudCachePtr !== 0 &&
+			state.debug.meetingHudState >= 0 &&
+			state.debug.meetingHudState < 4
+		);
+	}
+
+	function getAudioGameState(state: AmongUsState): GameState {
+		return isAirshipMeetingAudioFallback(state) ? GameState.DISCUSSION : state.gameState;
+	}
+
+	useEffect(() => {
+		if (!voiceDebugEnabled) {
+			return;
+		}
+		const snapshot = {
+			lobbyCode: gameState.lobbyCode,
+			map: MapType[gameState.map] || gameState.map,
+			gameState: GameState[gameState.gameState],
+			oldGameState: GameState[gameState.oldGameState],
+			playerCount: gameState.players?.length || 0,
+			localPlayer: gameState.players?.find((player) => player.isLocal)?.name,
+			players: gameState.players?.map((player) => ({
+				name: player.name,
+				clientId: player.clientId,
+				isLocal: player.isLocal,
+				isDead: player.isDead,
+				disconnected: player.disconnected,
+				bugged: player.bugged,
+			})),
+			lobbySettings: {
+				deadOnly: lobbySettings.deadOnly,
+				meetingGhostOnly: lobbySettings.meetingGhostOnly,
+				commsSabotage: lobbySettings.commsSabotage,
+				wallsBlockAudio: lobbySettings.wallsBlockAudio,
+				haunting: lobbySettings.haunting,
+				thirdPartyHaunting: lobbySettings.thirdPartyHaunting,
+			},
+			stateFlags: {
+				comsSabotaged: gameState.comsSabotaged,
+				mixupSabotaged: gameState.mixupSabotaged,
+				camouflaged: gameState.camouflaged,
+				closedDoors: gameState.closedDoors,
+			},
+			readerDebug: gameState.debug,
+			connected,
+			muted: connectionStuff.current.muted,
+			deafened: connectionStuff.current.deafened,
+		};
+		const serialized = JSON.stringify(snapshot);
+		const now = Date.now();
+		if (gameStateDebugRef.current !== serialized || now - gameStateDebugTimeRef.current > 2000) {
+			gameStateDebugRef.current = serialized;
+			gameStateDebugTimeRef.current = now;
+			console.warn('[BetterCrewLinkKai game state debug]', snapshot);
+		}
+	}, [connected, gameState, lobbySettings]);
+
+	function debugVoiceAvailability(
+		state: AmongUsState,
+		me: Player,
+		other: Player,
+		baseGain: number,
+		finalGain: number,
+		voiceDisguiseMode: VoiceDisguiseMode,
+		extraBlocks: string[] = []
+	) {
+		if (!voiceDebugEnabled) {
+			return;
+		}
+		const audioGameState = getAudioGameState(state);
+		const possibleBlocks: string[] = [...extraBlocks];
+		if (!connected) possibleBlocks.push('not-connected');
+		if (connectionStuff.current.muted) possibleBlocks.push('local-muted');
+		if (connectionStuff.current.deafened) possibleBlocks.push('local-deafened');
+		if (playerConfigs[other.nameHash]?.isMuted) possibleBlocks.push('remote-muted-by-user-config');
+		if (other.disconnected) possibleBlocks.push('remote-disconnected');
+		if (other.isDummy) possibleBlocks.push('remote-dummy');
+		if (audioGameState === GameState.TASKS && lobbySettings.meetingGhostOnly) possibleBlocks.push('meeting-only-enabled');
+		if (lobbySettings.deadOnly && !(audioGameState === GameState.DISCUSSION && state.map === MapType.AIRSHIP)) {
+			possibleBlocks.push('ghost-only-enabled');
+		}
+		if (audioGameState === GameState.TASKS && lobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor) {
+			possibleBlocks.push('comms-sabotage');
+		}
+		if (audioGameState === GameState.TASKS && other.isDead && !me.isDead && !canHearGhosts(me)) {
+			possibleBlocks.push('remote-is-dead');
+		}
+		if (baseGain <= 0 && possibleBlocks.length === 0) possibleBlocks.push('audio-rule-gain-zero');
+		if (finalGain <= 0 && baseGain > 0 && possibleBlocks.length === 0) possibleBlocks.push('post-audio-gain-zero');
+
+		const snapshot = {
+			lobbyCode: state.lobbyCode,
+			map: MapType[state.map] || state.map,
+			gameState: GameState[state.gameState],
+			audioGameState: GameState[audioGameState],
+			airshipMeetingAudioFallback: isAirshipMeetingAudioFallback(state),
+			oldGameState: GameState[state.oldGameState],
+			local: {
+				name: me.name,
+				clientId: me.clientId,
+				isDead: me.isDead,
+				isImpostor: me.isImpostor,
+				isThirdParty: me.isThirdParty,
+				talking,
+				muted: connectionStuff.current.muted,
+				deafened: connectionStuff.current.deafened,
+				canSpeakNow: connected && talking && !connectionStuff.current.muted && !connectionStuff.current.deafened,
+			},
+			remote: {
+				name: other.name,
+				clientId: other.clientId,
+				isDead: other.isDead,
+				isImpostor: other.isImpostor,
+				isThirdParty: other.isThirdParty,
+				inVent: other.inVent,
+				disconnected: other.disconnected,
+				bugged: other.bugged,
+				vadTalking: !!otherVAD[other.clientId],
+				mutedByUserConfig: !!playerConfigs[other.nameHash]?.isMuted,
+				canHearOther: finalGain > 0,
+			},
+			audio: {
+				baseGain,
+				finalGain,
+				maxDistance: maxDistanceRef.current,
+				voiceDisguiseMode,
+			},
+			lobbySettings: {
+				deadOnly: lobbySettings.deadOnly,
+				meetingGhostOnly: lobbySettings.meetingGhostOnly,
+				commsSabotage: lobbySettings.commsSabotage,
+				wallsBlockAudio: lobbySettings.wallsBlockAudio,
+				haunting: lobbySettings.haunting,
+				thirdPartyHaunting: lobbySettings.thirdPartyHaunting,
+			},
+			stateFlags: {
+				comsSabotaged: state.comsSabotaged,
+				mixupSabotaged: state.mixupSabotaged,
+				camouflaged: state.camouflaged,
+				closedDoors: state.closedDoors,
+			},
+			readerDebug: state.debug,
+			possibleBlocks,
+		};
+		const key = `${other.clientId}`;
+		const serialized = JSON.stringify(snapshot);
+		const now = Date.now();
+		if (voiceAvailabilityDebugRef.current[key] !== serialized || now - (voiceAvailabilityDebugTimeRef.current[key] || 0) > 2000) {
+			voiceAvailabilityDebugRef.current[key] = serialized;
+			voiceAvailabilityDebugTimeRef.current[key] = now;
+			console.warn('[BetterCrewLinkKai voice availability]', snapshot);
+			setVoiceDebugOverlay({
+				map: snapshot.map,
+				gameState: snapshot.gameState,
+				audioGameState: snapshot.audioGameState,
+				airshipMeetingAudioFallback: snapshot.airshipMeetingAudioFallback,
+				meetingHud: state.debug?.meetingHud,
+				meetingHudCachePtr: state.debug?.meetingHudCachePtr,
+				meetingHudState: state.debug?.meetingHudState,
+				rawGameState: state.debug?.rawGameState,
+				onlineScene: state.debug?.onlineScene,
+				mainMenuScene: state.debug?.mainMenuScene,
+				localTaskPtr: state.debug?.localTaskPtr,
+				localObjectFlags: state.debug?.localObjectFlags,
+				initPatternDebug: state.debug?.initPatternDebug,
+				airshipMeetingByOutfit: state.debug?.airshipMeetingByOutfit,
+				currentOutfits: state.debug?.currentOutfits,
+				localObjectDiffs: state.debug?.localObjectDiffs,
+				localPlayerDiffs: state.debug?.localPlayerDiffs,
+				innerNetDiffs: state.debug?.innerNetDiffs,
+				remoteName: other.name,
+				baseGain,
+				finalGain,
+				possibleBlocks,
+				updatedAt: now,
+			});
+		}
+	}
+
 	function calculateVoiceAudio(
 		state: AmongUsState,
 		settings: ISettings,
@@ -734,6 +954,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		const { pan, gain, muffle, reverb, voiceEffect, destination } = audio;
 		const audioContext = pan.context;
 		const useLightSource = true;
+		const audioGameState = getAudioGameState(state);
 		let maxdistance = maxDistanceRef.current;
 		let panPos = [other.x - me.x, other.y - me.y];
 		let endGain = 0;
@@ -756,7 +977,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			return muteAudio();
 		}
 
-		switch (state.gameState) {
+		switch (audioGameState) {
 			case GameState.MENU:
 				return muteAudio();
 			case GameState.LOBBY:
@@ -855,14 +1076,14 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			pan.maxDistance = maxDistanceRef.current;
 		}
 
-		if (!other.isDead || state.gameState !== GameState.TASKS || !canHearGhosts(me) || me.isDead) {
+		if (!other.isDead || audioGameState !== GameState.TASKS || !canHearGhosts(me) || me.isDead) {
 			if (audio.reverbConnected && reverb) {
 				audio.reverbConnected = false;
 				restoreEffect(gain, reverb, destination, other);
 			}
 		}
 
-		if (lobbySettings.deadOnly) {
+		if (lobbySettings.deadOnly && !(audioGameState === GameState.DISCUSSION && state.map === MapType.AIRSHIP)) {
 			panPos = [0, 0];
 			if (!me.isDead || !other.isDead) {
 				endGain = 0;
@@ -871,7 +1092,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 		let isOnCamera = state.currentCamera !== CameraLocation.NONE;
 		if (!skipDistanceCheck && Math.sqrt(panPos[0] * panPos[0] + panPos[1] * panPos[1]) > maxdistance) {
-			if (lobbySettings.hearThroughCameras && state.gameState === GameState.TASKS) {
+			if (lobbySettings.hearThroughCameras && audioGameState === GameState.TASKS) {
 				if (state.currentCamera !== CameraLocation.NONE && state.currentCamera !== CameraLocation.Skeld) {
 					const camerapos = AmongUsMaps[state.map].cameras[state.currentCamera];
 					panPos = [other.x - camerapos.x, other.y - camerapos.y];
@@ -907,7 +1128,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		// Muffling in vents
 		if (
 			((me.inVent && !me.isDead) || (other.inVent && !other.isDead) || isOnCamera) &&
-			state.gameState === GameState.TASKS
+			audioGameState === GameState.TASKS
 		) {
 			if (!audio.muffleConnected) {
 				audio.muffleConnected = true;
@@ -1765,7 +1986,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					}
 					if (parsedData.hasOwnProperty('maxDistance')) {
 						if (!hostRef.current || hostRef.current.parsedHostId !== socketClientsRef.current[peer]?.clientId) return;
-						const newSettings = {...defaultlocalLobbySettings, ...parsedData};
+						const newSettings = { ...defaultLobbySettings, ...parsedData };
 						setHostLobbySettings(newSettings);
 					}
 				});
@@ -1912,6 +2133,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			if (audio) {
 				handledPeerIds.push(peerId);
 				let gain = calculateVoiceAudio(gameState, settings, myPlayer, player, audio, voiceDisguiseMode);
+				const baseGain = gain;
 				if (connectionStuff.current.deafened || playerConfigs[player.nameHash]?.isMuted) {
 					gain = 0;
 				}
@@ -1925,11 +2147,22 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					}
 					gain = gain * (settings.masterVolume / 100);
 				}
+				debugVoiceAvailability(gameState, myPlayer, player, baseGain, gain, voiceDisguiseMode);
 				audio.gain.gain.value = gain;
 				tempTalking[player.clientId] = otherVAD[player.clientId] && gain > 0;
 				if (tempTalking[player.clientId] != otherTalking[player.clientId]) {
 					talkingUpdate = true;
 				}
+			} else {
+				debugVoiceAvailability(
+					gameState,
+					myPlayer,
+					player,
+					0,
+					0,
+					voiceDisguiseMode,
+					[peerId ? 'no-audio-node' : 'no-peer']
+				);
 			}
 		}
 		if (talkingUpdate) {
@@ -2181,6 +2414,23 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				)}
 			</>)}
 			{otherPlayers.length <= 6 && <Footer />}
+			{voiceDebugEnabled && voiceDebugOverlay && (
+				<div className={classes.debugOverlay}>
+					{[
+						`map=${voiceDebugOverlay.map} state=${voiceDebugOverlay.gameState} audio=${voiceDebugOverlay.audioGameState} airshipFallback=${voiceDebugOverlay.airshipMeetingAudioFallback}`,
+						`raw=${voiceDebugOverlay.rawGameState} meetingHud=${voiceDebugOverlay.meetingHud} cache=${voiceDebugOverlay.meetingHudCachePtr} hudState=${voiceDebugOverlay.meetingHudState}`,
+						`scene=${voiceDebugOverlay.onlineScene}/${voiceDebugOverlay.mainMenuScene} task=${voiceDebugOverlay.localTaskPtr}`,
+						`pat=${voiceDebugOverlay.initPatternDebug || '-'}`,
+						`outfits=${voiceDebugOverlay.currentOutfits || '-'} outfitMeet=${voiceDebugOverlay.airshipMeetingByOutfit}`,
+						`objDiff=${voiceDebugOverlay.localObjectDiffs || '-'}`,
+						`plrDiff=${voiceDebugOverlay.localPlayerDiffs || '-'}`,
+						`netDiff=${voiceDebugOverlay.innerNetDiffs || '-'}`,
+						`flags=${voiceDebugOverlay.localObjectFlags || '-'}`,
+						`remote=${voiceDebugOverlay.remoteName || '-'} base=${voiceDebugOverlay.baseGain?.toFixed(3)} final=${voiceDebugOverlay.finalGain?.toFixed(3)}`,
+						`blocks=${voiceDebugOverlay.possibleBlocks.length ? voiceDebugOverlay.possibleBlocks.join(',') : 'none'}`,
+					].join('\n')}
+				</div>
+			)}
 		</div>
 	);
 };

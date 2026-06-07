@@ -45,6 +45,7 @@ const allowMultiInstance =
 	/multi[-_ ]?instance/i.test(process.execPath);
 let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
 let hasCheckedForUpdates = false;
+let acceptedUpdateInfo: UpdateInfo | null = null;
 
 declare global {
 	var mainWindow: BrowserWindow | null;
@@ -117,6 +118,39 @@ function sendAutoUpdaterError(err: Error | unknown) {
 		state: 'error',
 		error: err instanceof Error ? err.message : String(err),
 	});
+}
+
+function parseVersion(version: string): number[] {
+	const normalized = version.replace(/^v/i, '').trim();
+	const [main, prerelease = ''] = normalized.split('-', 2);
+	const parts = main.split('.').map((part) => Number(part.replace(/\D/g, '')) || 0);
+	while (parts.length < 3) {
+		parts.push(0);
+	}
+	if (prerelease === '') {
+		parts.push(Number.MAX_SAFE_INTEGER);
+	} else {
+		const numericPrerelease = prerelease.match(/\d+/);
+		parts.push(numericPrerelease ? Number(numericPrerelease[0]) : 0);
+	}
+	return parts;
+}
+
+function compareVersions(a: string, b: string): number {
+	const aParts = parseVersion(a);
+	const bParts = parseVersion(b);
+	const length = Math.max(aParts.length, bParts.length);
+	for (let i = 0; i < length; i++) {
+		const diff = (aParts[i] || 0) - (bParts[i] || 0);
+		if (diff !== 0) {
+			return diff;
+		}
+	}
+	return 0;
+}
+
+function isRemoteVersionNewer(info: UpdateInfo): boolean {
+	return compareVersions(info.version, rawAppVersion) > 0;
 }
 
 function checkForUpdates() {
@@ -323,15 +357,28 @@ if (!gotTheLock) {
 	if (isLiteApp) {
 		autoUpdater.channel = 'lite';
 	}
-	autoUpdater.autoDownload = isLiteApp;
+	autoUpdater.autoDownload = false;
+	autoUpdater.allowDowngrade = false;
 	autoUpdater.allowPrerelease = true;
 	autoUpdater.on('update-available', (info: UpdateInfo) => {
+		if (!isRemoteVersionNewer(info)) {
+			acceptedUpdateInfo = null;
+			sendAutoUpdaterState({
+				state: 'unavailable',
+			});
+			return;
+		}
+		acceptedUpdateInfo = info;
 		sendAutoUpdaterState({
 			state: 'available',
 			info: info,
 		});
+		if (isLiteApp) {
+			autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
+		}
 	});
 	autoUpdater.on('update-not-available', () => {
+		acceptedUpdateInfo = null;
 		sendAutoUpdaterState({
 			state: 'unavailable',
 		});
@@ -346,6 +393,12 @@ if (!gotTheLock) {
 		});
 	});
 	autoUpdater.on('update-downloaded', () => {
+		if (!acceptedUpdateInfo || !isRemoteVersionNewer(acceptedUpdateInfo)) {
+			sendAutoUpdaterState({
+				state: 'unavailable',
+			});
+			return;
+		}
 		autoUpdater.quitAndInstall();
 	});
 
@@ -417,7 +470,13 @@ if (!gotTheLock) {
 	});
 
 	ipcMain.on('update-app', () => {
-		autoUpdater.downloadUpdate();
+		if (!acceptedUpdateInfo || !isRemoteVersionNewer(acceptedUpdateInfo)) {
+			sendAutoUpdaterState({
+				state: 'unavailable',
+			});
+			return;
+		}
+		autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
 	});
 
 	ipcMain.on(IpcHandlerMessages.OPEN_LOBBYBROWSER, () => {

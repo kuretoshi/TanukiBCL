@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($ExePath)) {
 	$candidates = @(
+		"$PSScriptRoot\Better-CrewLinkKai.exe",
+		"$PSScriptRoot\BetterCrewLinkKai.exe",
 		"$env:LOCALAPPDATA\Programs\bettercrewlinkkai\Better-CrewLinkKai.exe",
 		"$env:LOCALAPPDATA\Programs\bettercrewlinkkai\BetterCrewLinkKai.exe",
 		"$PSScriptRoot\dist\win-unpacked\Better-CrewLinkKai.exe",
@@ -28,4 +30,5 @@ $arguments = @(
 	"--target-name=$Title"
 )
 
+Write-Host "Launching BetterCrewLinkKai: $ExePath"
 Start-Process -FilePath $ExePath -ArgumentList $arguments

@@ -35,6 +35,7 @@ import { DEFAULT_PLAYERCOLORS } from '../main/avatarGenerator';
 import './language/i18n';
 import { withNamespaces } from 'react-i18next';
 import { ISettings } from '../common/ISettings';
+import { defaultLobbySettings } from '../common/defaultLobbySettings';
 
 const Voice = lazy(() => import('./Voice'));
 const Settings = lazy(() => import('./settings/Settings'));
@@ -150,7 +151,7 @@ export default function App({ t }): JSX.Element {
 	const overlayInitCount = useRef<number>(0);
 
 	const [settings, setSettings] = useState(SettingsStore.store);
-	const [hostLobbySettings, setHostLobbySettings] = useState(settings.localLobbySettings);
+	const [hostLobbySettings, setHostLobbySettings] = useState(defaultLobbySettings);
 	useEffect(() => {
 		SettingsStore.onDidAnyChange((newValue, _) => { setSettings(newValue as ISettings) });
 	}, []);
