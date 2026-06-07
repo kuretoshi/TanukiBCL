@@ -127,12 +127,8 @@ function parseVersion(version: string): number[] {
 	while (parts.length < 3) {
 		parts.push(0);
 	}
-	if (prerelease === '') {
-		parts.push(Number.MAX_SAFE_INTEGER);
-	} else {
-		const numericPrerelease = prerelease.match(/\d+/);
-		parts.push(numericPrerelease ? Number(numericPrerelease[0]) : 0);
-	}
+	const numericPrerelease = prerelease.match(/\d+/);
+	parts.push(numericPrerelease ? Number(numericPrerelease[0]) : 0);
 	return parts;
 }
 
