@@ -21,7 +21,7 @@ win:
       repo: BetterCrewLink
       releaseType: release
 nsis:
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: TanukiBCL-Setup-${version}.${ext}
   include: resources/installer.nsh
 linux:
   target:

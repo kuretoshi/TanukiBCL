@@ -22,7 +22,7 @@ win:
       releaseType: release
       channel: lite
 nsis:
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: TanukiBCLLite-Setup-${version}.${ext}
   include: resources/installer-lite.nsh
 linux:
   target:
