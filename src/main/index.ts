@@ -44,6 +44,11 @@ const allowMultiInstance =
 	args.multiInstance === true ||
 	process.env.BETTERCREWLINK_ALLOW_MULTI_INSTANCE === '1' ||
 	/multi[-_ ]?instance/i.test(process.execPath);
+const voiceDebugEnabled =
+	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
+	args['debug-voice'] ||
+	args.debugVoice ||
+	/debug/i.test(process.execPath);
 let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
 let hasCheckedForUpdates = false;
 let acceptedUpdateInfo: UpdateInfo | null = null;
@@ -192,7 +197,7 @@ function createMainWindow() {
 
 	if (isDevelopment) {
 		window.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=app&lite=${isLiteApp ? '1' : '0'}`
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=app&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
 		);
 	} else {
 		window.loadURL(
@@ -203,6 +208,7 @@ function createMainWindow() {
 					version: appVersion,
 					view: 'app',
 					lite: isLiteApp ? '1' : '0',
+					debugVoice: voiceDebugEnabled ? '1' : '0',
 				},
 				slashes: true,
 			})
@@ -274,7 +280,7 @@ function createLobbyBrowser() {
 	// }
 	if (isDevelopment) {
 		window.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=lobbies&lite=${isLiteApp ? '1' : '0'}`
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=lobbies&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
 		);
 	} else {
 		window.loadURL(
@@ -285,6 +291,7 @@ function createLobbyBrowser() {
 					version: appVersion,
 					view: 'lobbies',
 					lite: isLiteApp ? '1' : '0',
+					debugVoice: voiceDebugEnabled ? '1' : '0',
 				},
 				slashes: true,
 			})
@@ -323,7 +330,7 @@ function createOverlay() {
 
 	if (isDevelopment) {
 		overlay.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${appVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}`
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${appVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
 		);
 	} else {
 		overlay.loadURL(
@@ -334,6 +341,7 @@ function createOverlay() {
 					version: appVersion,
 					view: 'overlay',
 					lite: isLiteApp ? '1' : '0',
+					debugVoice: voiceDebugEnabled ? '1' : '0',
 				},
 				slashes: true,
 			})

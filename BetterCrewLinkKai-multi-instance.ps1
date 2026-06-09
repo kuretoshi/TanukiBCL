@@ -1,14 +1,20 @@
 param(
-	[int]$Count = 1,
+	[int]$Count = 0,
 	[int]$StartIndex = 0,
 	[string]$TargetName = "Among Us",
-	[string]$ExePath = ""
+	[string]$TargetProcessName = "Among Us",
+	[string]$ExePath = "",
+	[switch]$DebugVoice = $true
 )
 
 $ErrorActionPreference = "Stop"
 
+$targetProcessBaseName = [System.IO.Path]::GetFileNameWithoutExtension($TargetProcessName)
+$targetProcessExeName = "$targetProcessBaseName.exe"
+
 if ([string]::IsNullOrWhiteSpace($ExePath)) {
 	$candidates = @(
+		"$PSScriptRoot\TanukiBCL.exe",
 		"$env:LOCALAPPDATA\Programs\tanukibcl\TanukiBCL.exe",
 		"$PSScriptRoot\dist\win-unpacked\TanukiBCL.exe"
 	)
@@ -20,14 +26,31 @@ if ([string]::IsNullOrWhiteSpace($ExePath) -or !(Test-Path -LiteralPath $ExePath
 	throw "TanukiBCL executable was not found. Pass -ExePath explicitly."
 }
 
-for ($i = 0; $i -lt $Count; $i++) {
-	$targetIndex = $StartIndex + $i
+$processes = Get-Process -Name $targetProcessBaseName -ErrorAction SilentlyContinue |
+	Sort-Object Id |
+	Select-Object -Skip $StartIndex
+
+if ($Count -gt 0) {
+	$processes = $processes | Select-Object -First $Count
+}
+
+if (!$processes) {
+	throw "No running '$targetProcessBaseName' processes were found."
+}
+
+foreach ($process in $processes) {
 	$args = @(
 		"--multi-instance",
-		"--target-index=$targetIndex",
-		"--target-name=$TargetName"
+		"--target-pid=$($process.Id)",
+		"--target-name=`"$TargetName`"",
+		"--target-process=`"$targetProcessExeName`""
 	)
 
-	Start-Process -FilePath $ExePath -ArgumentList $args -WindowStyle Hidden
+	if ($DebugVoice) {
+		$args += "--debug-voice"
+	}
+
+	Write-Host "Launching TanukiBCL for $targetProcessExeName PID $($process.Id): $ExePath"
+	Start-Process -FilePath $ExePath -ArgumentList $args
 	Start-Sleep -Milliseconds 500
 }

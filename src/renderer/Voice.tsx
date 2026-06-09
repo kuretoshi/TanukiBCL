@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import io, { Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
+import { connectCompatibleSocket } from './socket';
 import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsContext } from './contexts';
 import {
 	AmongUsState,
@@ -59,6 +60,7 @@ console.log(adapter.browserDetails.browser);
 
 const isLiteApp =
 	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
+const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search.substring(1)) : undefined;
 const RichAvatar = lazy(() => import('./Avatar'));
 
 interface VoiceAvatarProps {
@@ -151,15 +153,18 @@ interface AppearanceBaseline {
 type VoiceDisguiseMode = 'none' | 'mixup';
 
 const voiceDebugEnabled =
+	queryParams?.get('debugVoice') === '1' ||
 	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
 	process.argv.some((arg) => arg === '--debug-voice' || arg === '--debugVoice') ||
 	/debug/i.test(process.execPath);
 
 interface VoiceDebugOverlayState {
 	map: string | number;
+	mod: string | undefined;
 	gameState: string | undefined;
 	audioGameState: string | undefined;
 	airshipMeetingAudioFallback: boolean;
+	airshipSpawnAudioFallback: boolean;
 	meetingHud: number | undefined;
 	meetingHudCachePtr: number | undefined;
 	meetingHudState: number | undefined;
@@ -174,6 +179,11 @@ interface VoiceDebugOverlayState {
 	localObjectDiffs: string | undefined;
 	localPlayerDiffs: string | undefined;
 	innerNetDiffs: string | undefined;
+	localRoleTeam: number | undefined;
+	localRoleLabel: string | undefined;
+	localRolePtr: number | undefined;
+	localRoleDiffs: string | undefined;
+	localRoleSnapshot: string | undefined;
 	remoteName?: string;
 	baseGain?: number;
 	finalGain?: number;
@@ -204,6 +214,7 @@ const DEFAULT_ICE_CONFIG_TURN: RTCConfiguration = {
 const PEER_RECONNECT_DELAY_MS = 1500;
 const PEER_TRACK_STALL_RECONNECT_MS = 4000;
 const PEER_RELAY_FALLBACK_AFTER_ATTEMPTS = 2;
+const AIRSHIP_SPAWN_AUDIO_GRACE_MS = 15000;
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -550,6 +561,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const gameStateDebugTimeRef = useRef<number>(0);
 	const voiceAvailabilityDebugRef = useRef<Record<string, string>>({});
 	const voiceAvailabilityDebugTimeRef = useRef<Record<string, number>>({});
+	const airshipSpawnAudioFallbackUntilRef = useRef<number>(0);
 	const classes = useStyles();
 
 	const [connect, setConnect] = useState<{
@@ -774,9 +786,42 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		);
 	}
 
-	function getAudioGameState(state: AmongUsState): GameState {
-		return isAirshipMeetingAudioFallback(state) ? GameState.DISCUSSION : state.gameState;
+	function isAirshipSpawnAudioFallback(state: AmongUsState): boolean {
+		const hasSpawnHudSignal =
+			!!state.debug &&
+			state.debug.meetingHudState === 4;
+
+		return (
+			state.gameState === GameState.TASKS &&
+			state.map === MapType.AIRSHIP &&
+			(hasSpawnHudSignal || Date.now() < airshipSpawnAudioFallbackUntilRef.current)
+		);
 	}
+
+	function getAudioGameState(state: AmongUsState): GameState {
+		return state.gameState;
+	}
+
+	useEffect(() => {
+		const isAirshipTasks = gameState?.map === MapType.AIRSHIP && gameState?.gameState === GameState.TASKS;
+		if (!isAirshipTasks) {
+			airshipSpawnAudioFallbackUntilRef.current = 0;
+			return;
+		}
+
+		const hasSpawnHudSignal =
+			!!gameState.debug &&
+			gameState.debug.meetingHudState === 4;
+		if (gameState.oldGameState === GameState.DISCUSSION || hasSpawnHudSignal) {
+			airshipSpawnAudioFallbackUntilRef.current = Date.now() + AIRSHIP_SPAWN_AUDIO_GRACE_MS;
+		}
+	}, [
+		gameState?.map,
+		gameState?.gameState,
+		gameState?.oldGameState,
+		gameState?.debug?.meetingHudCachePtr,
+		gameState?.debug?.meetingHudState,
+	]);
 
 	useEffect(() => {
 		if (!voiceDebugEnabled) {
@@ -822,6 +867,38 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			gameStateDebugRef.current = serialized;
 			gameStateDebugTimeRef.current = now;
 			console.warn('[BetterCrewLinkKai game state debug]', snapshot);
+			setVoiceDebugOverlay((current) => ({
+				map: snapshot.map,
+				mod: gameState.mod,
+				gameState: snapshot.gameState,
+				audioGameState: GameState[getAudioGameState(gameState)],
+				airshipMeetingAudioFallback: isAirshipMeetingAudioFallback(gameState),
+				airshipSpawnAudioFallback: isAirshipSpawnAudioFallback(gameState),
+				meetingHud: gameState.debug?.meetingHud,
+				meetingHudCachePtr: gameState.debug?.meetingHudCachePtr,
+				meetingHudState: gameState.debug?.meetingHudState,
+				rawGameState: gameState.debug?.rawGameState,
+				onlineScene: gameState.debug?.onlineScene,
+				mainMenuScene: gameState.debug?.mainMenuScene,
+				localTaskPtr: gameState.debug?.localTaskPtr,
+				localObjectFlags: gameState.debug?.localObjectFlags,
+				initPatternDebug: gameState.debug?.initPatternDebug,
+				airshipMeetingByOutfit: gameState.debug?.airshipMeetingByOutfit,
+				currentOutfits: gameState.debug?.currentOutfits,
+				localObjectDiffs: gameState.debug?.localObjectDiffs,
+				localPlayerDiffs: gameState.debug?.localPlayerDiffs,
+				innerNetDiffs: gameState.debug?.innerNetDiffs,
+				localRoleTeam: gameState.debug?.localRoleTeam,
+				localRoleLabel: gameState.debug?.localRoleLabel,
+				localRolePtr: gameState.debug?.localRolePtr,
+				localRoleDiffs: gameState.debug?.localRoleDiffs,
+				localRoleSnapshot: gameState.debug?.localRoleSnapshot,
+				remoteName: current?.remoteName,
+				baseGain: current?.baseGain,
+				finalGain: current?.finalGain,
+				possibleBlocks: current?.possibleBlocks || [],
+				updatedAt: now,
+			}));
 		}
 	}, [connected, gameState, lobbySettings]);
 
@@ -864,6 +941,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			gameState: GameState[state.gameState],
 			audioGameState: GameState[audioGameState],
 			airshipMeetingAudioFallback: isAirshipMeetingAudioFallback(state),
+			airshipSpawnAudioFallback: isAirshipSpawnAudioFallback(state),
 			oldGameState: GameState[state.oldGameState],
 			local: {
 				name: me.name,
@@ -921,9 +999,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			console.warn('[BetterCrewLinkKai voice availability]', snapshot);
 			setVoiceDebugOverlay({
 				map: snapshot.map,
+				mod: state.mod,
 				gameState: snapshot.gameState,
 				audioGameState: snapshot.audioGameState,
 				airshipMeetingAudioFallback: snapshot.airshipMeetingAudioFallback,
+				airshipSpawnAudioFallback: snapshot.airshipSpawnAudioFallback,
 				meetingHud: state.debug?.meetingHud,
 				meetingHudCachePtr: state.debug?.meetingHudCachePtr,
 				meetingHudState: state.debug?.meetingHudState,
@@ -938,6 +1018,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localObjectDiffs: state.debug?.localObjectDiffs,
 				localPlayerDiffs: state.debug?.localPlayerDiffs,
 				innerNetDiffs: state.debug?.innerNetDiffs,
+				localRoleTeam: state.debug?.localRoleTeam,
+				localRoleLabel: state.debug?.localRoleLabel,
+				localRolePtr: state.debug?.localRolePtr,
+				localRoleDiffs: state.debug?.localRoleDiffs,
+				localRoleSnapshot: state.debug?.localRoleSnapshot,
 				remoteName: other.name,
 				baseGain,
 				finalGain,
@@ -966,6 +1051,9 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		let skipDistanceCheck = false;
 		let muffleEnabled = false;
 		let voiceEffectEnabled = false;
+		const airshipSpawnAudioFallback = !me.isDead && isAirshipSpawnAudioFallback(state);
+		const aliveHearingDeadInTasks = audioGameState === GameState.TASKS && !me.isDead && other.isDead;
+		const canHearDeadInTasks = aliveHearingDeadInTasks && canHearGhosts(me);
 		const voiceDisguiseActive = isVoiceDisguiseEffectActive(other, voiceDisguiseMode);
 		const muteAudio = () => {
 			restoreTransientEffects(audio, other);
@@ -1013,9 +1101,14 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				if (
 					lobbySettings.wallsBlockAudio &&
 					!me.isDead &&
+					!airshipSpawnAudioFallback &&
 					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, gameState.map, gameState.closedDoors)
 				) {
 					collided = true;
+				}
+				if (airshipSpawnAudioFallback) {
+					skipDistanceCheck = true;
+					panPos = [0, 0];
 				}
 				if (
 					me.isImpostor &&
@@ -1050,17 +1143,14 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					}
 				}
 
-				if (!me.isDead && other.isDead && canHearGhosts(me)) {
+				if (canHearDeadInTasks) {
 					if (!audio.reverbConnected) {
 						audio.reverbConnected = true;
 						applyEffect(gain, reverb, destination, other);
 					}
-					collided = false;
 					endGain = settings.ghostVolumeAsImpostor / 100;
-				} else {
-					if (other.isDead && !me.isDead) {
-						endGain = 0;
-					}
+				} else if (other.isDead && !me.isDead) {
+					endGain = 0;
 				}
 				break;
 			case GameState.DISCUSSION:
@@ -1068,6 +1158,14 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				endGain = 1;
 				if (!me.isDead && other.isDead) {
 					endGain = 0;
+				}
+				if (
+					state.map === MapType.AIRSHIP &&
+					lobbySettings.wallsBlockAudio &&
+					!me.isDead &&
+					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, state.map, state.closedDoors)
+				) {
+					return muteAudio();
 				}
 				break;
 
@@ -1087,7 +1185,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			}
 		}
 
-		if (lobbySettings.deadOnly && !(audioGameState === GameState.DISCUSSION && state.map === MapType.AIRSHIP)) {
+		if (aliveHearingDeadInTasks && !canHearDeadInTasks) {
+			return muteAudio();
+		}
+
+		if (lobbySettings.deadOnly) {
 			panPos = [0, 0];
 			if (!me.isDead || !other.isDead) {
 				endGain = 0;
@@ -1123,10 +1225,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				return muteAudio();
 			}
 		} else {
-			if (collided && !skipDistanceCheck) {
-				return muteAudio();
-			}
 			isOnCamera = false;
+		}
+
+		if (collided && !skipDistanceCheck) {
+			return muteAudio();
 		}
 
 		// Muffling in vents
@@ -1557,9 +1660,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		// (async function anyNameFunction() {
 		let currentLobby = '';
 		// Connect to voice relay server
-		connectionStuff.current.socket = io(settings.serverURL,{
-			transports: ['websocket']
-		 });
+		connectionStuff.current.socket = connectCompatibleSocket(settings.serverURL);
 
 		const { socket } = connectionStuff.current;
 
@@ -2421,9 +2522,12 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			{voiceDebugEnabled && voiceDebugOverlay && (
 				<div className={classes.debugOverlay}>
 					{[
-						`map=${voiceDebugOverlay.map} state=${voiceDebugOverlay.gameState} audio=${voiceDebugOverlay.audioGameState} airshipFallback=${voiceDebugOverlay.airshipMeetingAudioFallback}`,
+						`map=${voiceDebugOverlay.map} mod=${voiceDebugOverlay.mod || '-'} state=${voiceDebugOverlay.gameState} audio=${voiceDebugOverlay.audioGameState} airshipFallback=${voiceDebugOverlay.airshipMeetingAudioFallback} airshipSpawn=${voiceDebugOverlay.airshipSpawnAudioFallback}`,
 						`raw=${voiceDebugOverlay.rawGameState} meetingHud=${voiceDebugOverlay.meetingHud} cache=${voiceDebugOverlay.meetingHudCachePtr} hudState=${voiceDebugOverlay.meetingHudState}`,
 						`scene=${voiceDebugOverlay.onlineScene}/${voiceDebugOverlay.mainMenuScene} task=${voiceDebugOverlay.localTaskPtr}`,
+						`role=${voiceDebugOverlay.localRoleLabel || '-'} team=${voiceDebugOverlay.localRoleTeam ?? '-'} ptr=${voiceDebugOverlay.localRolePtr || '-'}`,
+						`roleDiff=${voiceDebugOverlay.localRoleDiffs || '-'}`,
+						`roleRaw=${voiceDebugOverlay.localRoleSnapshot || '-'}`,
 						`pat=${voiceDebugOverlay.initPatternDebug || '-'}`,
 						`outfits=${voiceDebugOverlay.currentOutfits || '-'} outfitMeet=${voiceDebugOverlay.airshipMeetingByOutfit}`,
 						`objDiff=${voiceDebugOverlay.localObjectDiffs || '-'}`,

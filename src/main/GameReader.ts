@@ -26,6 +26,9 @@ import fs from 'fs';
 import path from 'path';
 import { AmongusMod, modList } from '../common/Mods';
 import { app } from 'electron';
+import Store from 'electron-store';
+import { ISettings } from '../common/ISettings';
+import { getVariantStoreName } from '../common/appVariant';
 
 let appVersion = '';
 if (process.env.NODE_ENV !== 'production') {
@@ -37,6 +40,12 @@ const appDisplayName =
 	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
 		? 'タヌキのベタクルLite'
 		: 'タヌキのベタクル';
+void appDisplayName;
+const appWatermarkName =
+	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
+		? 'TanukiBCL Lite'
+		: 'TanukiBCL';
+const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
 const KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS = [
 	44757884, // Among Us 17.4 / Super New Roles
 ];
@@ -475,6 +484,11 @@ export default class GameReader {
 							localObjectDiffs,
 							localPlayerDiffs,
 							innerNetDiffs,
+							localRoleTeam: localPlayer?.roleTeam ?? -1,
+							localRoleLabel: this.formatRoleLabel(localPlayer),
+							localRolePtr: localPlayer?.rolePtr || 0,
+							localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
+							localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
 						},
 					}
 					: {}),
@@ -514,6 +528,15 @@ export default class GameReader {
 			.slice(0, 28)
 			.map((offset) => `${offset}:${baseline[offset]}>${current[offset]}`)
 			.join(' ');
+	}
+
+	private readDebugIntSnapshot(address: number, start: number, end: number): string {
+		if (!address) return '';
+		const values: string[] = [];
+		for (let offset = start; offset <= end; offset += 4) {
+			values.push(`${offset}:${this.readMemory<number>('int32', address + offset, undefined, 0)}`);
+		}
+		return values.join(' ');
 	}
 
 	private readLocalObjectFlags(objectPtr: number): string {
@@ -964,9 +987,10 @@ export default class GameReader {
 		this.writeString(shellCodeAddr + 0x70, 'OnlineGame');
 		this.writeString(shellCodeAddr + 0x95, 'MMOnline');
 
+		const voiceServerURL = settingsStore.get('serverURL', 'https://bettercrewl.ink');
 		this.writeString(
 			shellCodeAddr + 0xd5,
-			`<size=85%><color=#BA68C8>${appDisplayName} v${appVersion}</color></size>\n<size=60%><color=#BA68C8>https://bettercrewlink.app</color></size><size=85%>\nPing: {0}ms</size>`
+			`<size=85%><color=#BA68C8>${appWatermarkName} v${appVersion}</color></size>\n<size=60%><color=#BA68C8>${voiceServerURL}</color></size><size=85%>\nPing: {0}ms</size>`
 		);
 
 		writeBuffer(this.amongUs!.handle, shellCodeAddr, Buffer.from(shellcode));
@@ -1328,6 +1352,13 @@ export default class GameReader {
 		return h;
 	}
 
+	formatRoleLabel(player?: Player): string {
+		if (!player) return 'unknown';
+		if (player.isImpostor) return 'Impostor';
+		if (player.isThirdParty) return `ThirdParty(${player.roleTeam})`;
+		return 'Crewmate';
+	}
+
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
 		if (!this.PlayerStruct || !this.offsets) return undefined;
 
@@ -1437,6 +1468,7 @@ export default class GameReader {
 			appearanceVisorId: appearanceVisor,
 			appearanceId: `${appearanceColor}|${appearanceHat}|${appearanceSkin}|${appearanceVisor}`,
 			disconnected: data.disconnected != 0,
+			rolePtr: data.rolePtr,
 			roleTeam: data.impostor,
 			isImpostor: data.impostor == 1,
 			isThirdParty: data.impostor != 0 && data.impostor != 1,

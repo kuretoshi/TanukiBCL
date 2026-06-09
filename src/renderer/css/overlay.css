@@ -9,6 +9,30 @@ body,
 	font-family: 'Varela', sans-serif;
 }
 
+.tanuki-overlay-watermark {
+	position: fixed;
+	top: 8px;
+	left: 10px;
+	z-index: 2147483647;
+	pointer-events: none;
+	color: rgba(186, 104, 200, 0.58);
+	font-family: 'Varela', sans-serif;
+	font-weight: 700;
+	font-size: 16px;
+	line-height: 1.05;
+	text-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.95),
+		0 0 5px rgba(0, 0, 0, 0.75);
+	white-space: nowrap;
+}
+
+.tanuki-overlay-watermark > div:last-child {
+	margin-top: 1px;
+	font-size: 11px;
+	font-weight: 600;
+	opacity: 0.8;
+}
+
 .overlay-wrapper {
 	width: 100px;
 	border-radius: 8px;

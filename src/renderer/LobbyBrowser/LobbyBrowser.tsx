@@ -11,7 +11,6 @@ import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 import { ipcRenderer } from 'electron';
 import { IpcHandlerMessages, IpcMessages } from '../../common/ipc-messages';
-import io from 'socket.io-client';
 import i18next from 'i18next';
 import { Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tooltip } from '@mui/material';
 import languages from '../language/languages';
@@ -19,6 +18,7 @@ import { PublicLobbyMap, PublicLobby } from '../../common/PublicLobby';
 import { modList, ModsType } from '../../common/Mods';
 import { GameState } from '../../common/AmongUsState';
 import SettingsStore from '../settings/SettingsStore';
+import { connectCompatibleSocket } from '../socket';
 
 const serverUrl = SettingsStore.get('serverURL', 'https://bettercrewl.ink/');
 const language = SettingsStore.get('language', 'ja');
@@ -100,9 +100,7 @@ export default function lobbyBrowser({ t }) {
 	useEffect(() => {
 		ipcRenderer.invoke(IpcMessages.REQUEST_MOD).then((mod: ModsType) => setMod(mod));
 
-		const s = io(serverUrl, {
-			transports: ['websocket'],
-		});
+		const s = connectCompatibleSocket(serverUrl);
 		setSocket(s);
 
 		s.on('update_lobby', (lobby: PublicLobby) => {

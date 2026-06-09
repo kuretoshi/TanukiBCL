@@ -11,6 +11,8 @@ import { DEFAULT_PLAYERCOLORS } from '../main/avatarGenerator';
 
 const isLiteOverlay =
 	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
+const overlayQueryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search.substring(1)) : undefined;
+const overlayVersion = overlayQueryParams?.get('version') || 'DEV';
 const RichAvatar = lazy(() => import('./Avatar'));
 
 interface UseStylesProps {
@@ -110,6 +112,7 @@ const Overlay: React.FC = function () {
 		return null;
 	return (
 		<>
+			<OverlayWatermark serverURL={settings.serverURL} />
 			{settings.meetingOverlay && gameState.gameState === GameState.DISCUSSION && (
 				<MeetingHud gameState={gameState} voiceState={voiceState} playerColors={playerColors} />
 			)}
@@ -125,6 +128,17 @@ const Overlay: React.FC = function () {
 		</>
 	);
 };
+
+interface OverlayWatermarkProps {
+	serverURL: string;
+}
+
+const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({ serverURL }: OverlayWatermarkProps) => (
+	<div className="tanuki-overlay-watermark">
+		<div>TanukiBCL v{overlayVersion}</div>
+		<div>{serverURL}</div>
+	</div>
+);
 
 interface AvatarOverlayProps {
 	voiceState: VoiceState;

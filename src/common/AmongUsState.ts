@@ -37,6 +37,11 @@ export interface AmongUsState {
 		localObjectDiffs: string;
 		localPlayerDiffs: string;
 		innerNetDiffs: string;
+		localRoleTeam: number;
+		localRoleLabel: string;
+		localRolePtr: number;
+		localRoleDiffs: string;
+		localRoleSnapshot: string;
 	};
 }
 
@@ -59,6 +64,7 @@ export interface Player {
 	appearanceVisorId: string;
 	appearanceId: string;
 	disconnected: boolean;
+	rolePtr: number;
 	roleTeam: number;
 	isImpostor: boolean;
 	isThirdParty: boolean;
