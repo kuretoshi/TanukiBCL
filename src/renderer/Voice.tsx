@@ -771,6 +771,16 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		);
 	}
 
+	function getStateMap(state: AmongUsState): MapType {
+		if (state.map !== undefined && MapType[state.map] !== undefined) {
+			return state.map;
+		}
+		if (hostRef.current.map !== undefined && MapType[hostRef.current.map] !== undefined) {
+			return hostRef.current.map;
+		}
+		return MapType.UNKNOWN;
+	}
+
 	function isAirshipMeetingAudioFallback(state: AmongUsState): boolean {
 		const hasMeetingHudSignal =
 			!!state.debug &&
@@ -781,7 +791,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 		return (
 			state.gameState === GameState.TASKS &&
-			state.map === MapType.AIRSHIP &&
+			getStateMap(state) === MapType.AIRSHIP &&
 			(hasMeetingHudSignal || hasOutfitSignal)
 		);
 	}
@@ -793,7 +803,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 		return (
 			state.gameState === GameState.TASKS &&
-			state.map === MapType.AIRSHIP &&
+			getStateMap(state) === MapType.AIRSHIP &&
 			(hasSpawnHudSignal || Date.now() < airshipSpawnAudioFallbackUntilRef.current)
 		);
 	}
@@ -803,7 +813,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}
 
 	useEffect(() => {
-		const isAirshipTasks = gameState?.map === MapType.AIRSHIP && gameState?.gameState === GameState.TASKS;
+		const isAirshipTasks = getStateMap(gameState) === MapType.AIRSHIP && gameState?.gameState === GameState.TASKS;
 		if (!isAirshipTasks) {
 			airshipSpawnAudioFallbackUntilRef.current = 0;
 			return;
@@ -829,7 +839,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		}
 		const snapshot = {
 			lobbyCode: gameState.lobbyCode,
-			map: MapType[gameState.map] || gameState.map,
+			map: MapType[getStateMap(gameState)] || getStateMap(gameState),
 			gameState: GameState[gameState.gameState],
 			oldGameState: GameState[gameState.oldGameState],
 			playerCount: gameState.players?.length || 0,
@@ -916,6 +926,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		}
 		const audioGameState = getAudioGameState(state);
 		const possibleBlocks: string[] = [...extraBlocks];
+		const wallCollides =
+			lobbySettings.wallsBlockAudio &&
+			!me.isDead &&
+			(audioGameState === GameState.TASKS || (audioGameState === GameState.DISCUSSION && getStateMap(state) === MapType.AIRSHIP)) &&
+			poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, getStateMap(state), state.closedDoors);
 		if (!connected) possibleBlocks.push('not-connected');
 		if (connectionStuff.current.muted) possibleBlocks.push('local-muted');
 		if (connectionStuff.current.deafened) possibleBlocks.push('local-deafened');
@@ -923,7 +938,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		if (other.disconnected) possibleBlocks.push('remote-disconnected');
 		if (other.isDummy) possibleBlocks.push('remote-dummy');
 		if (audioGameState === GameState.TASKS && lobbySettings.meetingGhostOnly) possibleBlocks.push('meeting-only-enabled');
-		if (lobbySettings.deadOnly && !(audioGameState === GameState.DISCUSSION && state.map === MapType.AIRSHIP)) {
+		if (lobbySettings.deadOnly && !(audioGameState === GameState.DISCUSSION && getStateMap(state) === MapType.AIRSHIP)) {
 			possibleBlocks.push('ghost-only-enabled');
 		}
 		if (audioGameState === GameState.TASKS && lobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor) {
@@ -932,12 +947,13 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		if (audioGameState === GameState.TASKS && other.isDead && !me.isDead && !canHearGhosts(me)) {
 			possibleBlocks.push('remote-is-dead');
 		}
+		if (wallCollides) possibleBlocks.push('wall-collision');
 		if (baseGain <= 0 && possibleBlocks.length === 0) possibleBlocks.push('audio-rule-gain-zero');
 		if (finalGain <= 0 && baseGain > 0 && possibleBlocks.length === 0) possibleBlocks.push('post-audio-gain-zero');
 
 		const snapshot = {
 			lobbyCode: state.lobbyCode,
-			map: MapType[state.map] || state.map,
+			map: MapType[getStateMap(state)] || getStateMap(state),
 			gameState: GameState[state.gameState],
 			audioGameState: GameState[audioGameState],
 			airshipMeetingAudioFallback: isAirshipMeetingAudioFallback(state),
@@ -953,6 +969,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				muted: connectionStuff.current.muted,
 				deafened: connectionStuff.current.deafened,
 				canSpeakNow: connected && talking && !connectionStuff.current.muted && !connectionStuff.current.deafened,
+				position: { x: me.x, y: me.y },
 			},
 			remote: {
 				name: other.name,
@@ -966,6 +983,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				vadTalking: !!otherVAD[other.clientId],
 				mutedByUserConfig: !!playerConfigs[other.nameHash]?.isMuted,
 				canHearOther: finalGain > 0,
+				position: { x: other.x, y: other.y },
 			},
 			audio: {
 				baseGain,
@@ -1044,6 +1062,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		const audioContext = pan.context;
 		const useLightSource = true;
 		const audioGameState = getAudioGameState(state);
+		const map = getStateMap(state);
 		let maxdistance = maxDistanceRef.current;
 		let panPos = [other.x - me.x, other.y - me.y];
 		let endGain = 0;
@@ -1101,8 +1120,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				if (
 					lobbySettings.wallsBlockAudio &&
 					!me.isDead &&
-					!airshipSpawnAudioFallback &&
-					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, gameState.map, gameState.closedDoors)
+					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, map, state.closedDoors)
 				) {
 					collided = true;
 				}
@@ -1160,10 +1178,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					endGain = 0;
 				}
 				if (
-					state.map === MapType.AIRSHIP &&
+					map === MapType.AIRSHIP &&
 					lobbySettings.wallsBlockAudio &&
 					!me.isDead &&
-					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, state.map, state.closedDoors)
+					poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, map, state.closedDoors)
 				) {
 					return muteAudio();
 				}
@@ -1200,13 +1218,13 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		if (!skipDistanceCheck && Math.sqrt(panPos[0] * panPos[0] + panPos[1] * panPos[1]) > maxdistance) {
 			if (lobbySettings.hearThroughCameras && audioGameState === GameState.TASKS) {
 				if (state.currentCamera !== CameraLocation.NONE && state.currentCamera !== CameraLocation.Skeld) {
-					const camerapos = AmongUsMaps[state.map].cameras[state.currentCamera];
+					const camerapos = AmongUsMaps[map].cameras[state.currentCamera];
 					panPos = [other.x - camerapos.x, other.y - camerapos.y];
 					console.log('camerapos: ', camerapos);
 				} else if (state.currentCamera === CameraLocation.Skeld) {
 					let distance = 999;
 					let camerapos = { x: 999, y: 999 };
-					for (const camera of Object.values(AmongUsMaps[state.map].cameras)) {
+					for (const camera of Object.values(AmongUsMaps[map].cameras)) {
 						const cameraDist = Math.sqrt(Math.pow(other.x - camera.x, 2) + Math.pow(other.y - camera.y, 2));
 						if (distance > cameraDist) {
 							distance = cameraDist;
@@ -1228,7 +1246,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			isOnCamera = false;
 		}
 
-		if (collided && !skipDistanceCheck) {
+		if (collided && (!skipDistanceCheck || airshipSpawnAudioFallback)) {
 			return muteAudio();
 		}
 
@@ -2204,7 +2222,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			maxDistanceRef.current = 1;
 		}
 		hostRef.current = {
-			map: gameState.map,
+			map: getStateMap(gameState),
 			mobileRunning: hostRef.current.mobileRunning,
 			gamestate: gameState.gameState,
 			code: gameState.lobbyCode,

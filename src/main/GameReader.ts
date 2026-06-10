@@ -317,7 +317,15 @@ export default class GameReader {
 					this.offsets.gameoptionsData
 				);
 				maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
-				map = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId);
+				map = this.normalizeMapType(
+					this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId, MapType.UNKNOWN)
+				);
+				const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
+				if (map === MapType.UNKNOWN && shipPtr) {
+					map = this.normalizeMapType(
+						this.readMemory<number>('byte', shipPtr, this.offsets.shipStatus_map, MapType.UNKNOWN)
+					);
+				}
 				if (state === GameState.TASKS) {
 					const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
 					const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
@@ -334,8 +342,6 @@ export default class GameReader {
 					}
 				}
 				if (state === GameState.TASKS) {
-					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
-
 					const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
 
 					if (systemsPtr !== 0 && state === GameState.TASKS) {
@@ -1195,6 +1201,10 @@ export default class GameReader {
 		const { address: addr, last } = this.offsetAddress(address, offsets || []);
 		if (addr === 0) return defaultParam as T;
 		return readMemoryRaw<T>(this.amongUs.handle, addr + last, dataType);
+	}
+
+	normalizeMapType(value: number | undefined): MapType {
+		return value !== undefined && MapType[value] !== undefined ? value : MapType.UNKNOWN;
 	}
 
 	offsetAddress(address: number, offsets: number[]): { address: number; last: number } {
