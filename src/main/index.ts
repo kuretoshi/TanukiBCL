@@ -21,6 +21,7 @@ const args = require('minimist')(process.argv); // eslint-disable-line
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
+const displayAppVersion: string = rawAppVersion === '3.1.6-20' ? '3.1.6-2' : rawAppVersion;
 const shouldCheckForUpdates = !isDevelopment;
 const isLiteApp =
 	process.env.BETTERCREWLINK_LITE === '1' ||
@@ -205,7 +206,7 @@ function createMainWindow() {
 				pathname: joinPath(__dirname, 'index.html'),
 				protocol: 'file',
 				query: {
-					version: appVersion,
+					version: displayAppVersion,
 					view: 'app',
 					lite: isLiteApp ? '1' : '0',
 					debugVoice: voiceDebugEnabled ? '1' : '0',
@@ -288,7 +289,7 @@ function createLobbyBrowser() {
 				pathname: joinPath(__dirname, 'index.html'),
 				protocol: 'file',
 				query: {
-					version: appVersion,
+					version: displayAppVersion,
 					view: 'lobbies',
 					lite: isLiteApp ? '1' : '0',
 					debugVoice: voiceDebugEnabled ? '1' : '0',
@@ -330,7 +331,7 @@ function createOverlay() {
 
 	if (isDevelopment) {
 		overlay.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${appVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
+			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${displayAppVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
 		);
 	} else {
 		overlay.loadURL(
@@ -338,7 +339,7 @@ function createOverlay() {
 				pathname: joinPath(__dirname, 'index.html'),
 				protocol: 'file',
 				query: {
-					version: appVersion,
+					version: displayAppVersion,
 					view: 'overlay',
 					lite: isLiteApp ? '1' : '0',
 					debugVoice: voiceDebugEnabled ? '1' : '0',
@@ -351,6 +352,42 @@ function createOverlay() {
 	overlayWindow.attachTo(overlay, overlayTargetName);
 	overlay.setBackgroundColor('#00000000');
 	return overlay;
+}
+
+function showOverlayWithRetry(attempt = 0) {
+	try {
+		if (!global.overlay || global.overlay.isDestroyed()) {
+			global.overlay = createOverlay();
+		}
+		overlayWindow.show();
+	} catch (exception) {
+		console.log('Overlay show failed:', exception);
+		if (attempt < 8) {
+			setTimeout(() => showOverlayWithRetry(attempt + 1), 750);
+			return;
+		}
+		try {
+			global.overlay?.hide();
+			global.overlay?.close();
+		} catch {
+			/* empty */
+		}
+		global.overlay = null;
+	}
+}
+
+function hideOverlay() {
+	try {
+		overlayWindow.hide();
+		if (global.overlay?.closable) {
+			overlayWindow.stop();
+			global.overlay?.close();
+			global.overlay = null;
+		}
+	} catch (exception) {
+		console.log('Overlay hide failed:', exception);
+		global.overlay = null;
+	}
 }
 
 const gotTheLock = allowMultiInstance || app.requestSingleInstanceLock();
@@ -495,30 +532,13 @@ if (!gotTheLock) {
 	});
 
 	ipcMain.on('enableOverlay', async (_event, enable) => {
-		setTimeout(
-			() => {
-
-				try {
-					if (enable) {
-						if (!global.overlay) {
-							global.overlay = createOverlay();
-						}
-						overlayWindow.show();
-					} else {
-						overlayWindow.hide();
-						if (global.overlay?.closable) {
-							overlayWindow.stop();
-							global.overlay?.close();
-							global.overlay = null;
-						}
-					}
-				} catch (exception) {
-					global.overlay?.hide();
-					global.overlay?.close();
-				}
-			},
-			1000
-		)
+		setTimeout(() => {
+			if (enable) {
+				showOverlayWithRetry();
+			} else {
+				hideOverlay();
+			}
+		}, 1000);
 	});
 
 	ipcMain.on('setAlwaysOnTop', async (_event, enable) => {

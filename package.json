@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.1.6-14",
+	"version": "3.1.6-20",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"repository": {
@@ -42,7 +42,7 @@
 		"electron-log": "^4.3.2",
 		"electron-overlay-window": "https://github.com/OhMyGuus/electron-overlay-window",
 		"electron-store": "^8.0.1",
-		"electron-updater": "^4.3.5",
+		"electron-updater": "4.3.5",
 		"electron-window-state": "^5.0.3",
 		"i18next": "^19.9.2",
 		"jimp": "^0.16.1",
@@ -59,6 +59,7 @@
 		"registry-js": "^1.15.1",
 		"simple-peer": "^9.11.0",
 		"socket.io-client": "2.4.0",
+		"socket.io-client-v4": "npm:socket.io-client@4.7.5",
 		"source-code-pro": "^2.30.2",
 		"source-map-support": "^0.5.16",
 		"structron": "^0.2.4",

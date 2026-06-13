@@ -9,6 +9,8 @@ files:
     filter:
       - package.json
       - app
+asarUnpack:
+  - "**/*.node"
 extraFiles:
   - from: Better-CrewLinkKai-target-pid.ps1
     to: TanukiBCL-target-pid.ps1

@@ -112,7 +112,11 @@ const Overlay: React.FC = function () {
 		return null;
 	return (
 		<>
-			<OverlayWatermark serverURL={settings.serverURL} />
+			<OverlayWatermark
+				serverURL={settings.serverURL}
+				lowered={gameState.mod === 'SUPER_NEW_ROLES'}
+				inGame={gameState.gameState === GameState.TASKS}
+			/>
 			{settings.meetingOverlay && gameState.gameState === GameState.DISCUSSION && (
 				<MeetingHud gameState={gameState} voiceState={voiceState} playerColors={playerColors} />
 			)}
@@ -131,10 +135,20 @@ const Overlay: React.FC = function () {
 
 interface OverlayWatermarkProps {
 	serverURL: string;
+	lowered: boolean;
+	inGame: boolean;
 }
 
-const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({ serverURL }: OverlayWatermarkProps) => (
-	<div className="tanuki-overlay-watermark">
+const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
+	serverURL,
+	lowered,
+	inGame,
+}: OverlayWatermarkProps) => (
+	<div
+		className={`tanuki-overlay-watermark${lowered ? ' tanuki-overlay-watermark_snr' : ''}${
+			inGame ? ' tanuki-overlay-watermark_game' : ''
+		}`}
+	>
 		<div>TanukiBCL v{overlayVersion}</div>
 		<div>{serverURL}</div>
 	</div>

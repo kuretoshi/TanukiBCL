@@ -30,22 +30,13 @@ import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 
-let appVersion = '';
-if (process.env.NODE_ENV !== 'production') {
-	appVersion = 'DEV';
-} else {
-	appVersion = app.getVersion();
-}
 const appDisplayName =
 	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
 		? 'タヌキのベタクルLite'
 		: 'タヌキのベタクル';
 void appDisplayName;
-const appWatermarkName =
-	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
-		? 'TanukiBCL Lite'
-		: 'TanukiBCL';
 const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
+void settingsStore;
 const KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS = [
 	44757884, // Among Us 17.4 / Super New Roles
 ];
@@ -930,80 +921,17 @@ export default class GameReader {
 			(relativeShellJMP & 0xff000000) >> 24,
 		];
 
-		const modManagerLateUpdate = this.gameAssembly!.modBaseAddr + this.offsets.modLateUpdateFunc;
-		const shellCodeAddr_1 = shellCodeAddr + 0x300;
-		const relativeShellJMP_1 = shellCodeAddr_1 - (modManagerLateUpdate + 0x1) - 0x4;
-		const relativefixedJMP_1 = modManagerLateUpdate + 0x5 - (shellCodeAddr_1 + 0x1c) - 0x4;
-		const showModStampFunc = this.gameAssembly!.modBaseAddr + this.offsets.showModStampFunc;
-		const relativeShowModStamp = showModStampFunc + 0x6 - (shellCodeAddr_1 + 0x12) - 0x4;
-
-		const _compareAddr = shellCodeAddr + 0x44;
-
-		const _compareAddr1 = (_compareAddr & 0xff000000) >> 24;
-		const _compareAddr2 = (_compareAddr & 0x00ff0000) >> 16;
-		const _compareAddr3 = (_compareAddr & 0x0000ff00) >> 8;
-		const _compareAddr4 = _compareAddr & 0x000000ff;
-
-		const shellcode_modIcon = [
-			0x80, // cmp byte ptr [ShellcodeAddr + 0x30], 0x0,
-			0x3d,
-			_compareAddr4, // 0x0
-			_compareAddr3, // 0x0
-			_compareAddr2, // 0xA3
-			_compareAddr1, // 0x0
-			0x00,
-			0x74, // je 0x13
-			0x0c,
-			0xc6, // mov byte ptr [ShellcodeAddr + 0x30], 0x00
-			0x05,
-			_compareAddr4, // 0x0
-			_compareAddr3, // 0x0
-			_compareAddr2, // 0xA3
-			_compareAddr1, // 0x0
-			0x00, // write 0x0
-			0xe9,
-			relativeShowModStamp & 0x000000ff,
-			(relativeShowModStamp & 0x0000ff00) >> 8,
-			(relativeShowModStamp & 0x00ff0000) >> 16,
-			(relativeShowModStamp & 0xff000000) >> 24,
-			0x53,
-			0x8b,
-			0xdc,
-			0x83,
-			0xec,
-			0x08,
-			0xe9, // jmp innerNet.InnerNetClient.FixedUpdate + 0x5
-			relativefixedJMP_1 & 0x000000ff,
-			(relativefixedJMP_1 & 0x0000ff00) >> 8,
-			(relativefixedJMP_1 & 0x00ff0000) >> 16,
-			(relativefixedJMP_1 & 0xff000000) >> 24,
-		];
-
-		const shellcodeJMP_1 = [
-			// jmp ShellcodeRelativeAddress
-			0xe9,
-			relativeShellJMP_1 & 0x000000ff,
-			(relativeShellJMP_1 & 0x0000ff00) >> 8,
-			(relativeShellJMP_1 & 0x00ff0000) >> 16,
-			(relativeShellJMP_1 & 0xff000000) >> 24,
-			0x90,
-		];
-
 		//MMOnline
 		this.writeString(shellCodeAddr + 0x70, 'OnlineGame');
 		this.writeString(shellCodeAddr + 0x95, 'MMOnline');
 
-		const voiceServerURL = settingsStore.get('serverURL', 'https://bettercrewl.ink');
 		this.writeString(
 			shellCodeAddr + 0xd5,
-			`<size=85%><color=#BA68C8>${appWatermarkName} v${appVersion}</color></size>\n<size=60%><color=#BA68C8>${voiceServerURL}</color></size><size=85%>\nPing: {0}ms</size>`
+			'Ping: {0}ms'
 		);
 
 		writeBuffer(this.amongUs!.handle, shellCodeAddr, Buffer.from(shellcode));
 		writeBuffer(this.amongUs!.handle, fixedUpdateFunc, Buffer.from(shellcodeJMP));
-
-		writeBuffer(this.amongUs!.handle, shellCodeAddr_1, Buffer.from(shellcode_modIcon));
-		writeBuffer(this.amongUs!.handle, modManagerLateUpdate, Buffer.from(shellcodeJMP_1));
 
 		this.shellcodeAddr = shellCodeAddr;
 		this.writtenPingMessage = false;
@@ -1049,7 +977,9 @@ export default class GameReader {
 		) {
 			return;
 		}
-		writeMemory(this.amongUs!.handle, this.shellcodeAddr + 0x44, 1, 'int32'); // enable ModIcon
+		// Super New Roles also draws in the top-left corner. Keep BetterCrewLink's
+		// injected mod stamp disabled so it does not cover the mod's own logo.
+		writeMemory(this.amongUs!.handle, this.shellcodeAddr + 0x44, 0, 'int32');
 
 		this.skipPingMessage = 25;
 		this.writtenPingMessage = true;

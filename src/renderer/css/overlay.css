@@ -26,6 +26,17 @@ body,
 	white-space: nowrap;
 }
 
+.tanuki-overlay-watermark_snr {
+	top: 96px;
+}
+
+.tanuki-overlay-watermark_game {
+	top: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+	text-align: center;
+}
+
 .tanuki-overlay-watermark > div:last-child {
 	margin-top: 1px;
 	font-size: 11px;

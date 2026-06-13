@@ -233,6 +233,10 @@ function LiteApp({ t }): JSX.Element {
 		ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_SETTINGS_CHANGED, SettingsStore.store);
 	}, [settings]);
 
+	useEffect(() => {
+		ipcRenderer.send('enableOverlay', settings.enableOverlay && state === AppState.VOICE);
+	}, [settings.enableOverlay, state]);
+
 	const page =
 		state === AppState.VOICE ? (
 			<Suspense fallback={null}>

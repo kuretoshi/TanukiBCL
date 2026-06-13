@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { connectCompatibleSocket } from './socket';
+import { CompatibleSocketVersion, connectCompatibleSocket } from './socket';
 import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsContext } from './contexts';
 import {
 	AmongUsState,
@@ -184,6 +184,7 @@ interface VoiceDebugOverlayState {
 	localRolePtr: number | undefined;
 	localRoleDiffs: string | undefined;
 	localRoleSnapshot: string | undefined;
+	socketIoVersion?: CompatibleSocketVersion;
 	remoteName?: string;
 	baseGain?: number;
 	finalGain?: number;
@@ -215,6 +216,7 @@ const PEER_RECONNECT_DELAY_MS = 1500;
 const PEER_TRACK_STALL_RECONNECT_MS = 4000;
 const PEER_RELAY_FALLBACK_AFTER_ATTEMPTS = 2;
 const AIRSHIP_SPAWN_AUDIO_GRACE_MS = 15000;
+const SIGNAL_DEDUPE_MS = 1500;
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -561,6 +563,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const gameStateDebugTimeRef = useRef<number>(0);
 	const voiceAvailabilityDebugRef = useRef<Record<string, string>>({});
 	const voiceAvailabilityDebugTimeRef = useRef<Record<string, number>>({});
+	const socketIoVersionRef = useRef<CompatibleSocketVersion | undefined>(undefined);
 	const airshipSpawnAudioFallbackUntilRef = useRef<number>(0);
 	const classes = useStyles();
 
@@ -903,6 +906,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: gameState.debug?.localRolePtr,
 				localRoleDiffs: gameState.debug?.localRoleDiffs,
 				localRoleSnapshot: gameState.debug?.localRoleSnapshot,
+				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: current?.remoteName,
 				baseGain: current?.baseGain,
 				finalGain: current?.finalGain,
@@ -1015,7 +1019,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			voiceAvailabilityDebugRef.current[key] = serialized;
 			voiceAvailabilityDebugTimeRef.current[key] = now;
 			console.warn('[BetterCrewLinkKai voice availability]', snapshot);
-			setVoiceDebugOverlay({
+			setVoiceDebugOverlay((current) => ({
 				map: snapshot.map,
 				mod: state.mod,
 				gameState: snapshot.gameState,
@@ -1041,12 +1045,13 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: state.debug?.localRolePtr,
 				localRoleDiffs: state.debug?.localRoleDiffs,
 				localRoleSnapshot: state.debug?.localRoleSnapshot,
+				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: other.name,
 				baseGain,
 				finalGain,
 				possibleBlocks,
 				updatedAt: now,
-			});
+			}));
 		}
 	}
 
@@ -1693,6 +1698,11 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			setConnected(true);
 			console.log('CONNECTED??');
 		});
+		socket.on('compatible_socket_version', (socketIoVersion: CompatibleSocketVersion) => {
+			socketIoVersionRef.current = socketIoVersion;
+			console.log(`Socket.IO debug version: ${socketIoVersion}`);
+			setVoiceDebugOverlay((current) => (current ? { ...current, socketIoVersion } : current));
+		});
 
 		socket.on('setHost', (hostId: number) => {
 			hostRef.current.serverHostId = hostId;
@@ -1885,6 +1895,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 			setConnect({ connect });
 
+			const recentSignals: Record<string, { hash: string; time: number }> = {};
+			function shouldIgnoreDuplicateSignal(peer: string, data: Peer.SignalData) {
+				const now = Date.now();
+				const hash = JSON.stringify(data);
+				const recent = recentSignals[peer];
+				recentSignals[peer] = { hash, time: now };
+				return !!recent && recent.hash === hash && now - recent.time < SIGNAL_DEDUPE_MS;
+			}
+
 			function schedulePeerReconnect(peer: string, client: Client, initiator: boolean, restartExisting = false) {
 				if (reconnectTimers.current[peer] || !(socket as any).connected || hostRef.current.gamestate === GameState.MENU) {
 					return;
@@ -2028,6 +2047,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				connection.on('stream', async (stream: MediaStream) => {
 					console.log('ONSTREAM');
 
+					const existingAudio = audioElements.current[peer];
+					if (existingAudio) {
+						if (existingAudio.dummyAudioElement.srcObject === stream) {
+							console.warn('Ignoring duplicate stream for peer:', peer);
+							return;
+						}
+						console.warn('Replacing existing audio stream for peer:', peer);
+						disconnectAudioElement(peer);
+					}
 					markPeerHealthy(peer);
 					watchRemoteAudioTrack(peer, client, initiator, stream);
 					setAudioConnected((old) => ({ ...old, [peer]: true }));
@@ -2160,6 +2188,10 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					return;
 				}
 				if (data.hasOwnProperty('type')) {
+					if (shouldIgnoreDuplicateSignal(from, data)) {
+						console.warn('Ignoring duplicate signal from peer:', from);
+						return;
+					}
 					if (peerConnectionsRef.current[from] && data.type !== 'offer') {
 						connection = peerConnectionsRef.current[from];
 					} else {
@@ -2312,6 +2344,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		return otherPlayers;
 	}, [
 		gameState,
+		otherVAD,
 		lobbySettings,
 		settings.crewVolumeAsGhost,
 		settings.enableSpatialAudio,
@@ -2329,15 +2362,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}, [connect?.connect, gameState?.lobbyCode, connected]);
 
 	useEffect(() => {
-		if (myPlayer?.shiftedColor != -1) {
-			connectionStuff.current.socket?.emit('VAD', false);
-			setTalking(false)
-		}
-	}, [myPlayer?.shiftedColor])
-
-	useEffect(() => {
-		if (myPlayer?.shiftedColor == -1 || !talking)
-			connectionStuff.current.socket?.emit('VAD', talking);
+		connectionStuff.current.socket?.emit('VAD', talking);
 	}, [talking])
 
 	// Connect to P2P negotiator, when game mode change
@@ -2540,7 +2565,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			{voiceDebugEnabled && voiceDebugOverlay && (
 				<div className={classes.debugOverlay}>
 					{[
-						`map=${voiceDebugOverlay.map} mod=${voiceDebugOverlay.mod || '-'} state=${voiceDebugOverlay.gameState} audio=${voiceDebugOverlay.audioGameState} airshipFallback=${voiceDebugOverlay.airshipMeetingAudioFallback} airshipSpawn=${voiceDebugOverlay.airshipSpawnAudioFallback}`,
+						`socketIO=${voiceDebugOverlay.socketIoVersion || '-'} map=${voiceDebugOverlay.map} mod=${voiceDebugOverlay.mod || '-'} state=${voiceDebugOverlay.gameState} audio=${voiceDebugOverlay.audioGameState} airshipFallback=${voiceDebugOverlay.airshipMeetingAudioFallback} airshipSpawn=${voiceDebugOverlay.airshipSpawnAudioFallback}`,
 						`raw=${voiceDebugOverlay.rawGameState} meetingHud=${voiceDebugOverlay.meetingHud} cache=${voiceDebugOverlay.meetingHudCachePtr} hudState=${voiceDebugOverlay.meetingHudState}`,
 						`scene=${voiceDebugOverlay.onlineScene}/${voiceDebugOverlay.mainMenuScene} task=${voiceDebugOverlay.localTaskPtr}`,
 						`role=${voiceDebugOverlay.localRoleLabel || '-'} team=${voiceDebugOverlay.localRoleTeam ?? '-'} ptr=${voiceDebugOverlay.localRolePtr || '-'}`,

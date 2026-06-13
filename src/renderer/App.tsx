@@ -225,6 +225,10 @@ export default function App({ t }): JSX.Element {
 		ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_SETTINGS_CHANGED, SettingsStore.store);
 	}, [settings]);
 
+	useEffect(() => {
+		ipcRenderer.send('enableOverlay', settings.enableOverlay && state === AppState.VOICE);
+	}, [settings.enableOverlay, state]);
+
 	let page;
 	switch (state) {
 		case AppState.MENU:
