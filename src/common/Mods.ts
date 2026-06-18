@@ -5,6 +5,7 @@ export type ModsType =
 	| 'TOWN_OF_US'
 	| 'THE_OTHER_ROLES'
 	| 'LAS_MONJAS'
+	| 'NoS'
 	| 'OTHER';
 
 export interface AmongusMod {
@@ -48,6 +49,11 @@ export const modList: AmongusMod[] = [
 		id: 'LAS_MONJAS',
 		label: 'Las Monjas',
 		dllStartsWith: 'LasMonjas',
+	},
+	{
+		id: 'NoS',
+		label: 'Nebula on the Ship',
+		dllStartsWith: 'Nebula',
 	},
 	{
 		id: 'OTHER',

@@ -116,6 +116,7 @@ const Overlay: React.FC = function () {
 				serverURL={settings.serverURL}
 				lowered={gameState.mod === 'SUPER_NEW_ROLES'}
 				inGame={gameState.gameState === GameState.TASKS}
+				mod={gameState.mod}
 			/>
 			{settings.meetingOverlay && gameState.gameState === GameState.DISCUSSION && (
 				<MeetingHud gameState={gameState} voiceState={voiceState} playerColors={playerColors} />
@@ -137,22 +138,28 @@ interface OverlayWatermarkProps {
 	serverURL: string;
 	lowered: boolean;
 	inGame: boolean;
+	mod: AmongUsState['mod'];
 }
 
 const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 	serverURL,
 	lowered,
 	inGame,
-}: OverlayWatermarkProps) => (
-	<div
-		className={`tanuki-overlay-watermark${lowered ? ' tanuki-overlay-watermark_snr' : ''}${
-			inGame ? ' tanuki-overlay-watermark_game' : ''
-		}`}
-	>
-		<div>TanukiBCL v{overlayVersion}</div>
-		<div>{serverURL}</div>
-	</div>
-);
+	mod,
+}: OverlayWatermarkProps) => {
+	const isNoS = mod === 'NoS';
+
+	return (
+		<div
+			className={`tanuki-overlay-watermark${lowered ? ' tanuki-overlay-watermark_snr' : ''}${
+				inGame ? ' tanuki-overlay-watermark_game' : ''
+			}${isNoS ? ' tanuki-overlay-watermark_nos' : ''}`}
+		>
+			<div>TanukiBCL v{overlayVersion}</div>
+			<div>{serverURL}</div>
+		</div>
+	);
+};
 
 interface AvatarOverlayProps {
 	voiceState: VoiceState;

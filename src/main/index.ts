@@ -17,7 +17,9 @@ import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
 import { GenerateHat } from './avatarGenerator';
-const args = require('minimist')(process.argv); // eslint-disable-line
+import { getAppArgs } from './args';
+const args = getAppArgs();
+
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
@@ -39,7 +41,14 @@ if (isLiteApp) {
 		channel: 'lite',
 	});
 }
-const overlayTargetName = String(args['target-name'] || args.targetName || args['target-window'] || args.targetWindow || 'Among Us');
+const overlayTargetName = String(
+	process.env.BETTERCREWLINK_TARGET_NAME ||
+		args['target-name'] ||
+		args.targetName ||
+		args['target-window'] ||
+		args.targetWindow ||
+		'Among Us'
+);
 const allowMultiInstance =
 	args['multi-instance'] === true ||
 	args.multiInstance === true ||

@@ -30,11 +30,19 @@ body,
 	top: 96px;
 }
 
+.tanuki-overlay-watermark_nos {
+	top: 58px;
+}
+
 .tanuki-overlay-watermark_game {
 	top: 10px;
 	left: 50%;
 	transform: translateX(-50%);
 	text-align: center;
+}
+
+.tanuki-overlay-watermark_game.tanuki-overlay-watermark_nos {
+	top: 58px;
 }
 
 .tanuki-overlay-watermark > div:last-child {

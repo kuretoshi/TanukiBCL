@@ -25,32 +25,39 @@ import { platform } from 'os';
 import fs from 'fs';
 import path from 'path';
 import { AmongusMod, modList } from '../common/Mods';
-import { app } from 'electron';
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
+import { getAppArgs } from './args';
 
-const appDisplayName =
-	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName())
-		? 'タヌキのベタクルLite'
-		: 'タヌキのベタクル';
-void appDisplayName;
 const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
 void settingsStore;
 const KNOWN_X86_MEETING_HUD_TYPEINFO_OFFSETS = [
 	44757884, // Among Us 17.4 / Super New Roles
 ];
-const args = require('minimist')(process.argv); // eslint-disable-line
+const args = getAppArgs();
+const VANILLA_RED_COLOR = 4279308742;
+const VANILLA_COLOR_COUNT = 18;
+const MAX_PLAYER_COLORS = 300;
+const MAX_NOS_PLAYER_COLORS = 512;
 const voiceDebugEnabled =
 	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
 	args['debug-voice'] ||
 	args.debugVoice ||
 	/debug/i.test(process.execPath);
 const targetProcessName = String(
-	args['target-exe'] || args.targetExe || args['target-process'] || args.targetProcess || 'Among Us.exe'
+	process.env.BETTERCREWLINK_TARGET_PROCESS ||
+		args['target-exe'] ||
+		args.targetExe ||
+		args['target-process'] ||
+		args.targetProcess ||
+		'Among Us.exe'
 );
-const targetProcessId = Number(args['target-pid'] || args.targetPid || 0);
-const targetProcessIndex = Math.max(0, Number(args['target-index'] || args.targetIndex || 0));
+const targetProcessId = Number(process.env.BETTERCREWLINK_TARGET_PID || args['target-pid'] || args.targetPid || 0);
+const targetProcessIndex = Math.max(
+	0,
+	Number(process.env.BETTERCREWLINK_TARGET_INDEX || args['target-index'] || args.targetIndex || 0)
+);
 
 interface ValueType<T> {
 	read(buffer: BufferSource, offset: number): T;
@@ -486,6 +493,7 @@ export default class GameReader {
 							localRolePtr: localPlayer?.rolePtr || 0,
 							localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
 							localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
+							colorDebug: this.formatColorDebug(players, localPlayer),
 						},
 					}
 					: {}),
@@ -534,6 +542,42 @@ export default class GameReader {
 			values.push(`${offset}:${this.readMemory<number>('int32', address + offset, undefined, 0)}`);
 		}
 		return values.join(' ');
+	}
+
+	private formatColorDebug(players: Player[], localPlayer?: Player): string {
+		const describeColor = (colorId: number): string => {
+			const colors = this.playercolors[colorId];
+			return colors ? `${colorId}:${colors[0]}/${colors[1]}` : `${colorId}:?`;
+		};
+		const describePlayerName = (player: Player): string => {
+			const name = player.name.replace(/\s+/g, '_').slice(0, 12) || '-';
+			return `${player.id}:${name}`;
+		};
+		const activePlayers = players.filter((player) => !player.disconnected && !player.bugged).slice(0, 24);
+		const formatGroup = (label: string, getColorId: (player: Player) => number): string => {
+			const groups = activePlayers.reduce<Record<number, string[]>>((result, player) => {
+				const colorId = getColorId(player);
+				if (!result[colorId]) result[colorId] = [];
+				result[colorId].push(describePlayerName(player));
+				return result;
+			}, {});
+			const lines = Object.keys(groups)
+				.map((colorIdText) => Number(colorIdText))
+				.sort((a, b) => a - b)
+				.map((colorId) => `  ${describeColor(colorId)} -> ${groups[colorId].join(',')}`);
+			return `${label}:\n${lines.length ? lines.join('\n') : '  -'}`;
+		};
+		const local = localPlayer
+			? `${describePlayerName(localPlayer)} base=${describeColor(localPlayer.colorId)} shown=${describeColor(
+				localPlayer.appearanceColorId
+			)} shifted=${localPlayer.shiftedColor}`
+			: '-';
+		return [
+			`palette=${this.playercolors.length} rainbow=${this.rainbowColor}`,
+			`local=${local}`,
+			formatGroup('baseColors', (player) => player.colorId),
+			formatGroup('shownColors', (player) => player.appearanceColorId),
+		].join('\n');
 	}
 
 	private readLocalObjectFlags(objectPtr: number): string {
@@ -1065,7 +1109,15 @@ export default class GameReader {
 		const colorLength = this.readMemory<number>('int', ShadowColorsPtr, this.offsets!.playerCount);
 		console.log('Initializecolors', colorLength, this.loadedMod.id);
 
-		if (!colorLength || colorLength <= 0 || colorLength > 300 || ((this.loadedMod.id == "THE_OTHER_ROLES") && colorLength <= 18)) {
+		const isNoS = this.loadedMod.id === 'NoS';
+		const waitsForModdedPalette = this.loadedMod.id === 'THE_OTHER_ROLES';
+		const maxColorLength = isNoS ? MAX_NOS_PLAYER_COLORS : MAX_PLAYER_COLORS;
+		if (
+			!colorLength ||
+			colorLength <= 0 ||
+			colorLength > maxColorLength ||
+			(waitsForModdedPalette && colorLength <= VANILLA_COLOR_COUNT)
+		) {
 			return;
 		}
 
@@ -1074,7 +1126,7 @@ export default class GameReader {
 		for (let i = 0; i < colorLength; i++) {
 			const playerColor = this.readMemory<number>('uint32', PlayerColorsPtr, [this.offsets!.playerAddrPtr + i * 0x4]);
 			const shadowColor = this.readMemory<number>('uint32', ShadowColorsPtr, [this.offsets!.playerAddrPtr + i * 0x4]);
-			if (i == 0 && playerColor != 4279308742) {
+			if (i == 0 && playerColor != VANILLA_RED_COLOR && !isNoS) {
 				return;
 			}
 			if (playerColor === 4278190080) {

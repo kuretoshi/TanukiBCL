@@ -39,18 +39,12 @@ if (!$processes) {
 }
 
 foreach ($process in $processes) {
-	$args = @(
-		"--multi-instance",
-		"--target-pid=$($process.Id)",
-		"--target-name=`"$TargetName`"",
-		"--target-process=`"$targetProcessExeName`""
-	)
-
-	if ($DebugVoice) {
-		$args += "--debug-voice"
-	}
-
 	Write-Host "Launching TanukiBCL for $targetProcessExeName PID $($process.Id): $ExePath"
-	Start-Process -FilePath $ExePath -ArgumentList $args
+	$env:BETTERCREWLINK_ALLOW_MULTI_INSTANCE = "1"
+	$env:BETTERCREWLINK_TARGET_PID = [string]$process.Id
+	$env:BETTERCREWLINK_TARGET_NAME = $TargetName
+	$env:BETTERCREWLINK_TARGET_PROCESS = $targetProcessExeName
+	$env:BETTERCREWLINK_DEBUG_OVERLAY = if ($DebugVoice) { "1" } else { "" }
+	Start-Process -FilePath $ExePath
 	Start-Sleep -Milliseconds 500
 }

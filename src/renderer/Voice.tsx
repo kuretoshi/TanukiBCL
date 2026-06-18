@@ -184,6 +184,7 @@ interface VoiceDebugOverlayState {
 	localRolePtr: number | undefined;
 	localRoleDiffs: string | undefined;
 	localRoleSnapshot: string | undefined;
+	colorDebug: string | undefined;
 	socketIoVersion?: CompatibleSocketVersion;
 	remoteName?: string;
 	baseGain?: number;
@@ -906,6 +907,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: gameState.debug?.localRolePtr,
 				localRoleDiffs: gameState.debug?.localRoleDiffs,
 				localRoleSnapshot: gameState.debug?.localRoleSnapshot,
+				colorDebug: gameState.debug?.colorDebug,
 				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: current?.remoteName,
 				baseGain: current?.baseGain,
@@ -1045,6 +1047,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: state.debug?.localRolePtr,
 				localRoleDiffs: state.debug?.localRoleDiffs,
 				localRoleSnapshot: state.debug?.localRoleSnapshot,
+				colorDebug: state.debug?.colorDebug,
 				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: other.name,
 				baseGain,
@@ -2571,6 +2574,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						`role=${voiceDebugOverlay.localRoleLabel || '-'} team=${voiceDebugOverlay.localRoleTeam ?? '-'} ptr=${voiceDebugOverlay.localRolePtr || '-'}`,
 						`roleDiff=${voiceDebugOverlay.localRoleDiffs || '-'}`,
 						`roleRaw=${voiceDebugOverlay.localRoleSnapshot || '-'}`,
+						`colors:\n${voiceDebugOverlay.colorDebug || '-'}`,
 						`pat=${voiceDebugOverlay.initPatternDebug || '-'}`,
 						`outfits=${voiceDebugOverlay.currentOutfits || '-'} outfitMeet=${voiceDebugOverlay.airshipMeetingByOutfit}`,
 						`objDiff=${voiceDebugOverlay.localObjectDiffs || '-'}`,
