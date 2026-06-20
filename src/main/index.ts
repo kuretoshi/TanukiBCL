@@ -18,6 +18,7 @@ import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
+import { initializeDebugLogging, registerWindowLogging } from './logger';
 const args = getAppArgs();
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -34,6 +35,7 @@ const appDisplayName = isLiteApp ? 'タヌキのベタクルLite' : 'タヌキ�
 const internalAppName = isLiteApp ? 'TanukiBCLLite' : 'TanukiBCL';
 app.setName(appDisplayName);
 app.setAppUserModelId(isLiteApp ? 'net.ottomated.crewlinkkai.lite' : 'net.ottomated.crewlinkkai.beta.local');
+initializeDebugLogging();
 if (isLiteApp) {
 	autoUpdater.setFeedURL({
 		provider: 'generic',
@@ -195,6 +197,7 @@ function createMainWindow() {
 		},
 	});
 	mainWindowState.manage(window);
+	registerWindowLogging(window, 'main');
 
 	if (devTools) {
 		//Force devtools into detached mode otherwise they are unusable
@@ -282,6 +285,7 @@ function createLobbyBrowser() {
 	window.on('closed', () => {
 		global.lobbyBrowser = null;
 	});
+	registerWindowLogging(window, 'lobbies');
 	// if (devTools) {
 	// 	// Force devtools into detached mode otherwise they are unusable
 	// 	window.webContents.openDevTools({
@@ -331,6 +335,7 @@ function createOverlay() {
 
 		//	...overlayWindow.WINDOW_OPTS,
 	});
+	registerWindowLogging(overlay, 'overlay');
 
 	if (devTools) {
 		overlay.webContents.openDevTools({

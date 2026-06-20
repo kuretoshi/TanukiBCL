@@ -43,6 +43,7 @@ export interface AmongUsState {
 		localRoleDiffs: string;
 		localRoleSnapshot: string;
 		colorDebug: string;
+		sizeDebug: string;
 	};
 }
 

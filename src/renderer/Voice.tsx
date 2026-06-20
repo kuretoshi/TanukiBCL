@@ -150,7 +150,7 @@ interface AppearanceBaseline {
 	[clientId: number]: string;
 }
 
-type VoiceDisguiseMode = 'none' | 'mixup';
+type VoiceDisguiseMode = 'none' | 'skin-changed';
 
 const voiceDebugEnabled =
 	queryParams?.get('debugVoice') === '1' ||
@@ -706,21 +706,30 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		return hatId === 'hat_NoHat' ? '' : hatId;
 	}
 
-	function normalizeSkinId(skinId: string): string {
-		return skinId === 'skin_None' ? '' : skinId;
-	}
-
 	function normalizeVisorId(visorId: string): string {
 		return visorId === 'visor_EmptyVisor' ? '' : visorId;
 	}
 
+	function normalizeSkinId(skinId: string): string {
+		return skinId === 'skin_None' ? '' : skinId;
+	}
+
+	function normalizeAppearance(appearance: DisplayAppearance): DisplayAppearance {
+		return {
+			colorId: appearance.colorId,
+			hatId: normalizeHatId(appearance.hatId || ''),
+			skinId: normalizeSkinId(appearance.skinId || ''),
+			visorId: normalizeVisorId(appearance.visorId || ''),
+		};
+	}
+
 	function getAppearanceKey(appearance: DisplayAppearance): string {
-		return [
-			appearance.colorId,
-			normalizeHatId(appearance.hatId || ''),
-			normalizeSkinId(appearance.skinId || ''),
-			normalizeVisorId(appearance.visorId || ''),
-		].join('|');
+		const normalized = normalizeAppearance(appearance);
+		return [normalized.colorId, normalized.hatId, normalized.skinId, normalized.visorId].join('|');
+	}
+
+	function hasMatchingDisplayName(player: Player): boolean {
+		return (player.appearanceName || player.name) === player.name;
 	}
 
 	function captureAppearanceBaseline(players: Player[]) {
@@ -737,7 +746,8 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}
 
 	function hasCurrentAppearanceChanged(player: Player): boolean {
-		return getAppearanceKey(getDisplayAppearance(player)) !== getBaselineAppearanceKey(player);
+		const displayAppearanceChanged = getAppearanceKey(getDisplayAppearance(player)) !== getBaselineAppearanceKey(player);
+		return displayAppearanceChanged || !hasMatchingDisplayName(player);
 	}
 
 	function getVoiceDisguiseMode(state: AmongUsState, players: Player[] | undefined): VoiceDisguiseMode {
@@ -749,8 +759,8 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 			return 'none';
 		}
 
-		if (state.mixupSabotaged) {
-			return 'mixup';
+		if (players.some((player) => !player.disconnected && !player.bugged && hasCurrentAppearanceChanged(player))) {
+			return 'skin-changed';
 		}
 
 		return 'none';
@@ -2085,7 +2095,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 					const reverb = context.createConvolver();
 					reverb.buffer = convolverBuffer.current;
-					const voiceEffect = createVoiceDisguiseEffect(context, convolverBuffer.current, settingsRef.current.voiceEffectStrength);
+					const voiceEffect = createVoiceDisguiseEffect(context, null, settingsRef.current.voiceEffectStrength);
 					const destination: AudioNode = dest;
 					// if (settingsRef.current.vadEnabled) {
 					// 	VAD(context, gain, undefined, {

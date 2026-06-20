@@ -494,6 +494,7 @@ export default class GameReader {
 							localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
 							localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
 							colorDebug: this.formatColorDebug(players, localPlayer),
+							sizeDebug: this.formatSizeDebug(players),
 						},
 					}
 					: {}),
@@ -578,6 +579,32 @@ export default class GameReader {
 			formatGroup('baseColors', (player) => player.colorId),
 			formatGroup('shownColors', (player) => player.appearanceColorId),
 		].join('\n');
+	}
+
+	private readDebugFloatCandidates(address: number, start: number, end: number): string {
+		if (!address) return '';
+		const values: string[] = [];
+		for (let offset = start; offset <= end; offset += 4) {
+			const value = this.readMemory<number>('float', address + offset, undefined, NaN);
+			if (!Number.isFinite(value) || Math.abs(value) < 0.01 || Math.abs(value) > 10) {
+				continue;
+			}
+			values.push(`${offset}:${value.toFixed(3)}`);
+		}
+		return values.slice(0, 24).join(' ');
+	}
+
+	private formatSizeDebug(players: Player[]): string {
+		return players
+			.filter((player) => !player.disconnected && !player.bugged)
+			.slice(0, 12)
+			.map((player) => {
+				const name = player.name.replace(/\s+/g, '_').slice(0, 12) || '-';
+				const objectFloats = this.readDebugFloatCandidates(player.objectPtr, 0, 220);
+				const playerFloats = this.readDebugFloatCandidates(player.ptr, 0, 160);
+				return `${player.clientId}:${name} pos=${player.x.toFixed(2)},${player.y.toFixed(2)} obj=[${objectFloats || '-'}] player=[${playerFloats || '-'}]`;
+			})
+			.join('\n');
 	}
 
 	private readLocalObjectFlags(objectPtr: number): string {
