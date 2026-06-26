@@ -3,6 +3,7 @@ import React from 'react';
 import makeStyles from '@mui/styles/makeStyles';
 import Button from '@mui/material/Button';
 import { Tooltip } from '@mui/material';
+import InquiryButton from './InquiryButton';
 
 const useStyles = makeStyles(() => ({
 	footer: {
@@ -27,7 +28,7 @@ const RawFooter: React.FC = function () {
 	return (
 		<div className={classes.footer}>
 			<div className={classes.row}>
-				<Button 
+				<Button
 					color="grey"
 					onClick={() => {
 						shell.openExternal('https://github.com/kuretoshi/BetterCrewLink/tree/voice_fixed');
@@ -42,7 +43,7 @@ const RawFooter: React.FC = function () {
 						</svg>
 					</Tooltip>
 				</Button>
-				<Button 
+				<Button
 					color="grey"
 					onClick={() => {
 						shell.openExternal('https://discord.gg/jEyDrpBsmJ');
@@ -61,6 +62,7 @@ const RawFooter: React.FC = function () {
 						</svg>
 					</Tooltip>
 				</Button>
+				<InquiryButton />
 			</div>
 		</div>
 	);

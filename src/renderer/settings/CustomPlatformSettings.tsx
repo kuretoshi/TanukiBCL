@@ -123,7 +123,7 @@ export const CustomPlatformSettings: React.FC<CustomPlatformSettingProps> = func
 		if (editPlatform && settings.customPlatforms[editPlatform.key]) {
 			const { [editPlatform.key]: remove, ...rest } = settings.customPlatforms;
 			setSettings('customPlatforms', {
-				...rest, 
+				...rest,
 				[customPlatform.key]: customPlatform,
 			});
 		} else {
@@ -159,7 +159,7 @@ export const CustomPlatformSettings: React.FC<CustomPlatformSettingProps> = func
 							hidden
 							onChange={(ev) => {
 								if (ev.target.files && ev.target.files.length > 0) {
-									setPlatformRun(ev.target.files[0].path);
+									setPlatformRun((ev.target.files[0] as File & { path: string }).path);
 								} else {
 									setPlatformRun('');
 								}

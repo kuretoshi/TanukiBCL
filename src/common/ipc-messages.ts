@@ -33,6 +33,8 @@ export enum IpcHandlerMessages {
 	JOIN_LOBBY = 'JOIN_LOBBY',
 	JOIN_LOBBY_ERROR = 'JOIN_LOBBY_ERROR',
 	OPEN_LOBBYBROWSER = 'OPEN_LOBBYBROWSER',
+	SELECT_INQUIRY_ATTACHMENTS = 'SELECT_INQUIRY_ATTACHMENTS',
+	SUBMIT_INQUIRY = 'SUBMIT_INQUIRY',
 }
 
 // Main --> Renderer (send/on)
@@ -53,3 +55,18 @@ export interface AutoUpdaterState {
 	progress?: ProgressInfo;
 	info?: UpdateInfo;
 }
+
+export interface InquiryAttachment {
+	path: string;
+	name: string;
+	size: number;
+}
+
+export interface InquiryPayload {
+	subject: string;
+	body: string;
+	tag: InquiryTag;
+	attachmentPaths: string[];
+}
+
+export type InquiryTag = 'question' | 'bug' | 'request';

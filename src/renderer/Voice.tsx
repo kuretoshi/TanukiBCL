@@ -139,17 +139,6 @@ interface ClientPeerConfig {
 	iceServers: RTCIceServer[];
 }
 
-interface DisplayAppearance {
-	colorId: number;
-	hatId: string;
-	skinId: string;
-	visorId: string;
-}
-
-interface AppearanceBaseline {
-	[clientId: number]: string;
-}
-
 type VoiceDisguiseMode = 'none' | 'skin-changed';
 
 const voiceDebugEnabled =
@@ -531,7 +520,6 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	const [lobbySettings, setHostLobbySettings] = useContext(HostSettingsContext);
 	const lobbySettingsRef = useRef(lobbySettings);
 	const maxDistanceRef = useRef(2);
-	const appearanceBaselineRef = useRef<AppearanceBaseline>({});
 	const previousVoiceDisguiseModeRef = useRef<VoiceDisguiseMode>('none');
 	const gameState = useContext(GameStateContext);
 	const playerColors = useContext(PlayerColorContext);
@@ -683,71 +671,8 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		resetAudioRoute(audio, player);
 	}
 
-	function getDisplayAppearance(player: Player): DisplayAppearance {
-		const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
-		return {
-			colorId: hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId,
-			hatId: hasDisplayOutfit ? player.appearanceHatId || '' : player.hatId || '',
-			skinId: hasDisplayOutfit ? player.appearanceSkinId || '' : player.skinId || '',
-			visorId: hasDisplayOutfit ? player.appearanceVisorId || '' : player.visorId || '',
-		};
-	}
-
-	function getOriginalAppearance(player: Player): DisplayAppearance {
-		return {
-			colorId: player.colorId,
-			hatId: player.hatId || '',
-			skinId: player.skinId || '',
-			visorId: player.visorId || '',
-		};
-	}
-
-	function normalizeHatId(hatId: string): string {
-		return hatId === 'hat_NoHat' ? '' : hatId;
-	}
-
-	function normalizeVisorId(visorId: string): string {
-		return visorId === 'visor_EmptyVisor' ? '' : visorId;
-	}
-
-	function normalizeSkinId(skinId: string): string {
-		return skinId === 'skin_None' ? '' : skinId;
-	}
-
-	function normalizeAppearance(appearance: DisplayAppearance): DisplayAppearance {
-		return {
-			colorId: appearance.colorId,
-			hatId: normalizeHatId(appearance.hatId || ''),
-			skinId: normalizeSkinId(appearance.skinId || ''),
-			visorId: normalizeVisorId(appearance.visorId || ''),
-		};
-	}
-
-	function getAppearanceKey(appearance: DisplayAppearance): string {
-		const normalized = normalizeAppearance(appearance);
-		return [normalized.colorId, normalized.hatId, normalized.skinId, normalized.visorId].join('|');
-	}
-
-	function hasMatchingDisplayName(player: Player): boolean {
-		return (player.appearanceName || player.name) === player.name;
-	}
-
-	function captureAppearanceBaseline(players: Player[]) {
-		appearanceBaselineRef.current = players.reduce((baseline: AppearanceBaseline, player) => {
-			if (!player.disconnected && !player.bugged) {
-				baseline[player.clientId] = getAppearanceKey(getDisplayAppearance(player));
-			}
-			return baseline;
-		}, {});
-	}
-
-	function getBaselineAppearanceKey(player: Player): string {
-		return appearanceBaselineRef.current[player.clientId] || getAppearanceKey(getOriginalAppearance(player));
-	}
-
 	function hasCurrentAppearanceChanged(player: Player): boolean {
-		const displayAppearanceChanged = getAppearanceKey(getDisplayAppearance(player)) !== getBaselineAppearanceKey(player);
-		return displayAppearanceChanged || !hasMatchingDisplayName(player);
+		return (player.appearanceName || player.name) !== player.name;
 	}
 
 	function getVoiceDisguiseMode(state: AmongUsState, players: Player[] | undefined): VoiceDisguiseMode {
@@ -1587,21 +1512,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}, [gameState.gameState]);
 
 	useEffect(() => {
-		if (!gameState.players) {
-			return;
-		}
-
 		if (gameState.gameState === GameState.LOBBY) {
-			captureAppearanceBaseline(gameState.players);
 			previousVoiceDisguiseModeRef.current = 'none';
 			return;
 		}
 
 		if (gameState.gameState === GameState.MENU || gameState.gameState === GameState.UNKNOWN) {
-			appearanceBaselineRef.current = {};
 			previousVoiceDisguiseModeRef.current = 'none';
 		}
-	}, [gameState.gameState, gameState.lobbyCode, gameState.players]);
+	}, [gameState.gameState, gameState.lobbyCode]);
 
 	useEffect(() => {
 		if (gameState.gameState !== GameState.TASKS || !gameState.players) {
@@ -1612,10 +1531,6 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		const voiceDisguiseMode = getVoiceDisguiseMode(gameState, gameState.players);
 		const previousVoiceDisguiseMode = previousVoiceDisguiseModeRef.current;
 		previousVoiceDisguiseModeRef.current = voiceDisguiseMode;
-
-		if (Object.keys(appearanceBaselineRef.current).length === 0 && voiceDisguiseMode === 'none') {
-			captureAppearanceBaseline(gameState.players);
-		}
 
 		const playersByClientId = new Map(gameState.players.map((player) => [player.clientId, player]));
 		if (previousVoiceDisguiseMode !== 'none' && voiceDisguiseMode === 'none') {

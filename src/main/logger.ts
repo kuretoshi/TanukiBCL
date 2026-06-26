@@ -18,35 +18,37 @@ const logLevels: Record<number, 'debug' | 'info' | 'warn' | 'error'> = {
 	2: 'warn',
 	3: 'error',
 };
+const logFilePath = joinPath(app.getPath('userData'), 'logs', 'debug.log');
 
 export function isDebugLoggingEnabled() {
 	return debugLoggingEnabled;
 }
 
 export function initializeDebugLogging() {
-	if (!debugLoggingEnabled) {
-		return;
-	}
-
 	log.transports.file.level = 'debug';
-	log.transports.file.resolvePath = () => joinPath(app.getPath('userData'), 'logs', 'debug.log');
+	log.transports.file.resolvePath = () => logFilePath;
 	log.transports.console.level = false;
 	Object.assign(console, log.functions);
 
-	console.log('Debug logging enabled:', log.transports.file.getFile().path);
+	console.log(
+		debugLoggingEnabled ? 'Debug logging enabled:' : 'Support logging enabled:',
+		log.transports.file.getFile().path
+	);
+}
+
+export function getLogFilePaths() {
+	return [logFilePath];
 }
 
 export function registerWindowLogging(window: BrowserWindow, name: string) {
-	if (!debugLoggingEnabled) {
-		return;
-	}
-
 	window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
 		const logLevel = logLevels[level] || 'info';
 		log[logLevel](`[renderer:${name}] ${message}`, sourceId ? `(${sourceId}:${line})` : '');
 	});
 
-	window.webContents.on('crashed', () => {
+	(window.webContents as Electron.WebContents & {
+		on(event: 'crashed', listener: () => void): Electron.WebContents;
+	}).on('crashed', () => {
 		log.error(`[renderer:${name}] crashed`);
 	});
 }
