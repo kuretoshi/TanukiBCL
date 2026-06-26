@@ -34,7 +34,7 @@ jobs:
       - name: Install Node.js, NPM and Yarn
         uses: actions/setup-node@v4
         with:
-          node-version: 16.14.2
+          node-version-file: .node-version
         
       - name: Cache Node Modules
         id: node-cache
@@ -43,7 +43,7 @@ jobs:
           path: |
             node_modules
             .yarn
-          key: ${{ runner.os }}-3-${{ hashFiles('yarn.lock')}}
+          key: ${{ runner.os }}-4-${{ hashFiles('.node-version', 'yarn.lock')}}
     
     
       - name: Install Dependencies

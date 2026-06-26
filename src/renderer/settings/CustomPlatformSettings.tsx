@@ -18,6 +18,7 @@ import { GamePlatformInstance, PlatformRunType } from '../../common/GamePlatform
 import path from 'path';
 import { platform } from 'process';
 import { SettingsContext } from '../contexts';
+import { webUtils } from 'electron';
 
 const useStyles = makeStyles((theme) => ({
 	header: {
@@ -159,7 +160,7 @@ export const CustomPlatformSettings: React.FC<CustomPlatformSettingProps> = func
 							hidden
 							onChange={(ev) => {
 								if (ev.target.files && ev.target.files.length > 0) {
-									setPlatformRun(ev.target.files[0].path);
+									setPlatformRun(webUtils.getPathForFile(ev.target.files[0]));
 								} else {
 									setPlatformRun('');
 								}

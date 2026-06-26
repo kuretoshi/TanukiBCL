@@ -46,7 +46,7 @@ export function registerWindowLogging(window: BrowserWindow, name: string) {
 		log[logLevel](`[renderer:${name}] ${message}`, sourceId ? `(${sourceId}:${line})` : '');
 	});
 
-	window.webContents.on('crashed', () => {
-		log.error(`[renderer:${name}] crashed`);
+	window.webContents.on('render-process-gone', (_event, details) => {
+		log.error(`[renderer:${name}] ${details.reason}`, `exitCode=${details.exitCode}`);
 	});
 }
