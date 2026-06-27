@@ -25,7 +25,7 @@ export function isDebugLoggingEnabled() {
 }
 
 export function initializeDebugLogging() {
-	log.transports.file.level = 'debug';
+	log.transports.file.level = debugLoggingEnabled ? 'debug' : 'warn';
 	log.transports.file.resolvePath = () => logFilePath;
 	log.transports.console.level = false;
 	Object.assign(console, log.functions);
@@ -43,6 +43,9 @@ export function getLogFilePaths() {
 export function registerWindowLogging(window: BrowserWindow, name: string) {
 	window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
 		const logLevel = logLevels[level] || 'info';
+		if (!debugLoggingEnabled && logLevel !== 'warn' && logLevel !== 'error') {
+			return;
+		}
 		log[logLevel](`[renderer:${name}] ${message}`, sourceId ? `(${sourceId}:${line})` : '');
 	});
 
