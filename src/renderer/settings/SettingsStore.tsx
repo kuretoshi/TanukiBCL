@@ -170,7 +170,7 @@ export const SettingsStore = new Store<ISettings>({
 		},
 		enableOverlay: {
 			type: 'boolean',
-			default: !isLiteSettingsStore,
+			default: false,
 		},
 		crewVolumeAsGhost: {
 			type: 'number',

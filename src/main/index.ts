@@ -51,6 +51,10 @@ const overlayTargetName = String(
 		args.targetWindow ||
 		'Among Us'
 );
+const nativeOverlayEnabled =
+	process.env.BETTERCREWLINK_ENABLE_OVERLAY === '1' ||
+	args['enable-overlay'] === true ||
+	args.enableOverlay === true;
 const allowMultiInstance =
 	args['multi-instance'] === true ||
 	args.multiInstance === true ||
@@ -547,7 +551,7 @@ if (!gotTheLock) {
 
 	ipcMain.on('enableOverlay', async (_event, enable) => {
 		setTimeout(() => {
-			if (enable) {
+			if (enable && nativeOverlayEnabled) {
 				showOverlayWithRetry();
 			} else {
 				hideOverlay();
