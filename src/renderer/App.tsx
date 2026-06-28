@@ -303,7 +303,7 @@ export default function App({ t }): JSX.Element {
 											</Button>
 										</DialogActions>
 									)}
-									{updaterState.state === 'available' && (
+									{(updaterState.state === 'available' || updaterState.state === 'downloaded') && (
 										<DialogActions>
 											<Button
 												onClick={() => {

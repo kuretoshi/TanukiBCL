@@ -291,7 +291,7 @@ function LiteApp({ t }): JSX.Element {
 											</Button>
 										</DialogActions>
 									)}
-									{updaterState.state === 'available' && (
+									{(updaterState.state === 'available' || updaterState.state === 'downloaded') && (
 										<DialogActions>
 											<Button onClick={() => ipcRenderer.send('update-app')}>今すぐ</Button>
 											<Button onClick={() => setDiaOpen(false)}>あとで</Button>

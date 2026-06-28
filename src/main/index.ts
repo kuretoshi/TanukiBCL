@@ -68,6 +68,7 @@ const voiceDebugEnabled =
 let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
 let hasCheckedForUpdates = false;
 let acceptedUpdateInfo: UpdateInfo | null = null;
+let updateInstallRequested = false;
 
 declare global {
 	var mainWindow: BrowserWindow | null;
@@ -427,16 +428,15 @@ if (!gotTheLock) {
 			return;
 		}
 		acceptedUpdateInfo = info;
+		updateInstallRequested = false;
 		sendAutoUpdaterState({
 			state: 'available',
 			info: info,
 		});
-		if (isLiteApp) {
-			autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
-		}
 	});
 	autoUpdater.on('update-not-available', () => {
 		acceptedUpdateInfo = null;
+		updateInstallRequested = false;
 		sendAutoUpdaterState({
 			state: 'unavailable',
 		});
@@ -457,7 +457,12 @@ if (!gotTheLock) {
 			});
 			return;
 		}
-		autoUpdater.quitAndInstall();
+		sendAutoUpdaterState({
+			state: 'downloaded',
+		});
+		if (updateInstallRequested) {
+			autoUpdater.quitAndInstall();
+		}
 	});
 
 	app.on('before-quit', () => {
@@ -532,6 +537,11 @@ if (!gotTheLock) {
 			sendAutoUpdaterState({
 				state: 'unavailable',
 			});
+			return;
+		}
+		updateInstallRequested = true;
+		if (latestAutoUpdaterState.state === 'downloaded') {
+			autoUpdater.quitAndInstall();
 			return;
 		}
 		autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
