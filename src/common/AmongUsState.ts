@@ -68,6 +68,9 @@ export interface Player {
 	disconnected: boolean;
 	rolePtr: number;
 	roleTeam: number;
+	roleName: string;
+	sizeScale: number;
+	specialRole: 'JUMBO' | 'MINI' | 'UNKNOWN';
 	isImpostor: boolean;
 	isThirdParty: boolean;
 	isDead: boolean;

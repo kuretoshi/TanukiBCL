@@ -110,6 +110,7 @@ export default class GameReader {
 	stablePlayerColors: Record<string, number> = {};
 	initPatternDebug = '';
 	debugBaselines: Record<string, Record<number, number>> = {};
+	nativeReadFailureCount = 0;
 
 	constructor(sendIPC: Electron.WebContents['send']) {
 		this.is_linux = platform() === 'linux';
@@ -195,7 +196,8 @@ export default class GameReader {
 			this.gameAssembly !== null &&
 			this.offsets !== undefined
 		) {
-			this.loadColors();
+			try {
+				this.loadColors();
 
 			let state = GameState.UNKNOWN;
 			const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
@@ -209,6 +211,7 @@ export default class GameReader {
 				this.gameAssembly.modBaseAddr,
 				this.offsets.innerNetClient.base
 			);
+			if (!innerNetClient) return null;
 
 			const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
 
@@ -244,9 +247,11 @@ export default class GameReader {
 			// }
 
 			const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
+			if (!allPlayersPtr) return null;
 			const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
+			if (!allPlayers) return null;
 
-			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount);
+			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
 			let playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
 			const players = [];
 
@@ -278,10 +283,15 @@ export default class GameReader {
 			if ((this.gameCode || this.isLocalGame) && playerCount) {
 				for (let i = 0; i < Math.min(playerCount, 40); i++) {
 					const { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
-					if (address === 0) continue;
-					const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
-					const player = this.parsePlayer(address + last, playerData, clientId);
 					playerAddrPtr += this.is_64bit ? 8 : 4;
+					if (address === 0) continue;
+					let player: Player | undefined;
+					try {
+						const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
+						player = this.parsePlayer(address + last, playerData, clientId);
+					} catch (e) {
+						continue;
+					}
 					if (!player || state === GameState.MENU) {
 						continue;
 					}
@@ -513,8 +523,33 @@ export default class GameReader {
 				this.stablePlayerColors = {};
 				this.debugBaselines = {};
 			}
+			this.nativeReadFailureCount = 0;
+			} catch (e) {
+				this.nativeReadFailureCount++;
+				console.error('Failed to read Among Us memory:', e);
+				this.resetAmongUsProcess();
+				this.checkProcessDelay = 0;
+				return this.nativeReadFailureCount >= 3 ? Errors.NATIVE_MEMORY_READ_ERROR : null;
+			}
 		}
 		return null;
+	}
+
+	private resetAmongUsProcess(): void {
+		this.amongUs = null;
+		this.gameAssembly = null;
+		this.PlayerStruct = undefined;
+		this.initializedWrite = false;
+		this.writtenPingMessage = true;
+		this.colorsInitialized = false;
+		this.shellcodeAddr = -1;
+		this.stablePlayerColors = {};
+		this.debugBaselines = {};
+		try {
+			this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, false);
+		} catch (e) {
+			/* empty */
+		}
 	}
 
 	private readDebugIntDiffs(key: string, address: number, start: number, end: number): string {
@@ -602,7 +637,8 @@ export default class GameReader {
 				const name = player.name.replace(/\s+/g, '_').slice(0, 12) || '-';
 				const objectFloats = this.readDebugFloatCandidates(player.objectPtr, 0, 220);
 				const playerFloats = this.readDebugFloatCandidates(player.ptr, 0, 160);
-				return `${player.clientId}:${name} pos=${player.x.toFixed(2)},${player.y.toFixed(2)} obj=[${objectFloats || '-'}] player=[${playerFloats || '-'}]`;
+				const roleFloats = this.readDebugFloatCandidates(player.rolePtr, 0, 260);
+				return `${player.clientId}:${name} role=${player.roleName} size=${player.sizeScale.toFixed(3)} pos=${player.x.toFixed(2)},${player.y.toFixed(2)} obj=[${objectFloats || '-'}] player=[${playerFloats || '-'}] roleFloats=[${roleFloats || '-'}]`;
 			})
 			.join('\n');
 	}
@@ -1254,8 +1290,10 @@ export default class GameReader {
 		maxLen: number,
 		callback: (keyPtr: number, valPtr: number, index: number) => void
 	): void {
-		const entries = this.readMemory<number>('ptr', address + (this.is_64bit ? 0x18 : 0xc));
-		let len = this.readMemory<number>('uint32', address + (this.is_64bit ? 0x20 : 0x10));
+		if (!address) return;
+		const entries = this.readMemory<number>('ptr', address + (this.is_64bit ? 0x18 : 0xc), undefined, 0);
+		let len = this.readMemory<number>('uint32', address + (this.is_64bit ? 0x20 : 0x10), undefined, 0);
+		if (!entries || !len) return;
 
 		len = len > maxLen ? maxLen : len;
 
@@ -1373,9 +1411,37 @@ export default class GameReader {
 
 	formatRoleLabel(player?: Player): string {
 		if (!player) return 'unknown';
+		if (player.specialRole !== 'UNKNOWN') return player.specialRole;
 		if (player.isImpostor) return 'Impostor';
 		if (player.isThirdParty) return `ThirdParty(${player.roleTeam})`;
 		return 'Crewmate';
+	}
+
+	private readRoleSizeScale(rolePtr: number): number {
+		if (!rolePtr) return 1;
+		const candidates: number[] = [];
+
+		for (let offset = 0; offset <= 256; offset += 4) {
+			const value = this.readMemory<number>('float', rolePtr + offset, undefined, NaN);
+			if (!Number.isFinite(value)) {
+				continue;
+			}
+			if (value > 0.2 && value < 3 && (value < 0.9 || value > 1.1)) {
+				candidates.push(Number(value.toFixed(3)));
+			}
+		}
+
+		const likelySizeValues = Array.from(new Set(candidates)).filter(
+			(value) => (value >= 0.35 && value <= 0.8) || (value >= 1.2 && value <= 2.5)
+		);
+
+		return likelySizeValues.length === 1 ? likelySizeValues[0] : 1;
+	}
+
+	private getSpecialRoleFromSize(sizeScale: number): Player['specialRole'] {
+		if (sizeScale >= 1.2) return 'JUMBO';
+		if (sizeScale <= 0.8) return 'MINI';
+		return 'UNKNOWN';
 	}
 
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
@@ -1459,6 +1525,14 @@ export default class GameReader {
 		const x_round = parseFloat(x?.toFixed(4));
 		const y_round = parseFloat(y?.toFixed(4));
 
+		const sizeScale = this.readRoleSizeScale(data.rolePtr);
+		const specialRole = this.getSpecialRoleFromSize(sizeScale);
+		const roleName = specialRole !== 'UNKNOWN' ? specialRole : this.formatRoleLabel({
+			roleTeam: data.impostor,
+			isImpostor: data.impostor == 1,
+			isThirdParty: data.impostor != 0 && data.impostor != 1,
+			specialRole,
+		} as Player);
 		const nameHash = this.hashCode(name);
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
 		const visibleColorId = currentColor === this.rainbowColor ? RainbowColorId : currentColor;
@@ -1489,6 +1563,9 @@ export default class GameReader {
 			disconnected: data.disconnected != 0,
 			rolePtr: data.rolePtr,
 			roleTeam: data.impostor,
+			roleName,
+			sizeScale,
+			specialRole,
 			isImpostor: data.impostor == 1,
 			isThirdParty: data.impostor != 0 && data.impostor != 1,
 			isDead: data.dead == 1,

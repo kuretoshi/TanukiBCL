@@ -52,6 +52,7 @@ import { poseCollide } from '../common/ColliderMap';
 import {
 	createVoiceDisguiseEffect,
 	disconnectVoiceDisguiseEffect,
+	PitchShiftDirection,
 	updateVoiceDisguiseEffect,
 	VoiceDisguiseEffect,
 } from './voiceEffect';
@@ -141,6 +142,12 @@ interface ClientPeerConfig {
 
 type VoiceDisguiseMode = 'none' | 'skin-changed';
 
+interface SizeVoiceEffect {
+	direction: PitchShiftDirection;
+	strength: number;
+	formantScale: number;
+}
+
 const voiceDebugEnabled =
 	queryParams?.get('debugVoice') === '1' ||
 	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
@@ -173,6 +180,7 @@ interface VoiceDebugOverlayState {
 	localRolePtr: number | undefined;
 	localRoleDiffs: string | undefined;
 	localRoleSnapshot: string | undefined;
+	sizeDebug: string | undefined;
 	colorDebug: string | undefined;
 	socketIoVersion?: CompatibleSocketVersion;
 	remoteName?: string;
@@ -703,6 +711,24 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		return hasCurrentAppearanceChanged(player);
 	}
 
+	function getSizeVoiceEffect(player: Player): SizeVoiceEffect | null {
+		if (!player.sizeScale || player.specialRole === 'UNKNOWN') {
+			return null;
+		}
+
+		const distanceFromNormal = Math.min(1, Math.abs(player.sizeScale - 1));
+		if (distanceFromNormal < 0.12) {
+			return null;
+		}
+
+		const strength = Math.max(20, Math.min(100, Math.round(distanceFromNormal * 85)));
+		return {
+			direction: player.sizeScale > 1 ? 'down' : 'up',
+			strength,
+			formantScale: Math.max(0.65, Math.min(1.45, 1 / Math.sqrt(player.sizeScale))),
+		};
+	}
+
 	function canHearGhosts(player: Player): boolean {
 		return (
 			(player.isImpostor && lobbySettings.haunting) ||
@@ -842,6 +868,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: gameState.debug?.localRolePtr,
 				localRoleDiffs: gameState.debug?.localRoleDiffs,
 				localRoleSnapshot: gameState.debug?.localRoleSnapshot,
+				sizeDebug: gameState.debug?.sizeDebug,
 				colorDebug: gameState.debug?.colorDebug,
 				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: current?.remoteName,
@@ -982,6 +1009,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				localRolePtr: state.debug?.localRolePtr,
 				localRoleDiffs: state.debug?.localRoleDiffs,
 				localRoleSnapshot: state.debug?.localRoleSnapshot,
+				sizeDebug: state.debug?.sizeDebug,
 				colorDebug: state.debug?.colorDebug,
 				socketIoVersion: socketIoVersionRef.current || current?.socketIoVersion,
 				remoteName: other.name,
@@ -1017,13 +1045,15 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 		const aliveHearingDeadInTasks = audioGameState === GameState.TASKS && !me.isDead && other.isDead;
 		const canHearDeadInTasks = aliveHearingDeadInTasks && canHearGhosts(me);
 		const voiceDisguiseActive = isVoiceDisguiseEffectActive(other, voiceDisguiseMode);
+		const sizeVoiceEffect = getSizeVoiceEffect(other);
+		const wantsVoiceEffect = voiceDisguiseActive || !!sizeVoiceEffect;
 		const muteAudio = () => {
 			restoreTransientEffects(audio, other);
 			return 0;
 		};
-		if (audio.voiceDisguiseActive && !voiceDisguiseActive) {
+		if (audio.voiceDisguiseActive && !wantsVoiceEffect) {
 			resetAudioRoute(audio, other);
-		} else if (audio.voiceEffectConnected && !voiceDisguiseActive) {
+		} else if (audio.voiceEffectConnected && !wantsVoiceEffect) {
 			restoreVoiceDisguiseRoute(audio, other);
 		}
 
@@ -1098,6 +1128,25 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 					updateVoiceDisguiseEffect(voiceEffect, settings.voiceEffectStrength);
 					voiceEffectEnabled = true;
 					audio.voiceDisguiseActive = true;
+					if (!audio.voiceEffectConnected) {
+						audio.voiceEffectConnected = true;
+						applyVoiceEffect(gain, voiceEffect, destination, other);
+					}
+				} else if (
+					sizeVoiceEffect &&
+					lobbySettings.voiceEffectEnabled !== false &&
+					!me.isDead &&
+					!other.isDead &&
+					!muffleEnabled
+				) {
+					updateVoiceDisguiseEffect(
+						voiceEffect,
+						sizeVoiceEffect.strength,
+						sizeVoiceEffect.direction,
+						sizeVoiceEffect.formantScale
+					);
+					voiceEffectEnabled = true;
+					audio.voiceDisguiseActive = false;
 					if (!audio.voiceEffectConnected) {
 						audio.voiceEffectConnected = true;
 						applyVoiceEffect(gain, voiceEffect, destination, other);
@@ -2499,6 +2548,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 						`role=${voiceDebugOverlay.localRoleLabel || '-'} team=${voiceDebugOverlay.localRoleTeam ?? '-'} ptr=${voiceDebugOverlay.localRolePtr || '-'}`,
 						`roleDiff=${voiceDebugOverlay.localRoleDiffs || '-'}`,
 						`roleRaw=${voiceDebugOverlay.localRoleSnapshot || '-'}`,
+						`sizes:\n${voiceDebugOverlay.sizeDebug || '-'}`,
 						`colors:\n${voiceDebugOverlay.colorDebug || '-'}`,
 						`pat=${voiceDebugOverlay.initPatternDebug || '-'}`,
 						`outfits=${voiceDebugOverlay.currentOutfits || '-'} outfitMeet=${voiceDebugOverlay.airshipMeetingByOutfit}`,

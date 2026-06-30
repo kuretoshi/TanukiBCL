@@ -11,17 +11,28 @@ export interface VoiceDisguiseEffect {
 	filter: BiquadFilterNode;
 	pitchDelayA: DelayNode;
 	pitchDelayB: DelayNode;
+	pitchDownDelayA: DelayNode;
+	pitchDownDelayB: DelayNode;
 	delayModA: AudioBufferSourceNode;
 	delayModB: AudioBufferSourceNode;
+	delayDownModA: AudioBufferSourceNode;
+	delayDownModB: AudioBufferSourceNode;
 	fadeModA: AudioBufferSourceNode;
 	fadeModB: AudioBufferSourceNode;
+	fadeDownModA: AudioBufferSourceNode;
+	fadeDownModB: AudioBufferSourceNode;
 	pitchGainA: GainNode;
 	pitchGainB: GainNode;
+	pitchDownGainA: GainNode;
+	pitchDownGainB: GainNode;
 	reverb?: ConvolverNode;
 	wetGain: GainNode;
+	pitchUpWetGain: GainNode;
+	pitchDownWetGain: GainNode;
 }
 
 const clampStrength = (strength: number) => Math.min(100, Math.max(0, Number.isFinite(strength) ? strength : 0));
+export type PitchShiftDirection = 'up' | 'down';
 
 export function updateVoiceEffectStrength(nodes: VoiceEffectNodes, strength: number) {
 	const normalizedStrength = clampStrength(strength) / 100;
@@ -31,11 +42,12 @@ export function updateVoiceEffectStrength(nodes: VoiceEffectNodes, strength: num
 	nodes.wetGain.gain.value = normalizedStrength * 1.6;
 }
 
-export function configureVoiceEffectFilter(filter: BiquadFilterNode, strength: number) {
+export function configureVoiceEffectFilter(filter: BiquadFilterNode, strength: number, formantScale = 1) {
 	const normalizedStrength = clampStrength(strength) / 100;
+	const normalizedFormantScale = Math.min(1.7, Math.max(0.55, Number.isFinite(formantScale) ? formantScale : 1));
 
 	filter.type = 'bandpass';
-	filter.frequency.value = 1200 - normalizedStrength * 350;
+	filter.frequency.value = (1200 - normalizedStrength * 350) * normalizedFormantScale;
 	filter.Q.value = 1 + normalizedStrength * 8;
 }
 
@@ -84,32 +96,55 @@ export function createVoiceDisguiseEffect(
 	const filter = context.createBiquadFilter();
 	const pitchDelayA = context.createDelay(0.12);
 	const pitchDelayB = context.createDelay(0.12);
+	const pitchDownDelayA = context.createDelay(0.12);
+	const pitchDownDelayB = context.createDelay(0.12);
 	const pitchGainA = context.createGain();
 	const pitchGainB = context.createGain();
+	const pitchDownGainA = context.createGain();
+	const pitchDownGainB = context.createGain();
 	const wetGain = context.createGain();
+	const pitchUpWetGain = context.createGain();
+	const pitchDownWetGain = context.createGain();
 	const delayTime = 0.035;
-	const delayBuffer = createDelayTimeBuffer(context, delayTime, true);
+	const delayUpBuffer = createDelayTimeBuffer(context, delayTime, true);
+	const delayDownBuffer = createDelayTimeBuffer(context, delayTime, false);
 	const fadeBufferA = createFadeBuffer(context, delayTime, 0);
 	const fadeBufferB = createFadeBuffer(context, delayTime, 0.5);
-	const delayModA = createLoopingBufferSource(context, delayBuffer);
-	const delayModB = createLoopingBufferSource(context, delayBuffer);
+	const delayModA = createLoopingBufferSource(context, delayUpBuffer);
+	const delayModB = createLoopingBufferSource(context, delayUpBuffer);
+	const delayDownModA = createLoopingBufferSource(context, delayDownBuffer);
+	const delayDownModB = createLoopingBufferSource(context, delayDownBuffer);
 	const fadeModA = createLoopingBufferSource(context, fadeBufferA);
 	const fadeModB = createLoopingBufferSource(context, fadeBufferB);
+	const fadeDownModA = createLoopingBufferSource(context, fadeBufferA);
+	const fadeDownModB = createLoopingBufferSource(context, fadeBufferB);
 
 	delayModA.connect(pitchDelayA.delayTime);
 	delayModB.connect(pitchDelayB.delayTime);
+	delayDownModA.connect(pitchDownDelayA.delayTime);
+	delayDownModB.connect(pitchDownDelayB.delayTime);
 	fadeModA.connect(pitchGainA.gain);
 	fadeModB.connect(pitchGainB.gain);
+	fadeDownModA.connect(pitchDownGainA.gain);
+	fadeDownModB.connect(pitchDownGainB.gain);
 
 	input.connect(dryGain);
 	dryGain.connect(output);
 	input.connect(filter);
 	filter.connect(pitchDelayA);
 	filter.connect(pitchDelayB);
+	filter.connect(pitchDownDelayA);
+	filter.connect(pitchDownDelayB);
 	pitchDelayA.connect(pitchGainA);
 	pitchDelayB.connect(pitchGainB);
-	pitchGainA.connect(wetGain);
-	pitchGainB.connect(wetGain);
+	pitchDownDelayA.connect(pitchDownGainA);
+	pitchDownDelayB.connect(pitchDownGainB);
+	pitchGainA.connect(pitchUpWetGain);
+	pitchGainB.connect(pitchUpWetGain);
+	pitchDownGainA.connect(pitchDownWetGain);
+	pitchDownGainB.connect(pitchDownWetGain);
+	pitchUpWetGain.connect(wetGain);
+	pitchDownWetGain.connect(wetGain);
 
 	let reverb: ConvolverNode | undefined;
 	if (reverbBuffer) {
@@ -128,43 +163,74 @@ export function createVoiceDisguiseEffect(
 		filter,
 		pitchDelayA,
 		pitchDelayB,
+		pitchDownDelayA,
+		pitchDownDelayB,
 		delayModA,
 		delayModB,
+		delayDownModA,
+		delayDownModB,
 		fadeModA,
 		fadeModB,
+		fadeDownModA,
+		fadeDownModB,
 		pitchGainA,
 		pitchGainB,
+		pitchDownGainA,
+		pitchDownGainB,
 		reverb,
 		wetGain,
+		pitchUpWetGain,
+		pitchDownWetGain,
 	};
 	updateVoiceDisguiseEffect(effect, strength);
 	return effect;
 }
 
-export function updateVoiceDisguiseEffect(effect: VoiceDisguiseEffect, strength: number) {
+export function updateVoiceDisguiseEffect(
+	effect: VoiceDisguiseEffect,
+	strength: number,
+	direction: PitchShiftDirection = 'up',
+	formantScale = 1
+) {
 	const normalizedStrength = clampStrength(strength) / 100;
 
-	configureVoiceEffectFilter(effect.filter, strength);
+	configureVoiceEffectFilter(effect.filter, strength, formantScale);
 	effect.dryGain.gain.value = 1 - normalizedStrength * 0.95;
 	effect.wetGain.gain.value = normalizedStrength * 1.45;
+	effect.pitchUpWetGain.gain.value = direction === 'up' ? 1 : 0;
+	effect.pitchDownWetGain.gain.value = direction === 'down' ? 1 : 0;
 }
 
 export function disconnectVoiceDisguiseEffect(effect: VoiceDisguiseEffect) {
 	effect.delayModA.stop();
 	effect.delayModB.stop();
+	effect.delayDownModA.stop();
+	effect.delayDownModB.stop();
 	effect.fadeModA.stop();
 	effect.fadeModB.stop();
+	effect.fadeDownModA.stop();
+	effect.fadeDownModB.stop();
 	effect.delayModA.disconnect();
 	effect.delayModB.disconnect();
+	effect.delayDownModA.disconnect();
+	effect.delayDownModB.disconnect();
 	effect.fadeModA.disconnect();
 	effect.fadeModB.disconnect();
+	effect.fadeDownModA.disconnect();
+	effect.fadeDownModB.disconnect();
 	effect.input.disconnect();
 	effect.dryGain.disconnect();
 	effect.filter.disconnect();
 	effect.pitchDelayA.disconnect();
 	effect.pitchDelayB.disconnect();
+	effect.pitchDownDelayA.disconnect();
+	effect.pitchDownDelayB.disconnect();
 	effect.pitchGainA.disconnect();
 	effect.pitchGainB.disconnect();
+	effect.pitchDownGainA.disconnect();
+	effect.pitchDownGainB.disconnect();
+	effect.pitchUpWetGain.disconnect();
+	effect.pitchDownWetGain.disconnect();
 	effect.wetGain.disconnect();
 	effect.reverb?.disconnect();
 	effect.output.disconnect();
