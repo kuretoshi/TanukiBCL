@@ -211,6 +211,7 @@ export default class GameReader {
 				this.gameAssembly.modBaseAddr,
 				this.offsets.innerNetClient.base
 			);
+			if (!innerNetClient) return null;
 
 			const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
 
@@ -246,9 +247,11 @@ export default class GameReader {
 			// }
 
 			const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
+			if (!allPlayersPtr) return null;
 			const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
+			if (!allPlayers) return null;
 
-			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount);
+			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
 			let playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
 			const players = [];
 
@@ -280,10 +283,15 @@ export default class GameReader {
 			if ((this.gameCode || this.isLocalGame) && playerCount) {
 				for (let i = 0; i < Math.min(playerCount, 40); i++) {
 					const { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
-					if (address === 0) continue;
-					const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
-					const player = this.parsePlayer(address + last, playerData, clientId);
 					playerAddrPtr += this.is_64bit ? 8 : 4;
+					if (address === 0) continue;
+					let player: Player | undefined;
+					try {
+						const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
+						player = this.parsePlayer(address + last, playerData, clientId);
+					} catch (e) {
+						continue;
+					}
 					if (!player || state === GameState.MENU) {
 						continue;
 					}
@@ -1282,8 +1290,10 @@ export default class GameReader {
 		maxLen: number,
 		callback: (keyPtr: number, valPtr: number, index: number) => void
 	): void {
-		const entries = this.readMemory<number>('ptr', address + (this.is_64bit ? 0x18 : 0xc));
-		let len = this.readMemory<number>('uint32', address + (this.is_64bit ? 0x20 : 0x10));
+		if (!address) return;
+		const entries = this.readMemory<number>('ptr', address + (this.is_64bit ? 0x18 : 0xc), undefined, 0);
+		let len = this.readMemory<number>('uint32', address + (this.is_64bit ? 0x20 : 0x10), undefined, 0);
+		if (!entries || !len) return;
 
 		len = len > maxLen ? maxLen : len;
 
