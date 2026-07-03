@@ -15,6 +15,8 @@ import {
 } from '../common/AmongUsState';
 import Peer from 'simple-peer';
 import { ipcRenderer } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import VAD from './vad';
 import { ISettings, playerConfigMap, SocketConfig } from '../common/ISettings';
 import { IpcRendererMessages, IpcMessages, IpcOverlayMessages, IpcHandlerMessages } from '../common/ipc-messages';
@@ -218,6 +220,130 @@ const PEER_TRACK_STALL_RECONNECT_MS = 4000;
 const PEER_RELAY_FALLBACK_AFTER_ATTEMPTS = 2;
 const AIRSHIP_SPAWN_AUDIO_GRACE_MS = 15000;
 const SIGNAL_DEDUPE_MS = 1500;
+
+interface LocalCustomization {
+	name: string;
+	colorId: number;
+	hatId: string;
+	skinId: string;
+	visorId: string;
+}
+
+let cachedLocalCustomization: LocalCustomization | null = null;
+let cachedLocalCustomizationAt = 0;
+
+function readLocalCustomization(): LocalCustomization | null {
+	const now = Date.now();
+	if (cachedLocalCustomization && now - cachedLocalCustomizationAt < 3000) {
+		return cachedLocalCustomization;
+	}
+
+	cachedLocalCustomizationAt = now;
+	try {
+		const userProfile = process.env.USERPROFILE || process.env.HOME || '';
+		const playerFile = path.join(userProfile, 'AppData', 'LocalLow', 'Innersloth', 'Among Us', 'player.amogus');
+		const parsed = JSON.parse(fs.readFileSync(playerFile, 'utf8'));
+		const customization = parsed?.customization;
+		if (!customization) {
+			return cachedLocalCustomization;
+		}
+
+		cachedLocalCustomization = {
+			name: typeof customization.name === 'string' ? customization.name : '',
+			colorId: Number.isFinite(customization.colorID) ? customization.colorID : 0,
+			hatId: typeof customization.hat === 'string' ? customization.hat : '',
+			skinId: typeof customization.skin === 'string' ? customization.skin : '',
+			visorId: typeof customization.visor === 'string' ? customization.visor : '',
+		};
+	} catch {
+		/* Keep the previous customization if the file is temporarily unavailable. */
+	}
+
+	return cachedLocalCustomization;
+}
+
+function applyLocalCustomization(player: Player): Player {
+	const customization = readLocalCustomization();
+	if (!customization) {
+		return player;
+	}
+
+	const name = customization.name || player.name;
+	const colorId = Number.isFinite(customization.colorId) && customization.colorId >= 0 ? customization.colorId : player.colorId;
+	const hatId = customization.hatId || player.hatId;
+	const skinId = customization.skinId || player.skinId;
+	const visorId = customization.visorId || player.visorId;
+
+	return {
+		...player,
+		name,
+		nameHash: hashString(name || `${player.clientId}:${player.id}`),
+		colorId,
+		hatId,
+		skinId,
+		visorId,
+		appearanceName: name,
+		appearanceColorId: colorId,
+		appearanceHatId: hatId,
+		appearanceSkinId: skinId,
+		appearanceVisorId: visorId,
+		appearanceId: `${colorId}|${hatId}|${skinId}|${visorId}`,
+		bugged: false,
+		disconnected: false,
+	};
+}
+
+function hashString(value: string): number {
+	let hash = 0;
+	for (let i = 0; i < value.length; i++) {
+		hash = (Math.imul(31, hash) + value.charCodeAt(i)) | 0;
+	}
+	return hash;
+}
+
+function createFallbackLocalPlayer(clientId = 0): Player {
+	const customization = readLocalCustomization();
+	const name = customization?.name || '';
+	const colorId = customization?.colorId ?? 0;
+	const hatId = customization?.hatId || '';
+	const skinId = customization?.skinId || '';
+	const visorId = customization?.visorId || '';
+
+	return {
+		ptr: 0,
+		id: 0,
+		clientId,
+		name,
+		nameHash: hashString(name || `${clientId}:0`),
+		colorId,
+		hatId,
+		petId: 0,
+		skinId,
+		visorId,
+		currentOutfit: 0,
+		appearanceName: name,
+		appearanceColorId: colorId,
+		appearanceHatId: hatId,
+		appearanceSkinId: skinId,
+		appearanceVisorId: visorId,
+		appearanceId: `${colorId}|${hatId}|${skinId}|${visorId}`,
+		disconnected: false,
+		rolePtr: 0,
+		roleTeam: 0,
+		isImpostor: false,
+		isThirdParty: false,
+		isDead: false,
+		taskPtr: 0,
+		objectPtr: 0,
+		isLocal: true,
+		shiftedColor: -1,
+		bugged: false,
+		x: 999,
+		y: 999,
+		inVent: false,
+		isDummy: false,
+	};
+}
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -2247,17 +2373,24 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 	//data: { mobilePlayerInfo: { code: this.gamecode, askingForHost: true }
 	const myPlayer = useMemo(() => {
-		if (!gameState || !gameState.players) {
+		if (!gameState) {
 			return undefined;
-		} else {
-			return gameState.players.find((p) => p.isLocal);
 		}
-	}, [gameState.players]);
+
+		if (!gameState.players?.length) {
+			return gameState.lobbyCode && gameState.lobbyCode !== 'MENU'
+				? createFallbackLocalPlayer(gameState.clientId)
+				: undefined;
+		}
+
+		const player = gameState.players.find((p) => p.isLocal) ?? gameState.players[0];
+		return gameState.lobbyCode && gameState.lobbyCode !== 'MENU' ? applyLocalCustomization(player) : player;
+	}, [gameState.players, gameState.lobbyCode, gameState.clientId]);
 
 	const otherPlayers = useMemo(() => {
 		let otherPlayers: Player[];
 		if (!gameState || !gameState.players || !myPlayer) return [];
-		else otherPlayers = gameState.players.filter((p) => !p.isLocal);
+		else otherPlayers = gameState.players.filter((p) => p !== myPlayer && !p.isLocal);
 		maxDistanceRef.current = lobbySettings.visionHearing
 			? myPlayer.isImpostor
 				? lobbySettings.maxDistance
@@ -2466,7 +2599,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 									muted={mutedState}
 									player={myPlayer}
 									borderColor="#2ecc71"
-									connectionState={connected ? 'connected' : 'disconnected'}
+									connectionState={connected ? 'connected' : undefined}
 									isUsingRadio={myPlayer?.isImpostor && impostorRadioClientId.current === myPlayer.clientId}
 									talking={talking}
 									isAlive={!myPlayer.isDead}

@@ -46,7 +46,9 @@ export function registerWindowLogging(window: BrowserWindow, name: string) {
 		log[logLevel](`[renderer:${name}] ${message}`, sourceId ? `(${sourceId}:${line})` : '');
 	});
 
-	window.webContents.on('crashed', () => {
+	(window.webContents as Electron.WebContents & {
+		on(event: 'crashed', listener: () => void): Electron.WebContents;
+	}).on('crashed', () => {
 		log.error(`[renderer:${name}] crashed`);
 	});
 }

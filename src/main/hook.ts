@@ -22,6 +22,19 @@ let pushToTalkShortcut: K | undefined;
 let deafenShortcut: K | undefined;
 let muteShortcut: K | undefined;
 let impostorRadioShortcut: K | undefined;
+
+function sendToRenderer(sender: Electron.WebContents, message: IpcRendererMessages, ...args: unknown[]): void {
+	if (sender.isDestroyed()) {
+		return;
+	}
+
+	try {
+		sender.send(message, ...args);
+	} catch (error) {
+		console.error('Failed to send renderer IPC:', message, error);
+	}
+}
+
 function resetKeyHooks(): void {
 	pushToTalkShortcut = store.get('pushToTalkShortcut', 'V') as K;
 	deafenShortcut = store.get('deafenShortcut', 'RControl') as K;
@@ -34,8 +47,27 @@ function resetKeyHooks(): void {
 	addKeyHandler(impostorRadioShortcut);
 }
 
+function resetGameReaderState(): void {
+	readingGame = false;
+	if (gameReader) {
+		gameReader.amongUs = null;
+		gameReader.gameAssembly = null;
+		gameReader.checkProcessDelay = 0;
+	}
+
+	try {
+		keyboardWatcher.clearKeyHooks();
+	} catch (error) {
+		console.error('Failed to clear keyboard hooks:', error);
+	}
+}
+
 ipcMain.on(IpcHandlerMessages.RESET_KEYHOOKS, () => {
-	resetKeyHooks();
+	try {
+		resetKeyHooks();
+	} catch (error) {
+		console.error('Failed to reset keyboard hooks:', error);
+	}
 });
 
 ipcMain.on(IpcHandlerMessages.JOIN_LOBBY, (event, lobbycode, server) => {
@@ -63,66 +95,91 @@ ipcMain.handle(IpcMessages.REQUEST_MOD, () => {
 ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 	if (!readingGame) {
 		readingGame = true;
-		let speaking: number = 0
-		resetKeyHooks();
-		gameReader = new GameReader(event.sender.send.bind(event.sender));
+		let speaking: number = 0;
+		gameReader = new GameReader((message: IpcRendererMessages, ...args: unknown[]) =>
+			sendToRenderer(event.sender, message, ...args)
+		);
+		const currentGameReader = gameReader;
 
-		keyboardWatcher.on('keydown', (keyId: number) => {
-			if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
-				speaking += 1;
-			}
-			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
-				speaking += 1;
-				event.sender.send(IpcRendererMessages.IMPOSTOR_RADIO, true);
-			}
+		try {
+			resetKeyHooks();
 
-			// Cover weird cases which shouldn't happen but just in case
-			if (speaking > 2) {
-				speaking = 2;
-			}
-			if (speaking) {
-				event.sender.send(IpcRendererMessages.PUSH_TO_TALK, true);
-			}
-		});
+			keyboardWatcher.on('keydown', (keyId: number) => {
+				try {
+					if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
+						speaking += 1;
+					}
+					if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+						speaking += 1;
+						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, true);
+					}
 
-		keyboardWatcher.on('keyup', (keyId: number) => {
-			if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
-				speaking -= 1;
-			}
-			if (keyCodeMatches(deafenShortcut!, keyId)) {
-				event.sender.send(IpcRendererMessages.TOGGLE_DEAFEN);
-			}
-			if (keyCodeMatches(muteShortcut!, keyId)) {
-				event.sender.send(IpcRendererMessages.TOGGLE_MUTE);
-			}
-			if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
-				speaking -= 1;
-				event.sender.send(IpcRendererMessages.IMPOSTOR_RADIO, false);
-			}
+					// Cover weird cases which shouldn't happen but just in case
+					if (speaking > 2) {
+						speaking = 2;
+					}
+					if (speaking) {
+						sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, true);
+					}
+				} catch (error) {
+					console.error('Keyboard keydown handler failed:', error);
+				}
+			});
 
-			// Cover weird cases which shouldn't happen but just in case
-			if (speaking < 0) {
-				speaking = 0;
-			}
-			if (!speaking) {
-				event.sender.send(IpcRendererMessages.PUSH_TO_TALK, false);
-			}
-		});
+			keyboardWatcher.on('keyup', (keyId: number) => {
+				try {
+					if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
+						speaking -= 1;
+					}
+					if (keyCodeMatches(deafenShortcut!, keyId)) {
+						sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_DEAFEN);
+					}
+					if (keyCodeMatches(muteShortcut!, keyId)) {
+						sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_MUTE);
+					}
+					if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+						speaking -= 1;
+						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, false);
+					}
 
-		keyboardWatcher.start();
+					// Cover weird cases which shouldn't happen but just in case
+					if (speaking < 0) {
+						speaking = 0;
+					}
+					if (!speaking) {
+						sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, false);
+					}
+				} catch (error) {
+					console.error('Keyboard keyup handler failed:', error);
+				}
+			});
+
+			keyboardWatcher.start();
+		} catch (error) {
+			console.error('Keyboard watcher failed to start:', error);
+		}
 
 		// Read game memory
 		let gotError = false;
 		const frame = async () => {
-			const err = await gameReader.loop();
+			if (!readingGame || gameReader !== currentGameReader) {
+				return;
+			}
+
+			let err: string | null = null;
+			try {
+				err = await currentGameReader.loop();
+			} catch (error) {
+				err = error instanceof Error ? error.message : String(error);
+			}
 			if (err) {
 				// readingGame = false;
 				gotError = true;
-				event.sender.send(IpcRendererMessages.ERROR, err);
+				sendToRenderer(event.sender, IpcRendererMessages.ERROR, err);
 				setTimeout(frame, 7500);
 			} else {
 				if (gotError) {
-					event.sender.send(IpcRendererMessages.ERROR, '');
+					sendToRenderer(event.sender, IpcRendererMessages.ERROR, '');
 					gotError = false;
 				}
 
@@ -137,6 +194,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 });
 
 ipcMain.on('reload', async (_, lobbybrowser) => {
+	resetGameReaderState();
 	if (!lobbybrowser) {
 		global.mainWindow?.reload();
 	}
