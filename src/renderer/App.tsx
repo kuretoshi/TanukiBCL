@@ -36,9 +36,9 @@ import './language/i18n';
 import { withNamespaces } from 'react-i18next';
 import { ISettings } from '../common/ISettings';
 import { defaultLobbySettings } from '../common/defaultLobbySettings';
+import Settings from './settings/Settings';
 
 const Voice = lazy(() => import('./Voice'));
-const Settings = lazy(() => import('./settings/Settings'));
 
 declare module '@mui/styles/defaultTheme' {
 	// eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -55,13 +55,15 @@ const appDisplayName = 'タヌキのベタクル';
 
 const useStyles = makeStyles(() => ({
 	root: {
-		position: 'absolute',
+		position: 'fixed',
 		width: '100vw',
 		height: theme.spacing(3),
 		backgroundColor: '#1d1a23',
 		top: 0,
+		left: 0,
 		WebkitAppRegion: 'drag',
-		zIndex: 100,
+		zIndex: 20000,
+		pointerEvents: 'auto',
 	},
 	title: {
 		width: '100%',
@@ -83,6 +85,9 @@ const useStyles = makeStyles(() => ({
 		padding: 0,
 		position: 'absolute',
 		top: 0,
+		zIndex: 20001,
+		pointerEvents: 'auto',
+		cursor: 'pointer',
 	},
 }));
 
@@ -91,7 +96,7 @@ interface TitleBarProps {
 	setSettingsOpen: Dispatch<SetStateAction<boolean>>;
 }
 
-const RawTitleBar: React.FC<TitleBarProps> = function ({ settingsOpen, setSettingsOpen }: TitleBarProps) {
+const RawTitleBar: React.FC<TitleBarProps> = function ({ setSettingsOpen }: TitleBarProps) {
 	const classes = useStyles();
 	return (
 		<div className={classes.root}>
@@ -102,7 +107,11 @@ const RawTitleBar: React.FC<TitleBarProps> = function ({ settingsOpen, setSettin
 				className={classes.button}
 				style={{ left: 0 }}
 				size="small"
-				onClick={() => setSettingsOpen(!settingsOpen)}
+				onMouseDown={(event) => event.stopPropagation()}
+				onClick={(event) => {
+					event.stopPropagation();
+					setSettingsOpen((open) => !open);
+				}}
 			>
 				<SettingsIcon htmlColor="#777" />
 			</IconButton>
@@ -176,7 +185,6 @@ export default function App({ t }): JSX.Element {
 			setUpdaterState((old) => ({ ...old, ...state }));
 		};
 		const onColorsChange = (_: Electron.IpcRendererEvent, colors: string[][]) => {
-			console.log('RECIEVED COLORS');
 			playerColors.current = colors;
 			ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, colors);
 		};
@@ -322,7 +330,7 @@ export default function App({ t }): JSX.Element {
 										</DialogActions>
 									)}
 								</Dialog>
-								{page}
+								{!settingsOpen && page}
 							</ThemeProvider>
 						</StyledEngineProvider>
 					</SettingsContext.Provider>

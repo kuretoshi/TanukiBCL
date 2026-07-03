@@ -47,7 +47,6 @@ import WifiOff from '@mui/icons-material/WifiOff';
 import LinkOff from '@mui/icons-material/LinkOff';
 import ErrorOutline from '@mui/icons-material/ErrorOutline';
 import Tooltip from 'react-tooltip-lite';
-import adapter from 'webrtc-adapter';
 import { VADOptions } from './vad';
 import { pushToTalkOptions } from './settings/SettingsStore';
 import { poseCollide } from '../common/ColliderMap';
@@ -57,8 +56,6 @@ import {
 	updateVoiceDisguiseEffect,
 	VoiceDisguiseEffect,
 } from './voiceEffect';
-
-console.log(adapter.browserDetails.browser);
 
 const isLiteApp =
 	typeof window !== 'undefined' && new URLSearchParams(window.location.search.substring(1)).get('lite') === '1';
@@ -1570,7 +1567,6 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	}, [settings.voiceEffectStrength]);
 
 	const updateLobby = () => {
-		console.log(gameState);
 		if (
 			isLiteApp ||
 			!gameState ||

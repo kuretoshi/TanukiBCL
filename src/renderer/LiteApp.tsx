@@ -68,13 +68,15 @@ if (typeof window !== 'undefined' && window.location) {
 
 const useStyles = makeStyles(() => ({
 	root: {
-		position: 'absolute',
+		position: 'fixed',
 		width: '100vw',
 		height: theme.spacing(3),
 		backgroundColor: '#1d1a23',
 		top: 0,
+		left: 0,
 		WebkitAppRegion: 'drag',
-		zIndex: 100,
+		zIndex: 20000,
+		pointerEvents: 'auto',
 	},
 	title: {
 		width: '100%',
@@ -96,6 +98,9 @@ const useStyles = makeStyles(() => ({
 		padding: 0,
 		position: 'absolute',
 		top: 0,
+		zIndex: 20001,
+		pointerEvents: 'auto',
+		cursor: 'pointer',
 	},
 }));
 
@@ -104,7 +109,7 @@ interface TitleBarProps {
 	setSettingsOpen: Dispatch<SetStateAction<boolean>>;
 }
 
-const TitleBar: React.FC<TitleBarProps> = React.memo(function ({ settingsOpen, setSettingsOpen }: TitleBarProps) {
+const TitleBar: React.FC<TitleBarProps> = React.memo(function ({ setSettingsOpen }: TitleBarProps) {
 	const classes = useStyles();
 	return (
 		<div className={classes.root}>
@@ -113,7 +118,11 @@ const TitleBar: React.FC<TitleBarProps> = React.memo(function ({ settingsOpen, s
 				className={classes.button}
 				style={{ left: 0 }}
 				size="small"
-				onClick={() => setSettingsOpen(!settingsOpen)}
+				onMouseDown={(event) => event.stopPropagation()}
+				onClick={(event) => {
+					event.stopPropagation();
+					setSettingsOpen((open) => !open);
+				}}
 			>
 				<SettingsIcon htmlColor="#777" />
 			</IconButton>

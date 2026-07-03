@@ -17,6 +17,11 @@ declare module "@mui/material" {
 
 // Create a theme instance.
 const theme = createTheme({
+	zIndex: {
+		modal: 30000,
+		snackbar: 30010,
+		tooltip: 30020,
+	},
 	palette: {
 		primary: {
 			main: purple[300],

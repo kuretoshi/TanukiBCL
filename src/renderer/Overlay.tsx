@@ -85,26 +85,21 @@ const Overlay: React.FC = function () {
 			setVoiceState(newState);
 		};
 		const onSettings = (_: Electron.IpcRendererEvent, newState: ISettings) => {
-			console.log('Recieved settings..');
-
 			setSettings(newState);
 		};
 		const onColorChange = (_: Electron.IpcRendererEvent, colors: string[][]) => {
-			console.log('Recieved colors..');
 			setColors(colors);
-			console.log('new colors: ', playerColors);
 		};
 		ipcRenderer.on(IpcOverlayMessages.NOTIFY_GAME_STATE_CHANGED, onState);
 		ipcRenderer.on(IpcOverlayMessages.NOTIFY_VOICE_STATE_CHANGED, onVoiceState);
 		ipcRenderer.on(IpcOverlayMessages.NOTIFY_SETTINGS_CHANGED, onSettings);
 		ipcRenderer.on(IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, onColorChange);
 		ipcRenderer.send(IpcMessages.SEND_TO_MAINWINDOW, IpcOverlayMessages.REQUEST_INITVALUES);
-		console.log('REQUEST_INITVALUES');
 		return () => {
 			ipcRenderer.off(IpcOverlayMessages.NOTIFY_GAME_STATE_CHANGED, onState);
 			ipcRenderer.off(IpcOverlayMessages.NOTIFY_VOICE_STATE_CHANGED, onVoiceState);
 			ipcRenderer.off(IpcOverlayMessages.NOTIFY_SETTINGS_CHANGED, onSettings);
-			ipcRenderer.on(IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, onColorChange);
+			ipcRenderer.off(IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, onColorChange);
 		};
 	}, []);
 

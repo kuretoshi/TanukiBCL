@@ -34,6 +34,9 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone }: T
 		const ctx = new AudioContext();
 		const processor = ctx.createScriptProcessor(2048, 1, 1);
 		processor.connect(ctx.destination);
+		let stream: MediaStream | undefined;
+		let source: MediaStreamAudioSourceNode | undefined;
+		let closed = false;
 
 		const minUpdateRate = 50;
 		let lastRefreshTime = 0;
@@ -71,15 +74,27 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone }: T
 				audio: audio_options,
 				video: false,
 			})
-			.then((stream) => {
-				const src = ctx.createMediaStreamSource(stream);
-				src.connect(processor);
+			.then((acquiredStream) => {
+				if (closed) {
+					acquiredStream.getTracks().forEach((track) => track.stop());
+					return;
+				}
+				stream = acquiredStream;
+				source = ctx.createMediaStreamSource(acquiredStream);
+				source.connect(processor);
 				processor.addEventListener('audioprocess', handleProcess);
 			})
-			.catch(() => setError(true));
+			.catch(() => {
+				if (!closed) setError(true);
+			});
 
 		return () => {
+			closed = true;
 			processor.removeEventListener('audioprocess', handleProcess);
+			source?.disconnect();
+			processor.disconnect();
+			stream?.getTracks().forEach((track) => track.stop());
+			ctx.close().catch(() => undefined);
 		};
 	}, [microphone]);
 

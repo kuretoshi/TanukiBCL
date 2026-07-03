@@ -1,4 +1,4 @@
-import React, { ReactChild, lazy, useCallback, useContext, useEffect, useReducer, useState } from 'react';
+import React, { ReactChild, useCallback, useContext, useEffect, useReducer, useState } from 'react';
 import { SettingsContext, GameStateContext, HostSettingsContext } from '../contexts';
 import MicrophoneSoundBar from './MicrophoneSoundBar';
 import TestSpeakersButton from './TestSpeakersButton';
@@ -29,8 +29,7 @@ import languages from '../language/languages';
 import ServerURLInput from './ServerURLInput';
 import MuiDivider from '@mui/material/Divider';
 import SettingsStore, { pushToTalkOptions } from './SettingsStore';
-
-const PublicLobbySettings = lazy(() => import('./PublicLobbySettings'));
+import PublicLobbySettings from './PublicLobbySettings';
 
 interface StyleInput {
 	open: boolean;
@@ -48,12 +47,11 @@ const useStyles = makeStyles((theme) => ({
 	root: {
 		width: '100vw',
 		height: `calc(100vh - ${theme.spacing(3)})`,
-		background: '#171717ad',
-		backdropFilter: 'blur(4px)',
+		background: '#27232a',
 		position: 'absolute',
 		left: 0,
 		top: 0,
-		zIndex: 99,
+		zIndex: 15000,
 		alignItems: 'center',
 		marginTop: theme.spacing(3),
 		transition: 'transform .1s ease-in-out',
@@ -76,6 +74,7 @@ const useStyles = makeStyles((theme) => ({
 		paddingLeft: theme.spacing(1.5),
 		paddingRight: theme.spacing(1.5),
 		overflowY: 'auto',
+		overscrollBehavior: 'contain',
 		display: 'flex',
 		flexDirection: 'column',
 		justifyContent: 'start',
@@ -245,6 +244,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 	const gameState = useContext(GameStateContext);
 	const [hostLobbySettings] = useContext(HostSettingsContext);
 	const [unsavedCount, setUnsavedCount] = useState(0);
+	const [audioPreviewReady, setAudioPreviewReady] = useState(false);
 	const unsaved = unsavedCount > 1;
 	const canChangeLobbySettings =
 		gameState?.gameState === GameState.MENU || (gameState?.isHost && gameState?.gameState === GameState.LOBBY);
@@ -267,6 +267,16 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 		window.addEventListener('crewlink-save-settings-before-reload', savePendingSettings);
 		return () => window.removeEventListener('crewlink-save-settings-before-reload', savePendingSettings);
 	}, [savePendingSettings]);
+
+	useEffect(() => {
+		if (!open) {
+			setAudioPreviewReady(false);
+			return;
+		}
+
+		const timeout = window.setTimeout(() => setAudioPreviewReady(true), 250);
+		return () => window.clearTimeout(timeout);
+	}, [open]);
 
 	useEffect(() => {
 		setUnsavedCount((s) => s + 1);
@@ -297,25 +307,40 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 	const [devices, setDevices] = useState<MediaDevice[]>([]);
 	const [_, updateDevices] = useReducer((state) => state + 1, 0);
 	useEffect(() => {
-		navigator.mediaDevices.enumerateDevices().then((devices) =>
-			setDevices(
-				devices.map((d) => {
-					let label = d.label;
-					if (d.deviceId === 'default') {
-						label = t('buttons.default');
-					} else {
-						const match = /.+?\([^(]+\)/.exec(d.label);
-						if (match && match[0]) label = match[0];
-					}
-					return {
-						id: d.deviceId,
-						kind: d.kind,
-						label,
-					};
-				})
-			)
-		);
-	}, [_]);
+		let cancelled = false;
+		if (!navigator.mediaDevices?.enumerateDevices) {
+			setDevices([]);
+			return;
+		}
+
+		navigator.mediaDevices
+			.enumerateDevices()
+			.then((devices) => {
+				if (cancelled) return;
+				setDevices(
+					devices.map((d) => {
+						let label = d.label;
+						if (d.deviceId === 'default') {
+							label = t('buttons.default');
+						} else {
+							const match = /.+?\([^(]+\)/.exec(d.label);
+							if (match && match[0]) label = match[0];
+						}
+						return {
+							id: d.deviceId,
+							kind: d.kind,
+							label,
+						};
+					})
+				);
+			})
+			.catch(() => {
+				if (!cancelled) setDevices([]);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [_, t]);
 
 	const setShortcut = (ev: React.KeyboardEvent, shortcut: keyof ISettings) => {
 		let k = ev.key;
@@ -365,7 +390,6 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 
 	useEffect(() => {
 		(async () => {
-			console.log(settings.language);
 			if (settings.language === 'unkown') {
 				const locale: string = await ipcRenderer.invoke("getlocale");
 				const lang = Object.keys(languages).includes(locale)
@@ -761,7 +785,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 						</option>
 					))}
 				</TextField>
-				{open && <MicrophoneSoundBar microphone={settings.microphone} />}
+				{audioPreviewReady && <MicrophoneSoundBar microphone={settings.microphone} />}
 				<TextField
 					select
 					label={t('settings.audio.speaker')}
@@ -780,7 +804,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 						</option>
 					))}
 				</TextField>
-				{open && <TestSpeakersButton t={t} speaker={settings.speaker} />}
+				{audioPreviewReady && <TestSpeakersButton t={t} speaker={settings.speaker} />}
 				<div className={classes.voiceEffectControl}>
 					<Typography id="voice-effect-slider" className={classes.voiceEffectLabel}>
 						{t('settings.audio.voice_effect_strength')}
@@ -800,7 +824,7 @@ const Settings: React.FC<SettingsProps> = function ({ t, open, onClose }: Settin
 						</Grid>
 					</Grid>
 				</div>
-				{open && (
+				{audioPreviewReady && (
 					<TestVoiceEffectButton
 						t={t}
 						microphone={settings.microphone}
