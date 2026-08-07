@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Player } from '../common/AmongUsState';
+import { hasVisibleAppearanceChanged, Player } from '../common/AmongUsState';
 import {
 	getCosmetic,
 	redAlive,
@@ -72,6 +72,7 @@ export interface CanvasProps {
 	color: number;
 	overflow: boolean;
 	usingRadio: boolean | undefined;
+	hideAvatar?: boolean;
 	onClick?: () => void;
 	mod: ModsType;
 }
@@ -91,6 +92,7 @@ export interface AvatarProps {
 	lookLeft?: boolean;
 	overflow?: boolean;
 	isUsingRadio?: boolean;
+	hideWhenAppearanceChanged?: boolean;
 	onConfigChange?: () => void;
 	mod: ModsType;
 	colorPalette?: string[];
@@ -109,6 +111,7 @@ const Avatar: React.FC<AvatarProps> = function ({
 	showborder,
 	showHat,
 	isUsingRadio,
+	hideWhenAppearanceChanged,
 	lookLeft = false,
 	overflow = false,
 	onConfigChange,
@@ -125,6 +128,7 @@ const Avatar: React.FC<AvatarProps> = function ({
 	const displaySkin = normalizeSkinId(hasDisplayOutfit ? player.appearanceSkinId : player.skinId);
 	const displayVisor = normalizeVisorId(hasDisplayOutfit ? player.appearanceVisorId : player.visorId);
 	const displayName = player.appearanceName || player.name;
+	const hideAvatar = hideWhenAppearanceChanged === true && hasVisibleAppearanceChanged(player);
 	deafened = deafened === true || socketConfig?.isMuted === true || socketConfig?.volume === 0;
 	switch (connectionState) {
 		case 'connected':
@@ -157,6 +161,7 @@ const Avatar: React.FC<AvatarProps> = function ({
 			size={size}
 			overflow={overflow}
 			usingRadio={isUsingRadio}
+			hideAvatar={hideAvatar}
 			mod={mod}
 		/>
 	);
@@ -310,6 +315,7 @@ function Canvas({
 	color,
 	overflow,
 	usingRadio,
+	hideAvatar,
 	onClick,
 	mod,
 }: CanvasProps) {
@@ -361,31 +367,35 @@ function Canvas({
 	return (
 		<>
 			<div className={classes.avatar} onClick={onClick}>
-				<div
-					className={classes.avatar}
-					style={{
-						overflow: 'hidden',
-						position: 'absolute',
-						top: Math.max(2, size / 40) * -1,
-						left: Math.max(2, size / 40) * -1,
-						transform: 'unset',
-					}}
-				>
-					<img
-						src={hatImg.base}
-						className={classes.base}
-						//@ts-ignore
-						onError={(e: any) => {
-							e.target.onError = null;
-							e.target.src = redAlive;
-						}}
-					/>
+				{!hideAvatar && (
+					<>
+						<div
+							className={classes.avatar}
+							style={{
+								overflow: 'hidden',
+								position: 'absolute',
+								top: Math.max(2, size / 40) * -1,
+								left: Math.max(2, size / 40) * -1,
+								transform: 'unset',
+							}}
+						>
+							<img
+								src={hatImg.base}
+								className={classes.base}
+								//@ts-ignore
+								onError={(e: any) => {
+									e.target.onError = null;
+									e.target.src = redAlive;
+								}}
+							/>
 
-					{hatImg.skin && <img src={hatImg.skin} className={classes.skin} onError={onerror} onLoad={onload} />}
-					{overflow && hatElement}
-				</div>
-				{!overflow && hatElement}
-				{usingRadio && <img src={RadioSVG} className={classes.radio} />}
+							{hatImg.skin && <img src={hatImg.skin} className={classes.skin} onError={onerror} onLoad={onload} />}
+							{overflow && hatElement}
+						</div>
+						{!overflow && hatElement}
+						{usingRadio && <img src={RadioSVG} className={classes.radio} />}
+					</>
+				)}
 			</div>
 		</>
 	);

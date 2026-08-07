@@ -16,8 +16,11 @@ type AnySocket = {
 const COMPATIBLE_SOCKET_OPTIONS: SocketIOClient.ConnectOpts = {
 	transports: ['websocket'],
 };
-const SOCKET_CONNECT_TIMEOUT_MS = 2500;
-const INTERNAL_EVENTS = new Set(['connect', 'disconnect', 'connect_error', 'error']);
+const SOCKET_CONNECT_TIMEOUT_MS = 8000;
+const V4_FALLBACK_DELAY_MS = 3500;
+const MAX_PENDING_EMITS = 50;
+const COALESCED_PENDING_EVENTS = new Set(['VAD', 'id', 'join', 'lobby', 'setHost']);
+const INTERNAL_EVENTS = new Set(['connect', 'disconnect', 'connect_error', 'connect_timeout', 'error']);
 
 class CompatibleSocket {
 	private socket?: AnySocket;
@@ -75,7 +78,13 @@ class CompatibleSocket {
 			return this;
 		}
 		if (!this.socket?.connected) {
+			if (COALESCED_PENDING_EVENTS.has(event)) {
+				this.pendingEmits = this.pendingEmits.filter((emit) => emit.event !== event);
+			}
 			this.pendingEmits.push({ event, args });
+			if (this.pendingEmits.length > MAX_PENDING_EMITS) {
+				this.pendingEmits = this.pendingEmits.slice(this.pendingEmits.length - MAX_PENDING_EMITS);
+			}
 			return this;
 		}
 		this.socket.emit(event, ...args);
@@ -110,7 +119,7 @@ class CompatibleSocket {
 			forceNew: true,
 		}) as unknown as AnySocket;
 		this.activateSocket(socket, '4');
-		this.fallbackTimer = window.setTimeout(() => this.fallbackToV2(), SOCKET_CONNECT_TIMEOUT_MS + 500);
+		this.fallbackTimer = window.setTimeout(() => this.fallbackToV2(), V4_FALLBACK_DELAY_MS);
 	}
 
 	private fallbackToV2(error?: unknown): void {
@@ -160,7 +169,11 @@ class CompatibleSocket {
 				return;
 			}
 			this.dispatch('connect_error', error);
-			this.dispatch('error', error);
+		});
+		socket.on('connect_timeout', (error: unknown) => {
+			if (this.socket === socket) {
+				this.dispatch('connect_timeout', error);
+			}
 		});
 		socket.on('error', (error: unknown) => {
 			if (this.socket !== socket) {

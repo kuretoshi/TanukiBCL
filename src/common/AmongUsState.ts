@@ -85,6 +85,31 @@ export interface Player {
 	isDummy: boolean;
 }
 
+export function hasVisibleAppearanceChanged(player: Player): boolean {
+	const normalizeHatId = (hatId: string | undefined) => (hatId === 'hat_NoHat' ? '' : hatId || '');
+	const normalizeSkinId = (skinId: string | undefined) => (skinId === 'skin_None' ? '' : skinId || '');
+	const normalizeVisorId = (visorId: string | undefined) => (visorId === 'visor_EmptyVisor' ? '' : visorId || '');
+
+	if (player.currentOutfit <= 0 || player.currentOutfit > 10) {
+		return false;
+	}
+
+	const originalAppearance = [
+		player.colorId,
+		normalizeHatId(player.hatId),
+		normalizeSkinId(player.skinId),
+		normalizeVisorId(player.visorId),
+	].join('|');
+	const visibleAppearance = [
+		player.appearanceColorId,
+		normalizeHatId(player.appearanceHatId),
+		normalizeSkinId(player.appearanceSkinId),
+		normalizeVisorId(player.appearanceVisorId),
+	].join('|');
+
+	return visibleAppearance !== originalAppearance;
+}
+
 export enum GameState {
 	LOBBY,
 	TASKS,

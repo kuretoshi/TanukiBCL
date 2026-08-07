@@ -5,6 +5,7 @@ import { GameStateContext, HostSettingsContext, PlayerColorContext, SettingsCont
 import {
 	AmongUsState,
 	GameState,
+	hasVisibleAppearanceChanged,
 	Player,
 	SocketClientMap,
 	AudioConnected,
@@ -76,6 +77,7 @@ interface VoiceAvatarProps {
 	socketConfig?: SocketConfig;
 	showborder?: boolean;
 	isUsingRadio?: boolean;
+	hideWhenAppearanceChanged?: boolean;
 	onConfigChange?: () => void;
 	mod: any;
 	colorPalette?: string[];
@@ -133,6 +135,8 @@ interface ConnectionStuff {
 
 interface SocketError {
 	message?: string;
+	type?: string;
+	description?: string;
 }
 
 interface ClientPeerConfig {
@@ -141,6 +145,32 @@ interface ClientPeerConfig {
 }
 
 type VoiceDisguiseMode = 'none' | 'skin-changed';
+
+function getSocketErrorMessage(error: SocketError | string | unknown): string {
+	if (typeof error === 'string') {
+		return error;
+	}
+	if (error && typeof error === 'object' && 'message' in error) {
+		return String((error as SocketError).message || '');
+	}
+	return String(error || '');
+}
+
+function isTransientSocketError(error: SocketError | string | unknown): boolean {
+	const socketError = (error || {}) as SocketError;
+	const message = getSocketErrorMessage(error).toLowerCase();
+	const type = String(socketError.type || '').toLowerCase();
+	const description = String(socketError.description || '').toLowerCase();
+
+	return (
+		type === 'transporterror' ||
+		message.includes('timeout') ||
+		message.includes('websocket error') ||
+		message.includes('xhr poll error') ||
+		description.includes('websocket') ||
+		description.includes('timeout')
+	);
+}
 
 interface SizeVoiceEffect {
 	direction: PitchShiftDirection;
@@ -330,6 +360,7 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 	const iconSize = Math.max(18, Math.round(30 * scale));
 	const iconFontSize = Math.max(14, Math.round(20 * scale));
 	const displayName = props.player.appearanceName || props.player.name;
+	const hideAvatar = props.hideWhenAppearanceChanged === true && hasVisibleAppearanceChanged(props.player);
 	let statusIcon: React.ReactNode = null;
 
 	if (props.player.bugged) {
@@ -370,69 +401,73 @@ const VoiceAvatar: React.FC<VoiceAvatarProps> = function (props: VoiceAvatarProp
 				cursor: 'pointer',
 			}}
 		>
-			<div
-				style={{
-					position: 'absolute',
-					left: Math.round(17 * scale),
-					bottom: Math.round(2 * scale),
-					width: Math.round(67 * scale),
-					height: Math.round(13 * scale),
-					borderRadius: '50%',
-					background: 'rgba(0, 0, 0, 0.32)',
-				}}
-			/>
-			<div
-				style={{
-					position: 'absolute',
-					left: imageLeft,
-					top: imageTop,
-					width: imageWidth,
-					height: imageHeight,
-					filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
-				}}
-			>
-				<div
-					style={{
-						position: 'absolute',
-						inset: 0,
-						background,
-						WebkitMaskImage: `url(${liteCrewmateImage})`,
-						maskImage: `url(${liteCrewmateImage})`,
-						WebkitMaskRepeat: 'no-repeat',
-						maskRepeat: 'no-repeat',
-						WebkitMaskSize: 'contain',
-						maskSize: 'contain',
-						WebkitMaskPosition: 'center',
-						maskPosition: 'center',
-					}}
-				/>
-				<img
-					src={liteCrewmateImage}
-					alt=""
-					style={{
-						position: 'absolute',
-						inset: 0,
-						width: '100%',
-						height: '100%',
-						objectFit: 'contain',
-						mixBlendMode: 'multiply',
-						opacity: 0.72,
-						pointerEvents: 'none',
-					}}
-				/>
-				<img
-					src={liteVisorImage}
-					alt=""
-					style={{
-						position: 'absolute',
-						inset: 0,
-						width: '100%',
-						height: '100%',
-						objectFit: 'contain',
-						pointerEvents: 'none',
-					}}
+			{!hideAvatar && (
+				<>
+					<div
+						style={{
+							position: 'absolute',
+							left: Math.round(17 * scale),
+							bottom: Math.round(2 * scale),
+							width: Math.round(67 * scale),
+							height: Math.round(13 * scale),
+							borderRadius: '50%',
+							background: 'rgba(0, 0, 0, 0.32)',
+						}}
 					/>
-			</div>
+					<div
+						style={{
+							position: 'absolute',
+							left: imageLeft,
+							top: imageTop,
+							width: imageWidth,
+							height: imageHeight,
+							filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
+						}}
+					>
+						<div
+							style={{
+								position: 'absolute',
+								inset: 0,
+								background,
+								WebkitMaskImage: `url(${liteCrewmateImage})`,
+								maskImage: `url(${liteCrewmateImage})`,
+								WebkitMaskRepeat: 'no-repeat',
+								maskRepeat: 'no-repeat',
+								WebkitMaskSize: 'contain',
+								maskSize: 'contain',
+								WebkitMaskPosition: 'center',
+								maskPosition: 'center',
+							}}
+						/>
+						<img
+							src={liteCrewmateImage}
+							alt=""
+							style={{
+								position: 'absolute',
+								inset: 0,
+								width: '100%',
+								height: '100%',
+								objectFit: 'contain',
+								mixBlendMode: 'multiply',
+								opacity: 0.72,
+								pointerEvents: 'none',
+							}}
+						/>
+						<img
+							src={liteVisorImage}
+							alt=""
+							style={{
+								position: 'absolute',
+								inset: 0,
+								width: '100%',
+								height: '100%',
+								objectFit: 'contain',
+								pointerEvents: 'none',
+							}}
+						/>
+					</div>
+				</>
+			)}
 			{statusIcon && (
 				<div
 					style={{
@@ -1659,21 +1694,40 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 	useEffect(() => {
 		// (async function anyNameFunction() {
 		let currentLobby = '';
+		let currentPlayerId = 0;
+		let currentClientId = 0;
+		let currentIsHost = false;
 		// Connect to voice relay server
 		connectionStuff.current.socket = connectCompatibleSocket(settings.serverURL);
 
 		const { socket } = connectionStuff.current;
 
 		socket.on('error', (error: SocketError) => {
-			if (error.message) {
-				setError(error.message);
+			if (isTransientSocketError(error)) {
+				console.warn('transient socketIO error:', error);
+				return;
+			}
+			const message = getSocketErrorMessage(error);
+			if (message) {
+				setError(message);
 			}
 			console.error('socketIO error:', error);
 			currentLobby = 'MENU';
 		});
+		socket.on('connect_error', (error: SocketError) => {
+			console.warn('socketIO connect error; reconnecting:', error);
+		});
+		socket.on('connect_timeout', (error: SocketError) => {
+			console.warn('socketIO connect timeout; reconnecting:', error);
+		});
 		socket.on('connect', () => {
 			setConnected(true);
+			setError('');
 			console.log('CONNECTED??');
+			if (currentLobby !== '' && currentLobby !== 'MENU' && currentClientId !== 0) {
+				socket.emit('id', currentPlayerId, currentClientId);
+				socket.emit('join', currentLobby, currentPlayerId, currentClientId, currentIsHost);
+			}
 		});
 		socket.on('compatible_socket_version', (socketIoVersion: CompatibleSocketVersion) => {
 			socketIoVersionRef.current = socketIoVersion;
@@ -1687,7 +1741,6 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 
 		socket.on('disconnect', () => {
 			setConnected(false);
-			currentLobby = 'MENU';
 			console.log('DISCONNECTED??');
 		});
 
@@ -1855,6 +1908,9 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 				console.log('connect called..', lobbyCode);
 				setOtherVAD({});
 				setOtherTalking({});
+				currentPlayerId = playerId;
+				currentClientId = clientId;
+				currentIsHost = isHost;
 				if (lobbyCode === 'MENU') {
 					Object.keys(peerConnectionsRef.current).forEach((k) => {
 						disconnectPeer(k);
@@ -2432,6 +2488,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 									borderColor="#2ecc71"
 									connectionState={connected ? 'connected' : 'disconnected'}
 									isUsingRadio={myPlayer?.isImpostor && impostorRadioClientId.current === myPlayer.clientId}
+									hideWhenAppearanceChanged
 									talking={talking}
 									isAlive={!myPlayer.isDead}
 									size={isLiteApp ? 80 : 100}
@@ -2526,6 +2583,7 @@ const Voice: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceP
 											!(player.disconnected || player.bugged) &&
 											impostorRadioClientId.current === player.clientId
 										}
+										hideWhenAppearanceChanged
 										size={50}
 										socketConfig={socketConfig}
 										onConfigChange={() => setSetting(`playerConfigMap.${player.nameHash}`, playerConfigs[player.nameHash])}
