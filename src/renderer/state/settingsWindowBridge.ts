@@ -40,7 +40,22 @@ function sendHostId(): void {
 	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_HOST_ID_CHANGED, hostId);
 }
 
+function sendDebugVoice(): void {
+	const voice = voiceController.getSnapshot();
+	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_DEBUG_VOICE_CHANGED, {
+		connected: voice.connected,
+		error: voice.error,
+		muted: voice.muted,
+		deafened: voice.deafened,
+		talking: voice.talking,
+		otherTalking: voice.otherTalking,
+		playerSocketIds: voice.playerSocketIds,
+		audioConnected: voice.audioConnected,
+		impostorRadioClientId: voice.impostorRadioClientId,
+	});
+}
 function sendAll(): void {
+	sendDebugVoice();
 	sendGameState();
 	sendPlayerColors();
 	sendActiveLobbySettings();
@@ -54,6 +69,7 @@ function onGameStoreChanged(): void {
 }
 
 function onVoiceChanged(): void {
+	sendDebugVoice();
 	const { activeLobbySettings, hostId } = voiceController.getSnapshot();
 	if (activeLobbySettings !== lastSentActiveLobbySettings) sendActiveLobbySettings();
 	if (hostId !== lastSentHostId) sendHostId();

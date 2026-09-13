@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import vm from 'node:vm';
+import { pbkdf2Sync } from 'node:crypto';
 
 globalThis.window = { electron: { ipcRenderer: { on() {}, off() {}, send() {} }, shell: {}, platform: 'win32' } };
 const cache = resolve('.tools/test-cache');
@@ -19,9 +20,17 @@ async function bundle(entry, plugins = []) {
   return import(pathToFileURL(file).href);
 }
 const { selectVoiceEffect } = await bundle('src/renderer/voice/voiceEffectRules.ts');
+const { verifyDebugPassword } = await bundle('src/main/debugAuth.ts');
+const authSalt = '0123456789abcdef0123456789abcdef';
+const authConfig = JSON.stringify({ salt: authSalt, hash: pbkdf2Sync('test-only-password', Buffer.from(authSalt, 'hex'), 100000, 32, 'sha256').toString('hex') });
+assert.equal(verifyDebugPassword('test-only-password', authConfig), true);
+for (const password of ['', 'incorrect', null, {}, 'x'.repeat(1025)]) assert.equal(verifyDebugPassword(password, authConfig), false);
+for (const config of ['', '{}', 'invalid']) assert.equal(verifyDebugPassword('test-only-password', config), false);
+console.log('ok developer password: correct password only, invalid and missing configuration rejected');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
 const { AudioController } = await bundle('src/renderer/voice/AudioController.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
+const { normalizeMeetingState } = await bundle('src/common/meetingState.ts');
 const { MapType, CameraLocation } = await bundle('src/common/AmongusMap.ts');
 const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.ts');
 const lobby = { ...defaultLobbySettings };
@@ -36,8 +45,8 @@ assert.equal(rule(state, { ...lobby, voiceEffectEnabled: false }), null);
 for (const key of ['isDead', 'disconnected', 'bugged', 'isDummy']) assert.equal(rule(state, lobby, me, { ...other, [key]: true }), null);
 assert.equal(rule(state, lobby, { ...me, isDead: true }), null);
 assert.equal(rule(state, { ...lobby, impostorRadioEnabled: true }, { ...me, isImpostor: true }, { ...other, isImpostor: true }, 2), null);
-assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 1.5, specialRole: 'GIANT' }).direction, 'down');
-assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 0.5, specialRole: 'MINI' }).direction, 'up');
+assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 1.5, specialRole: 'JUMBO' }), null);
+assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 0.5, specialRole: 'MINI' }), null);
 console.log('ok voice effects: disguise, size, meeting, death, radio and host toggle');
 
 const spatial = (changes = {}) => calculateVoiceAudio({ state, settings, activeLobbySettings: lobby, me, other, maxDistance: 5.32, impostorRadioClientId: -1, ...changes });
@@ -53,6 +62,33 @@ assert.equal(radio.muffle.type, 'highpass');
 assert.equal(spatial({ me: { ...me, inVent: true } }).muffle.type, 'lowpass');
 assert.equal(spatial().muffle, false);
 console.log('ok spatial audio: distance, Airship, third-party haunting, radio/vent filter restoration');
+
+const disguised = { ...other, name: 'Original', nameHash: 123, playerConfigId: 456,
+  colorId: 2, hatId: 'original-hat', skinId: 'original-skin', visorId: 'original-visor',
+  currentOutfit: 3, appearanceName: 'Target', appearanceColorId: 4, appearanceHatId: 'target-hat',
+  appearanceSkinId: 'target-skin', appearanceVisorId: 'target-visor', appearanceId: 'target',
+  shiftedColor: 4, sizeScale: 1.5, inVent: true, specialRole: 'JUMBO' };
+const taskSnapshot = { ...state, players: [me, disguised], mixupSabotaged: true, camouflaged: true };
+assert.equal(normalizeMeetingState(taskSnapshot), taskSnapshot);
+const meeting = normalizeMeetingState({ ...taskSnapshot, gameState: GameState.DISCUSSION });
+const restored = meeting.players[1];
+assert.deepEqual([restored.appearanceName, restored.appearanceColorId, restored.appearanceHatId,
+  restored.appearanceSkinId, restored.appearanceVisorId, restored.appearanceId],
+  ['Original', 2, 'original-hat', 'original-skin', 'original-visor', '2|original-hat|original-skin|original-visor']);
+assert.equal(restored.currentOutfit, 0); assert.equal(restored.shiftedColor, -1);
+assert.equal(restored.inVent, false); assert.equal(restored.sizeScale, 1);
+assert.equal(restored.clientId, disguised.clientId); assert.equal(restored.nameHash, 123); assert.equal(restored.playerConfigId, 456);
+assert.equal(meeting.mixupSabotaged, false); assert.equal(meeting.camouflaged, false);
+assert.equal(disguised.appearanceName, 'Target');
+assert.equal(normalizeMeetingState(taskSnapshot).players[1].appearanceName, 'Target');
+assert.equal(rule(meeting, lobby, me, restored), null);
+const meetingAudio = spatial({ state: { ...meeting, map: MapType.AIRSHIP, comsSabotaged: true },
+  me: { ...me, x: -100, y: -100, inVent: true }, other: { ...restored, x: 100, y: 100 },
+  activeLobbySettings: { ...lobby, wallsBlockAudio: true, commsSabotage: true, meetingGhostOnly: true } });
+assert.equal(meetingAudio.gain, 1); assert.deepEqual(meetingAudio.panPosition, [0, 0]);
+assert.equal(meetingAudio.muffle, false); assert.equal(meetingAudio.reverb, false);
+assert.equal(spatial({ state: meeting, other: { ...restored, isDead: true } }).gain, 0);
+console.log('ok meeting reset: canonical appearance, stable identity, normal voice and task-state preservation');
 
 class Node {
   connections = new Set(); gain = { value: 1 }; frequency = { value: 0 }; Q = { value: 0 }; delayTime = { value: 0 };
@@ -81,6 +117,96 @@ audio.removePeer('first'); assert.ok(audio.peers.has('second')); assert.equal(co
 console.log('ok audio graph: effects release, route restoration and independent peer cleanup');
 
 const readerSource = ts.createSourceFile('GameReader.ts', await readFile('src/main/GameReader.ts', 'utf8'), ts.ScriptTarget.Latest, true);
+const { modList } = await bundle('src/common/Mods.ts');
+let detectModMethod;
+function findModDetector(node) {
+  if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'getInstalledMods') detectModMethod = node;
+  ts.forEachChild(node, findModDetector);
+}
+findModDetector(readerSource);
+let loadedModule;
+let loadedModuleName = 'SuperNewRoles.dll';
+const detectMod = vm.runInNewContext(ts.transpileModule(`({ ${detectModMethod.getText(readerSource)} })`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2020 },
+}).outputText, { modList, path: { basename: value => value.split(/[\\/]/).pop() }, findModule: (name, pid) => {
+  assert.ok(['SuperNewRoles.dll', 'Nebula.dll'].includes(name)); assert.equal(pid, 42);
+  if (!loadedModule || name !== loadedModuleName) throw new Error('module not found');
+  return loadedModule;
+} }).getInstalledMods;
+const modReader = { pid: 42, readPluginFiles: () => [] };
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
+loadedModule = { th32ProcessID: 42, szModule: 'SuperNewRoles.dll', modBaseAddr: 100, modBaseSize: 200, szExePath: 'launcher/BepInEx/plugins/SuperNewRoles.dll' };
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'SUPER_NEW_ROLES');
+assert.ok(modReader.loadedMods.includes(loadedModule.szExePath));
+loadedModuleName = 'Nebula.dll';
+loadedModule = { th32ProcessID: 42, szModule: 'Nebula.dll', modBaseAddr: 100, modBaseSize: 200, szExePath: 'game/BepInEx/nebula/Nebula.dll' };
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NoS');
+assert.ok(modReader.loadedMods.includes(loadedModule.szExePath));
+loadedModule.th32ProcessID = 99;
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
+loadedModule.th32ProcessID = 42;
+loadedModule.szModule = 'SuperNewRoles.dll';
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
+loadedModule = undefined;
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
+assert.equal(modReader.loadedMods.length, 0);
+modReader.readPluginFiles = () => ['TheOtherRoles.dll'];
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'THE_OTHER_ROLES');
+modReader.readPluginFiles = () => ['SuperNewRoles.dll'];
+assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'SUPER_NEW_ROLES');
+console.log('ok MOD detection: launcher module, Vanilla, late loading and existing folder fallback');
+let checkProcessMethod;
+function findProcessChecker(node) {
+  if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'checkProcessOpen') checkProcessMethod = node;
+  ts.forEachChild(node, findProcessChecker);
+}
+findProcessChecker(readerSource);
+let runningProcesses = [{ szExeFile: 'Among Us.exe', th32ProcessID: 42 }];
+const checkProcess = vm.runInNewContext(ts.transpileModule(`({ ${checkProcessMethod.getText(readerSource)} })`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2020 },
+}).outputText, { modList, getProcesses: () => runningProcesses, targetProcessName: 'Among Us.exe', targetProcessId: 0, targetProcessIndex: 0,
+  console: { log() {} }, IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } }).checkProcessOpen;
+const switchingReader = { pid: 42, amongUs: {}, loadedMod: modList.find(m => m.id === 'SUPER_NEW_ROLES'), loadedMods: ['old.dll'],
+  nextModCheck: 0, gamePath: 'game/Among Us.exe', getInstalledMods: () => modList.find(m => m.id === 'NoS'), sendIPC() {} };
+await checkProcess.call(switchingReader);
+assert.equal(switchingReader.loadedMod.id, 'NoS');
+runningProcesses = [];
+await checkProcess.call(switchingReader);
+assert.equal(switchingReader.loadedMod.id, 'NONE');
+assert.equal(switchingReader.loadedMods.length, 0);
+console.log('ok MOD refresh: previous SNR result corrected to Nebula and cleared on game exit');
+let parsePlayerMethod;
+function findParser(node) {
+  if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'parsePlayer') parsePlayerMethod = node;
+  ts.forEachChild(node, findParser);
+}
+findParser(readerSource);
+assert.ok(parsePlayerMethod);
+const parsePlayer = vm.runInNewContext(ts.transpileModule(`({ ${parsePlayerMethod.getText(readerSource)} })`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2020 },
+}).outputText, { RainbowColorId: -99 }).parsePlayer;
+const originalOutfit = { name: 'Original', color: 2, hat: 'original-hat', skin: 'original-skin', visor: 'original-visor' };
+const targetOutfit = { name: 'Target', color: 4, hat: 'target-hat', skin: 'target-skin', visor: 'target-visor' };
+for (const entries of [[[3, targetOutfit], [0, originalOutfit]], [[0, originalOutfit], [3, targetOutfit]]]) {
+  const fixture = {
+    PlayerStruct: { report: () => ({ data: { objectPtr: 10, outfitsPtr: 20, rolePtr: 30, clientId: 2, disconnected: 0, dead: 0, id: 2 } }) },
+    offsets: { player: { currentOutfit: 'outfit', remoteX: 'x', remoteY: 'y', roleTeam: 'role', isDummy: 'dummy', inVent: 'vent',
+      outfit: { playerName: 'name', colorId: 'color', hatId: 'hat', skinId: 'skin', visorId: 'visor' } } },
+    playercolors: Array(18), rainbowColor: 99,
+    readString: value => value || '',
+    readMemory: (_type, address, offset) => offset === undefined ? address : typeof address === 'object' ? address[offset] : ({ outfit: 3, x: 1, y: 2, role: 1, dummy: false, vent: 0 }[offset]),
+    readDictionary: (_ptr, _limit, visit) => entries.forEach(([key, value], index) => visit(key, value, index)),
+    readRoleSizeScale: () => { throw new Error('size inference must stay disabled'); }, getSpecialRoleFromSize: () => { throw new Error('special role inference must stay disabled'); }, formatRoleLabel: () => 'IMPOSTOR',
+    hashCode: value => value.length,
+  };
+  const parsed = parsePlayer.call(fixture, 1, Buffer.alloc(0));
+  assert.equal(parsed.sizeScale, 1); assert.equal(parsed.specialRole, 'UNKNOWN');
+  assert.equal(parsed.name, 'Original'); assert.equal(parsed.colorId, 2); assert.equal(parsed.skinId, 'original-skin');
+  assert.equal(parsed.appearanceName, 'Target'); assert.equal(parsed.appearanceSkinId, 'target-skin');
+  const reset = normalizeMeetingState({ ...meeting, players: [parsed] }).players[0];
+  assert.equal(reset.appearanceName, 'Original'); assert.equal(reset.appearanceSkinId, 'original-skin');
+}
+console.log('ok outfit parsing: original outfit restored regardless of dictionary order');
 let notificationBlock;
 function findColorLoader(node) {
   if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'loadColors') {

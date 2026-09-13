@@ -15,6 +15,8 @@ if (typeof window !== 'undefined' && window.location) {
 		import('./views/App');
 	} else if (view === 'lobbies') {
 		import('./views/LobbyBrowser/LobbyBrowserContainer');
+	} else if (view === 'debug') {
+		import('./views/DebugWindow');
 	} else if (view === 'inquiry') {
 		import('./views/InquiryWindow');
 	} else if (view === 'settings') {

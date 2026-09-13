@@ -91,6 +91,16 @@ npm.cmd run dev
 
 Lite版の開発起動では、現在のPowerShellで`$env:BETTERCREWLINK_LITE = '1'`を設定してから実行します。通常版へ戻すときはこの環境変数を削除します。
 
+3.2.1では、設定の「詳細設定」→「デバッグ情報を開く」で開発者用パスワードを入力すると、リアルタイム一覧・ゲーム状態・音声接続・ログを別ウィンドウで確認できます。役職は現在の読み取り処理が判定できる情報を表示します（ミニ・ジャンボの判定は停止中）。開発起動ではデバッグ指定時に自動表示しますが、配布版は認証が必要です。
+
+開発者用パスワードは、ビルド前に次のコマンドで設定します。確認を含め2回入力します。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/set-debug-password.ps1
+```
+
+照合用ハッシュをGit管理対象外の`.tools/debug-password.json`に保存します。通常版・Lite版に適用するには、その後アプリと両インストーラーを再ビルドしてください。未設定では認証できません。これはローカルアプリの操作制限であり、アプリ自体を改変する利用者まで防ぐものではありません。
+
 ### Windows 64bitビルド
 
 ```powershell
@@ -99,8 +109,8 @@ npm.cmd run build
 .\node_modules\.bin\electron-builder.cmd --win --x64 --config electron-builder-lite.yml --publish never
 ```
 
-- 通常版: `dist/TanukiBCL-Setup-3.2.0.exe`
-- Lite版: `dist-lite/TanukiBCLLite-Setup-3.2.0.exe`
+- 通常版: `dist/TanukiBCL-Setup-3.2.1.exe`
+- Lite版: `dist-lite/TanukiBCLLite-Setup-3.2.1.exe`
 
 N-API対応の検証済みビルドを使うため、配布設定の`npmRebuild`は無効です。ネイティブ依存を変更した場合は、NodeとElectronの両方で読み込みとメモリ読み取りを再検証してください。今回の配布確認対象はWindows x64です。
 

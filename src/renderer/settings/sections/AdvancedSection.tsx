@@ -1,4 +1,6 @@
 import React from 'react';
+import Button from '@mui/material/Button';
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { TFunction } from 'i18next';
 import { ISettings } from '../../../common/ISettings';
 import { ipcRenderer } from '../../lib/electron-bridge';
@@ -13,8 +15,64 @@ export interface AdvancedSectionProps {
 }
 
 const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings, setSettings, confirm }) {
+	const [passwordOpen, setPasswordOpen] = React.useState(false);
+	const [password, setPassword] = React.useState('');
+	const [passwordError, setPasswordError] = React.useState('');
+	const [authenticating, setAuthenticating] = React.useState(false);
+	const closePassword = () => {
+		if (authenticating) return;
+		setPasswordOpen(false);
+		setPassword('');
+		setPasswordError('');
+	};
+	const authenticate = async () => {
+		if (authenticating || !password) return;
+		setAuthenticating(true);
+		try {
+			if (await ipcRenderer.invoke('OPEN_DEBUG', password)) {
+				setPasswordOpen(false);
+				setPasswordError('');
+			} else setPasswordError('認証できませんでした。パスワードと開発者用の設定を確認してください。');
+		} catch {
+			setPasswordError('認証処理に失敗しました。再試行してください。');
+		} finally {
+			setPassword('');
+			setAuthenticating(false);
+		}
+	};
 	return (
 		<>
+			<Dialog open={passwordOpen} onClose={closePassword} fullWidth maxWidth="xs">
+				<DialogTitle>開発者認証</DialogTitle>
+				<form
+					onSubmit={(event) => {
+						event.preventDefault();
+						void authenticate();
+					}}
+				>
+					<DialogContent>
+						<TextField
+							autoFocus
+							fullWidth
+							type="password"
+							label="パスワード"
+							value={password}
+							disabled={authenticating}
+							error={!!passwordError}
+							helperText={passwordError || '開発者用パスワードを入力してください。'}
+							onChange={(event) => setPassword(event.target.value)}
+						/>
+					</DialogContent>
+					<DialogActions>
+						<Button onClick={closePassword} disabled={authenticating}>
+							キャンセル
+						</Button>
+						<Button type="submit" disabled={authenticating || !password}>
+							開く
+						</Button>
+					</DialogActions>
+				</form>
+			</Dialog>
 			<SettingsSection title={t('settings.advanced.title')}>
 				<SelectRow
 					label={t('settings.advanced.voice_server')}
@@ -56,6 +114,18 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 				/>
 			</SettingsSection>
 
+			<SettingsSection title="デバッグ">
+				<SettingRow
+					label="デバッグ情報"
+					description="ゲーム状態・音声接続・ログを別ウィンドウで表示します。"
+					controlWidth="auto"
+					control={
+						<Button variant="outlined" onClick={() => setPasswordOpen(true)}>
+							デバッグ情報を開く
+						</Button>
+					}
+				/>
+			</SettingsSection>
 			<SettingsSection title={t('settings.beta.title')}>
 				<SwitchRow
 					label={t('settings.beta.mobilehost')}

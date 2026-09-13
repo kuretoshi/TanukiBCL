@@ -226,6 +226,7 @@ export const initializeIpcListeners = (): void => {
 	ipcMain.on(IpcMessages.SEND_TO_SETTINGS, (_, event: IpcSettingsMessages, ...args: unknown[]) => {
 		try {
 			if (global.settingsWindow) global.settingsWindow.webContents.send(event, ...args);
+			if (global.debugWindow) global.debugWindow.webContents.send(event, ...args);
 		} catch {
 			/*empty*/
 		}

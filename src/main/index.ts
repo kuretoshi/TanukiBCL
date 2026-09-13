@@ -1,5 +1,8 @@
 import electronUpdater from 'electron-updater';
-import { app, BrowserWindow, ipcMain, session, net, protocol } from 'electron';
+import { verifyDebugPassword } from './debugAuth';
+import { setVoiceDebugEnabled } from './GameReader';
+import { app, BrowserWindow, ipcMain, session, net, protocol, dialog } from 'electron';
+import { copyFile } from 'node:fs/promises';
 import windowStateKeeper from 'electron-window-state';
 import { platform } from 'os';
 import { join as joinPath } from 'path';
@@ -18,8 +21,16 @@ import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
-import { initializeDebugLogging, registerWindowLogging } from './logger';
+import {
+	initializeDebugLogging,
+	registerWindowLogging,
+	isDebugLoggingEnabled,
+	setDebugLoggingEnabled,
+	readDebugLog,
+	getLogFilePaths,
+} from './logger';
 const args = getAppArgs();
+const debugLoggingAtStartup = !!isDebugLoggingEnabled();
 
 const isDevelopment = !app.isPackaged;
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
@@ -71,6 +82,7 @@ declare global {
 	var lobbyBrowser: BrowserWindow | null;
 	var settingsWindow: BrowserWindow | null;
 	var inquiryWindow: BrowserWindow | null;
+	var debugWindow: BrowserWindow | null;
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -94,6 +106,7 @@ global.overlay = null;
 global.settingsWindow = null;
 global.lobbyBrowser = null;
 global.inquiryWindow = null;
+global.debugWindow = null;
 const store = new Store<ISettings>({ name: getVariantStoreName() });
 let isQuitting = false;
 app.commandLine.appendSwitch('disable-pinch');
@@ -113,7 +126,15 @@ function closeAppWindows() {
 		/* empty */
 	}
 
-	const windows = [global.inquiryWindow, global.settingsWindow, global.lobbyBrowser, global.overlay, global.mainWindow];
+	const windows = [
+		global.debugWindow,
+		global.inquiryWindow,
+		global.settingsWindow,
+		global.lobbyBrowser,
+		global.overlay,
+		global.mainWindow,
+	];
+	global.debugWindow = null;
 	global.inquiryWindow = null;
 	global.settingsWindow = null;
 	global.lobbyBrowser = null;
@@ -355,6 +376,51 @@ function createSettingsWindow() {
 	return window;
 }
 
+function createDebugWindow() {
+	setVoiceDebugEnabled(true);
+	setDebugLoggingEnabled(true);
+	const debugWindowState = windowStateKeeper({
+		file: 'debug-window-state.json',
+		defaultWidth: 900,
+		defaultHeight: 680,
+	});
+
+	const window = new BrowserWindow({
+		title: isLiteApp ? 'TanukiBCL Lite Debug' : 'TanukiBCL Debug',
+		width: debugWindowState.width,
+		height: debugWindowState.height,
+		x: debugWindowState.x,
+		y: debugWindowState.y,
+		minWidth: 620,
+		minHeight: 440,
+		backgroundColor: '#25232a',
+		resizable: true,
+		frame: false,
+		fullscreenable: false,
+		closable: true,
+		maximizable: true,
+		show: false,
+		webPreferences: {
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
+		},
+	});
+	debugWindowState.manage(window);
+	registerWindowLogging(window, 'debug');
+
+	window.once('ready-to-show', () => window.show());
+	window.on('closed', () => {
+		global.debugWindow = null;
+		setVoiceDebugEnabled(!!voiceDebugEnabled);
+		setDebugLoggingEnabled(debugLoggingAtStartup || !!voiceDebugEnabled);
+	});
+
+	loadView(window, 'debug');
+	return window;
+}
+
 function createInquiryWindow() {
 	const inquiryWindowState = windowStateKeeper({
 		file: 'inquiry-window-state.json',
@@ -551,6 +617,8 @@ if (!gotTheLock) {
 		// on macOS it is common to re-create a window even after all windows have been closed
 		if (global.mainWindow === null) {
 			global.mainWindow = createMainWindow();
+			if (isDevelopment && !global.debugWindow && (voiceDebugEnabled || isDebugLoggingEnabled()))
+				global.debugWindow = createDebugWindow();
 		}
 
 		session.fromPartition('default').setPermissionRequestHandler((webContents, permission, callback) => {
@@ -597,6 +665,7 @@ if (!gotTheLock) {
 		initializeIpcHandlers();
 		initSettingsIpc();
 		global.mainWindow = createMainWindow();
+		if (isDevelopment && (voiceDebugEnabled || isDebugLoggingEnabled())) global.debugWindow = createDebugWindow();
 
 		if (isDevelopment && !isLiteApp) {
 			const { installExtension, REACT_DEVELOPER_TOOLS } = await import('electron-devtools-installer');
@@ -640,6 +709,46 @@ if (!gotTheLock) {
 		autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
 	});
 
+	ipcMain.handle('debug:get-logs', (event) => {
+		if (event.sender !== global.debugWindow?.webContents) return '';
+		return readDebugLog();
+	});
+	let savingDebugLog = false;
+	ipcMain.handle('debug:save-log', async (event) => {
+		const window = global.debugWindow;
+		if (!window || event.sender !== window.webContents || savingDebugLog) return { status: 'cancelled' };
+		savingDebugLog = true;
+		try {
+			const { canceled, filePath } = await dialog.showSaveDialog(window, {
+				title: 'デバッグログを保存',
+				defaultPath: joinPath(
+					app.getPath('documents'),
+					`TanukiBCL-debug-${new Date().toISOString().replace(/[:.]/g, '-')}.log`
+				),
+				filters: [{ name: 'ログファイル', extensions: ['log'] }],
+			});
+			if (canceled || !filePath) return { status: 'cancelled' };
+			await copyFile(getLogFilePaths()[0], filePath);
+			return { status: 'saved' };
+		} catch {
+			return { status: 'error' };
+		} finally {
+			savingDebugLog = false;
+		}
+	});
+	let nextDebugAttempt = 0;
+	ipcMain.handle('OPEN_DEBUG', (event, password: unknown) => {
+		if (event.sender !== global.settingsWindow?.webContents || Date.now() < nextDebugAttempt) return false;
+		nextDebugAttempt = Date.now() + 1000;
+		if (!verifyDebugPassword(password)) return false;
+		if (!global.debugWindow) global.debugWindow = createDebugWindow();
+		else {
+			if (global.debugWindow.isMinimized()) global.debugWindow.restore();
+			global.debugWindow.show();
+			global.debugWindow.focus();
+		}
+		return true;
+	});
 	ipcMain.on('OPEN_INQUIRY', () => {
 		if (!global.inquiryWindow) global.inquiryWindow = createInquiryWindow();
 		else {

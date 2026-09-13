@@ -117,13 +117,6 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			break;
 
 		case GameState.DISCUSSION:
-			if (
-				state.map === MapType.AIRSHIP &&
-				activeLobbySettings.wallsBlockAudio &&
-				!me.isDead &&
-				poseCollide({ x: me.x, y: me.y }, { x: other.x, y: other.y }, state.map, state.closedDoors)
-			)
-				return result;
 			panPos = [0, 0];
 			endGain = 1;
 			if (!me.isDead && other.isDead) {

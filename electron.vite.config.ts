@@ -1,9 +1,14 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+
+const debugAuthPath = resolve(__dirname, '.tools/debug-password.json');
+const debugAuth = existsSync(debugAuthPath) ? readFileSync(debugAuthPath, 'utf8').replace(/^\uFEFF/, '') : '';
 
 export default defineConfig({
 	main: {
+		define: { 'process.env.TANUKI_DEBUG_AUTH': JSON.stringify(debugAuth) },
 		plugins: [externalizeDepsPlugin()],
 		build: {
 			rollupOptions: {

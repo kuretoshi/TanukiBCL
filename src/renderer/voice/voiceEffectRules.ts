@@ -35,6 +35,7 @@ export function selectVoiceEffect(
 	) {
 		return { strength: settings.voiceEffectStrength };
 	}
+	/* TODO: ミニ・ジャンボの判定が完成するまでサイズによるエフェクトを無効化。
 	if (!other.sizeScale || other.specialRole === 'UNKNOWN') return null;
 	const difference = Math.min(1, Math.abs(other.sizeScale - 1));
 	if (difference < 0.12) return null;
@@ -43,4 +44,6 @@ export function selectVoiceEffect(
 		direction: other.sizeScale > 1 ? 'down' : 'up',
 		formantScale: Math.max(0.65, Math.min(1.45, 1 / Math.sqrt(other.sizeScale))),
 	};
+	*/
+	return null;
 }

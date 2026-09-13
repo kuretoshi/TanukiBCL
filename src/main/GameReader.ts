@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { normalizeMeetingState } from '../common/meetingState';
 import { GameInfo } from '../common/GameInfo';
 import memoryjs from 'memoryjs';
 import type { DataType, ModuleObject, ProcessObject } from 'memoryjs';
@@ -42,11 +43,14 @@ const VANILLA_RED_COLOR = 4279308742;
 const VANILLA_COLOR_COUNT = 18;
 const MAX_PLAYER_COLORS = 300;
 const MAX_NOS_PLAYER_COLORS = 512;
-const voiceDebugEnabled =
+let voiceDebugEnabled =
 	process.env.BETTERCREWLINK_DEBUG_OVERLAY === '1' ||
 	args['debug-voice'] ||
 	args.debugVoice ||
 	/debug/i.test(process.execPath);
+export function setVoiceDebugEnabled(enabled: boolean): void {
+	voiceDebugEnabled = enabled;
+}
 const targetProcessName = String(
 	process.env.BETTERCREWLINK_TARGET_PROCESS ||
 		args['target-exe'] ||
@@ -109,6 +113,7 @@ export default class GameReader {
 	pid = -1;
 	loadedMod = modList[0];
 	loadedMods: string[] = [];
+	private nextModCheck = 0;
 	broadcastVersion = -1;
 	offsetsVersion = -1;
 	gamePath = '';
@@ -139,6 +144,7 @@ export default class GameReader {
 					this.gameAssembly = findModule('GameAssembly.dll', this.amongUs.th32ProcessID);
 					this.gamePath = getProcessPath(this.amongUs.handle);
 					this.loadedMod = this.getInstalledMods(this.gamePath);
+					this.nextModCheck = Date.now() + 2000;
 					await this.initializeoffsets();
 					this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, true);
 					break;
@@ -157,17 +163,52 @@ export default class GameReader {
 			}
 		} else if (this.amongUs && (processesOpen.length === 0 || reset)) {
 			this.amongUs = null;
+			this.loadedMod = modList[0];
+			this.loadedMods = [];
 			try {
 				this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, false);
 			} catch {
 				/*empty*/
 			}
 		}
+		// ランチャーがゲーム起動後にDLLを読み込む場合にも追従する。
+		if (this.amongUs && Date.now() >= this.nextModCheck) {
+			this.nextModCheck = Date.now() + 2000;
+			const detectedMod = this.getInstalledMods(this.gamePath);
+			if (detectedMod.id !== this.loadedMod.id) {
+				console.log('MOD detection changed', { pid: this.pid, previous: this.loadedMod.id, current: detectedMod.id });
+			}
+			this.loadedMod = detectedMod;
+		}
 		return;
 	}
 
 	getInstalledMods(filePath: string): AmongusMod {
 		this.loadedMods = this.readPluginFiles(filePath);
+		// SNRランチャーやNebulaは通常のpluginsフォルダ外からMODを読み込む。
+		// 接続対象のPIDに実際にロードされたDLLを優先する。
+		if (this.pid > 0) {
+			for (const [dll, id] of [
+				['SuperNewRoles.dll', 'SUPER_NEW_ROLES'],
+				['Nebula.dll', 'NoS'],
+			] as const) {
+				try {
+					const module = findModule(dll, this.pid);
+					if (
+						module.modBaseAddr &&
+						module.modBaseSize > 0 &&
+						module.th32ProcessID === this.pid &&
+						module.szModule?.toLowerCase() === dll.toLowerCase() &&
+						path.basename(module.szExePath).toLowerCase() === dll.toLowerCase()
+					) {
+						this.loadedMods = [...new Set([...this.loadedMods, module.szExePath || dll])];
+						return modList.find((mod) => mod.id === id)!;
+					}
+				} catch {
+					// 未ロード・プロセス終了時は従来のフォルダ検出へ戻る。
+				}
+			}
+		}
 		for (const file of this.loadedMods) {
 			const mod = modList.find((o) => o.dllStartsWith && file.includes(o.dllStartsWith));
 			if (mod) return mod;
@@ -478,7 +519,7 @@ export default class GameReader {
 					this.lastPlayerPtr = allPlayers;
 				}
 				const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
-				const newState: AmongUsState = {
+				const newState: AmongUsState = normalizeMeetingState({
 					lobbyCode: lobbyCode,
 					lobbyCodeInt,
 					players,
@@ -536,7 +577,7 @@ export default class GameReader {
 								},
 							}
 						: {}),
-				};
+				});
 				//	const stateHasChanged = !equal(this.lastState, newState);
 				if (state !== GameState.MENU || this.oldGameState !== GameState.MENU) {
 					try {
@@ -1400,6 +1441,7 @@ export default class GameReader {
 		return 'Crewmate';
 	}
 
+	/* TODO: ミニ・ジャンボのサイズ推定は未完成のため、一時的に無効化。
 	private readRoleSizeScale(rolePtr: number): number {
 		if (!rolePtr) return 1;
 		const candidates: number[] = [];
@@ -1426,6 +1468,7 @@ export default class GameReader {
 		if (sizeScale <= 0.8) return 'MINI';
 		return 'UNKNOWN';
 	}
+	*/
 
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
 		if (!this.PlayerStruct || !this.offsets) return undefined;
@@ -1474,10 +1517,10 @@ export default class GameReader {
 		if (Object.prototype.hasOwnProperty.call(data, 'name')) {
 			name = this.readString(data.name, 1000).split(/<.*?>/).join('');
 		} else {
-			this.readDictionary(data.outfitsPtr, 12, (k, v, i) => {
+			this.readDictionary(data.outfitsPtr, 12, (k, v) => {
 				const key = this.readMemory<number>('int32', k);
 				const val = this.readMemory<number>('ptr', v);
-				if (key === 0 && i == 0) {
+				if (key === 0) {
 					const namePtr = this.readMemory<number>('pointer', val, this.offsets!.player.outfit.playerName); // 0x40
 					data.color = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
 					name = this.readString(namePtr, 1000).split(/<.*?>/).join('');
@@ -1517,17 +1560,17 @@ export default class GameReader {
 		const x_round = parseFloat(x?.toFixed(4));
 		const y_round = parseFloat(y?.toFixed(4));
 
-		const sizeScale = this.readRoleSizeScale(data.rolePtr);
-		const specialRole = this.getSpecialRoleFromSize(sizeScale);
-		const roleName =
-			specialRole !== 'UNKNOWN'
-				? specialRole
-				: this.formatRoleLabel({
-						roleTeam: data.impostor,
-						isImpostor: data.impostor == 1,
-						isThirdParty: data.impostor != 0 && data.impostor != 1,
-						specialRole,
-					} as Player);
+		// TODO: 判定が完成するまで、サイズと特殊役職は通常値に固定する。
+		// const sizeScale = this.readRoleSizeScale(data.rolePtr);
+		// const specialRole = this.getSpecialRoleFromSize(sizeScale);
+		const sizeScale = 1;
+		const specialRole: Player['specialRole'] = 'UNKNOWN';
+		const roleName = this.formatRoleLabel({
+			roleTeam: data.impostor,
+			isImpostor: data.impostor == 1,
+			isThirdParty: data.impostor != 0 && data.impostor != 1,
+			specialRole,
+		} as Player);
 		const nameHash = this.hashCode(name);
 		const playerConfigId = playerUid ? this.hashCode(playerUid) : nameHash;
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
