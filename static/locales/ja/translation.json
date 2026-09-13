@@ -33,7 +33,20 @@
 				"language": "言語",
 				"enable_warning": "これを有効にすると、あなたのロビーは他のBetterCrewLinkKaiユーザーに公開されます！",
 				"ban_warning": "不適切な表現を使った場合、BetterCrewLinkKaiからBANされます。"
-			}
+			},
+			"impostor_radio_private": "非公開インポスター無線",
+			"impostor_radio_private_description": "近くのクルーには無線中のインポスターの声が聞こえません。",
+			"impostor_radio_private_requires": "先にインポスター無線を有効にしてください。",
+			"host_notice": "ロビー設定はホストが管理します。",
+			"host_notice_you": "あなたがホストです。ロビーではあなたの設定を使います。",
+			"edit_as_host": "変更",
+			"tab_current": "現在のロビー",
+			"tab_mine": "自分の設定",
+			"host": "ホスト",
+			"host_you": "あなた",
+			"host_unknown": "不明",
+			"no_lobby": "ロビーに未接続です。参加または作成すると設定を確認できます。",
+			"mine_notice": "ホスト中はあなたの設定が全員に適用されます。"
 		},
 		"customplatforms": {
 			"title": "その他",
@@ -60,14 +73,21 @@
 			"test_speaker_stop": "スピーカーテスト停止",
 			"test_voice_effect_start": "ボイスエフェクトテスト",
 			"test_voice_effect_stop": "エフェクトテスト停止",
-			"voice_effect_strength": "ボイスエフェクトの強さ"
+			"voice_effect_strength": "ボイスエフェクトの強さ",
+			"auto_gain_disabled": "自動ゲイン調整中は無効です。",
+			"test_microphone_start": "マイクをテスト",
+			"test_microphone_stop": "マイクテストを停止",
+			"mode": "音声モード"
 		},
 		"keyboard": {
 			"title": "キーボードショートカット",
 			"push_to_talk": "押して話す",
 			"mute": "ミュート",
 			"deafen": "スピーカーミュート",
-			"impostor_radio": "インポスターラジオ"
+			"impostor_radio": "インポスターラジオ",
+			"hint": "ショートカットをクリックし、キーかマウスボタンを押してください。Escapeで無効にできます。",
+			"press_key": "キーを押してください…",
+			"disabled": "無効"
 		},
 		"overlay": {
 			"title": "オーバーレイ",
@@ -110,7 +130,10 @@
 			"noiseSuppression": "ノイズ防止",
 			"spatial_audio": "立体音響",
 			"oldsampledebug": "サンプルレートデバッグ",
-			"oldsampledebug_warning": "依頼された場合のみ有効にするテスト機能です。"
+			"oldsampledebug_warning": "依頼された場合のみ有効にするテスト機能です。",
+			"echocancellation_description": "マイクテストではエコー除去を使いません。ヘッドホンを使用してください。",
+			"autoGainControl": "自動ゲイン調整",
+			"autoGainControl_warning": "ベータ版：マイク音量を自動調整します。先にテストしてください。"
 		},
 		"streaming": {
 			"title": "配信設定",
@@ -118,13 +141,24 @@
 			"obs_overlay": "OBS ブラウザーのオーバーレイ",
 			"obs_url": "OBSブラウザソースURL",
 			"voice_server_comp": "ボイスサーバー互換性モード",
-			"voice_server_comp_warning": "例えば、ボイスサーバーをBetterCrewLinkKaiボイスサーバー(https://bettercrewl.ink)に変更することをお勧めします。"
+			"voice_server_comp_warning": "例えば、ボイスサーバーをBetterCrewLinkKaiボイスサーバー(https://bettercrewl.ink)に変更することをお勧めします。",
+			"copy_url": "URLをコピー"
 		},
 		"troubleshooting": {
 			"title": "トラブルシューティング",
 			"restore": "デフォルトに戻す",
 			"restore_warning": "すべての設定がリセットされます。",
 			"warning": "ゲーム内ではホストとして利用できません！"
+		},
+		"general": "一般",
+		"players": {
+			"title": "プレイヤー",
+			"volume": "音量",
+			"empty": "他のプレイヤーはいません。ロビーに参加すると音量を変更できます。",
+			"disconnected": "切断済み",
+			"mute": "ミュート",
+			"unmute": "ミュート解除",
+			"muted": "ミュート中"
 		}
 	},
 	"lobbybrowser": {

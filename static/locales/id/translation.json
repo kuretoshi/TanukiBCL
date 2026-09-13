@@ -31,7 +31,20 @@
 				"language": "Bahasa",
 				"enable_warning": "Menghidupkan ini akan membuat lobi Anda terbuka untuk pengguna BetterCrewLinkKai lainnya!",
 				"ban_warning": "Teks yang tidak pantas akan mengakibatkan pemblokiran (ban) dari BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Radio Impostor Pribadi",
+			"impostor_radio_private_description": "Kru di dekat tidak mendengar impostor lewat radio.",
+			"impostor_radio_private_requires": "Aktifkan Radio Impostor dahulu.",
+			"host_notice": "Host mengatur setelan lobi.",
+			"host_notice_you": "Kamu host; lobi memakai setelanmu.",
+			"edit_as_host": "Ubah",
+			"tab_current": "Lobi Saat Ini",
+			"tab_mine": "Setelan Saya",
+			"host": "Host",
+			"host_you": "Kamu",
+			"host_unknown": "Tidak diketahui",
+			"no_lobby": "Belum masuk lobi. Gabung atau buat game untuk melihat setelan.",
+			"mine_notice": "Setelanmu berlaku untuk semua saat kamu menjadi host."
 		},
 		"customplatforms": {
 			"title": "Platform Kustom",
@@ -55,14 +68,21 @@
 			"crewvolume": "Volume Kru sebagai Hantu",
 			"ghostvolumeasimpostor": "Volume Hantu sebagai Penipu",
 			"test_speaker_start": "Uji Speaker",
-			"test_speaker_stop": "Hentikan Uji Speaker"
+			"test_speaker_stop": "Hentikan Uji Speaker",
+			"auto_gain_disabled": "Nonaktif saat penguatan otomatis aktif.",
+			"test_microphone_start": "Tes Mikrofon",
+			"test_microphone_stop": "Hentikan Tes Mikrofon",
+			"mode": "Mode Suara"
 		},
 		"keyboard": {
 			"title": "Pintasan Keyboard",
 			"push_to_talk": "Tekan untuk Berbicara",
 			"mute": "Membungkam",
 			"deafen": "Menulikan",
-			"impostor_radio": "Radio Penipu"
+			"impostor_radio": "Radio Penipu",
+			"hint": "Klik pintasan, lalu tekan tombol papan ketik atau tetikus. Escape menonaktifkannya.",
+			"press_key": "Tekan tombol…",
+			"disabled": "Nonaktif"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Peredaman Kebisingan",
 			"spatial_audio": "Audio Spasial",
 			"oldsampledebug": "Debug Laju Sampel",
-			"oldsampledebug_warning": "Ini adalah fungsi uji coba, aktifkanlah HANYA ketika diminta untuk melakukannya."
+			"oldsampledebug_warning": "Ini adalah fungsi uji coba, aktifkanlah HANYA ketika diminta untuk melakukannya.",
+			"echocancellation_description": "Tes mikrofon mengabaikan peredam gema. Gunakan headphone.",
+			"autoGainControl": "Penguatan Otomatis",
+			"autoGainControl_warning": "Beta: mikrofon mengatur volume otomatis. Tes dahulu."
 		},
 		"streaming": {
 			"title": "Penyetelan Streaming",
@@ -110,13 +133,24 @@
 			"obs_overlay": "Overlay OBS Browser",
 			"obs_url": "URL OBS Browser Source",
 			"voice_server_comp": "Mode Kompatibilitas Server Suara",
-			"voice_server_comp_warning": "Disarankan untuk hanya mengubah server suara ke Server Suara BetterCrewLinkKai misalnya (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Disarankan untuk hanya mengubah server suara ke Server Suara BetterCrewLinkKai misalnya (https://bettercrewl.ink).",
+			"copy_url": "Salin URL"
 		},
 		"troubleshooting": {
 			"title": "Penyelesaian masalah",
 			"restore": "Pulihkan Bawaan",
 			"restore_warning": "Ini akan menyetel ulang SEMUA penyetelan ke nilai bawaannya.",
 			"warning": "Tidak tersedia sebagai host dalam permainan!"
+		},
+		"general": "Umum",
+		"players": {
+			"title": "Pemain",
+			"volume": "Volume",
+			"empty": "Tidak ada pemain lain. Gabung lobi untuk mengubah volume mereka.",
+			"disconnected": "Terputus",
+			"mute": "Bisukan",
+			"unmute": "Bunyikan",
+			"muted": "Dibisukan"
 		}
 	},
 	"lobbybrowser": {

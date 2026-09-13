@@ -1,26 +1,28 @@
-import {
-	DataType,
+import { app } from 'electron';
+import { GameInfo } from '../common/GameInfo';
+import memoryjs from 'memoryjs';
+import type { DataType, ModuleObject, ProcessObject } from 'memoryjs';
+import Struct from 'structron';
+
+const {
 	findModule,
 	getProcesses,
-	ModuleObject,
 	openProcess,
-	ProcessObject,
 	readBuffer,
-	readMemory as readMemoryRaw,
-	findPattern as findPatternRaw,
+	readMemory: readMemoryRaw,
+	findPattern: findPatternRaw,
 	virtualAllocEx,
 	writeBuffer,
 	writeMemory,
 	getProcessPath,
-} from 'memoryjs';
-import Struct from 'structron';
+} = memoryjs;
 import { IpcOverlayMessages, IpcRendererMessages } from '../common/ipc-messages';
 import { GameState, AmongUsState, Player } from '../common/AmongUsState';
 import { fetchOffsetLookup, fetchOffsets, IOffsets, IOffsetsLookup } from './offsetStore';
 import Errors from '../common/Errors';
 import { CameraLocation, MapType } from '../common/AmongusMap';
 import { GenerateAvatars, numberToColorHex } from './avatarGenerator';
-import { RainbowColorId } from '../renderer/cosmetics';
+import { RainbowColorId } from '../common/playerColors';
 import { platform } from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -68,6 +70,9 @@ interface PlayerReport {
 	objectPtr: number;
 	outfitsPtr: number;
 	id: number;
+	clientId: number;
+	friendCode: number;
+	puid: number;
 	name: number;
 	color: number;
 	hat: string;
@@ -100,10 +105,12 @@ export default class GameReader {
 	rainbowColor = -9999;
 	gameCode = 'MENU';
 	shellcodeAddr = -1;
-	currentServer = '';
 	disableWriting = false;
 	pid = -1;
 	loadedMod = modList[0];
+	loadedMods: string[] = [];
+	broadcastVersion = -1;
+	offsetsVersion = -1;
 	gamePath = '';
 	oldMeetingHud = false;
 	playercolors: string[][] = [];
@@ -152,7 +159,7 @@ export default class GameReader {
 			this.amongUs = null;
 			try {
 				this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, false);
-			} catch (e) {
+			} catch {
 				/*empty*/
 			}
 		}
@@ -160,21 +167,40 @@ export default class GameReader {
 	}
 
 	getInstalledMods(filePath: string): AmongusMod {
-		const pathLower = filePath.toLowerCase();
-		if (pathLower.includes('?\\volume')) {
-			return modList[0];
-		} else {
-			const dir = path.dirname(filePath);
-			if (!fs.existsSync(path.join(dir, 'winhttp.dll')) || !fs.existsSync(path.join(dir, 'BepInEx', 'plugins'))) {
-				return modList[0];
-			}
-			for (const file of fs.readdirSync(path.join(dir, 'BepInEx', 'plugins'))) {
-				console.log(`MOD! ${file}`);
-				const mod = modList.find((o) => o.dllStartsWith && file.includes(o.dllStartsWith));
-				if (mod) return mod;
-			}
-			return modList[0];
+		this.loadedMods = this.readPluginFiles(filePath);
+		for (const file of this.loadedMods) {
+			const mod = modList.find((o) => o.dllStartsWith && file.includes(o.dllStartsWith));
+			if (mod) return mod;
 		}
+		return modList[0];
+	}
+
+	private readPluginFiles(filePath: string): string[] {
+		if (filePath.toLowerCase().includes('?\\volume')) {
+			return [];
+		}
+		const dir = path.dirname(filePath);
+		if (!fs.existsSync(path.join(dir, 'winhttp.dll')) || !fs.existsSync(path.join(dir, 'BepInEx', 'plugins'))) {
+			return [];
+		}
+		try {
+			return fs.readdirSync(path.join(dir, 'BepInEx', 'plugins')).filter((file) => file.endsWith('.dll'));
+		} catch (e) {
+			console.log('failed to read plugins directory:', e);
+			return [];
+		}
+	}
+
+	getGameInfo(): GameInfo {
+		return {
+			appVersion: app.getVersion(),
+			broadcastVersion: this.broadcastVersion,
+			offsetsVersion: this.offsetsVersion,
+			is64bit: this.is_64bit,
+			platform: platform(),
+			mod: this.loadedMod.id,
+			mods: this.loadedMods,
+		};
 	}
 
 	checkProcessDelay = 0;
@@ -185,7 +211,7 @@ export default class GameReader {
 			try {
 				await this.checkProcessOpen();
 			} catch (e) {
-				this.checkProcessDelay = 0
+				this.checkProcessDelay = 0;
 				return String(e);
 			}
 		}
@@ -199,332 +225,333 @@ export default class GameReader {
 			try {
 				this.loadColors();
 
-			let state = GameState.UNKNOWN;
-			const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
-			const meetingHud_cachePtr =
-				meetingHud === 0 ? 0 : this.readMemory<number>('pointer', meetingHud, this.offsets.objectCachePtr);
-			const meetingHudState =
-				meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
+				let state = GameState.UNKNOWN;
+				const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
+				const meetingHud_cachePtr =
+					meetingHud === 0 ? 0 : this.readMemory<number>('pointer', meetingHud, this.offsets.objectCachePtr);
+				const meetingHudState =
+					meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
 
-			const innerNetClient = this.readMemory<number>(
-				'ptr',
-				this.gameAssembly.modBaseAddr,
-				this.offsets.innerNetClient.base
-			);
-			if (!innerNetClient) return null;
-
-			const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
-
-			switch (gameState) {
-				case 0:
-					state = GameState.MENU;
-					break;
-				case 1:
-				case 3:
-					state = GameState.LOBBY;
-					break;
-				default:
-					if (meetingHudState < 4) state = GameState.DISCUSSION;
-					else state = GameState.TASKS;
-					break;
-			}
-			// const DEBUG = true;
-			const lobbyCodeInt =
-				state === GameState.MENU
-					? -1
-					: this.readMemory<number>('int32', innerNetClient, this.offsets.innerNetClient.gameId);
-
-
-			this.gameCode =
-				state === GameState.MENU
-					? ''
-					: lobbyCodeInt === this.lastState.lobbyCodeInt
-						? this.gameCode
-						: this.IntToGameCode(lobbyCodeInt);
-
-			// if (DEBUG) {
-			// 	this.gameCode = 'oof';
-			// }
-
-			const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
-			if (!allPlayersPtr) return null;
-			const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
-			if (!allPlayers) return null;
-
-			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
-			let playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
-			const players = [];
-
-			const hostId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.hostId);
-			const clientId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.clientId);
-			this.isLocalGame = lobbyCodeInt === 32; // is local game
-			let lightRadius = 1;
-			let comsSabotaged = false;
-			let mixupSabotaged = false;
-			let camouflaged = false;
-			let currentCamera = CameraLocation.NONE;
-			let map = MapType.UNKNOWN;
-			let maxPlayers = 10;
-			const closedDoors: number[] = [];
-			let localPlayer = undefined;
-			let localObjectFlags = '';
-			let localObjectDiffs = '';
-			let localPlayerDiffs = '';
-			let innerNetDiffs = '';
-			let airshipMeetingByOutfit = false;
-			let currentOutfits = '';
-			if (
-				this.currentServer === '' ||
-				(this.oldGameState != state &&
-					(this.oldGameState === GameState.MENU || this.oldGameState === GameState.UNKNOWN))
-			) {
-				this.readCurrentServer();
-			}
-			if ((this.gameCode || this.isLocalGame) && playerCount) {
-				for (let i = 0; i < Math.min(playerCount, 40); i++) {
-					const { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
-					playerAddrPtr += this.is_64bit ? 8 : 4;
-					if (address === 0) continue;
-					let player: Player | undefined;
-					try {
-						const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
-						player = this.parsePlayer(address + last, playerData, clientId);
-					} catch (e) {
-						continue;
-					}
-					if (!player || state === GameState.MENU) {
-						continue;
-					}
-
-					if (this.isLocalGame && player.clientId == hostId) {
-						this.gameCode = ((player.nameHash % 99999)).toString();
-
-					}
-					if (player.isLocal) {
-						localPlayer = player;
-					}
-
-					players.push(player);
-				}
-				this.normalizePlayerColors(players);
-				if (localPlayer) {
-					this.fixPingMessage();
-					lightRadius = this.readMemory<number>('float', localPlayer.objectPtr, this.offsets.lightRadius, -1);
-					if (voiceDebugEnabled) {
-						localObjectFlags = this.readLocalObjectFlags(localPlayer.objectPtr);
-						localObjectDiffs = this.readDebugIntDiffs('obj', localPlayer.objectPtr, 0, 240);
-						localPlayerDiffs = this.readDebugIntDiffs('plr', localPlayer.ptr, 0, 140);
-					}
-				}
-				if (voiceDebugEnabled) {
-					innerNetDiffs = this.readDebugIntDiffs('net', innerNetClient, 0, 220);
-				}
-				const gameOptionsPtr = this.readMemory<number>(
+				const innerNetClient = this.readMemory<number>(
 					'ptr',
 					this.gameAssembly.modBaseAddr,
-					this.offsets.gameoptionsData
+					this.offsets.innerNetClient.base
 				);
-				maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
-				map = this.normalizeMapType(
-					this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId, MapType.UNKNOWN)
-				);
-				const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
-				if (map === MapType.UNKNOWN && shipPtr) {
-					map = this.normalizeMapType(
-						this.readMemory<number>('byte', shipPtr, this.offsets.shipStatus_map, MapType.UNKNOWN)
-					);
+				if (!innerNetClient) return null;
+
+				const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
+
+				switch (gameState) {
+					case 0:
+						state = GameState.MENU;
+						break;
+					case 1:
+					case 3:
+						state = GameState.LOBBY;
+						break;
+					default:
+						if (meetingHudState < 4) state = GameState.DISCUSSION;
+						else state = GameState.TASKS;
+						break;
 				}
-				if (state === GameState.TASKS) {
-					const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
-					const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
-					const shiftedPlayerCount = shiftedPlayers.length;
-					const mixupThreshold = 1;
-					mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
+				// const DEBUG = true;
+				const lobbyCodeInt =
+					state === GameState.MENU
+						? -1
+						: this.readMemory<number>('int32', innerNetClient, this.offsets.innerNetClient.gameId);
+
+				this.gameCode =
+					state === GameState.MENU
+						? ''
+						: lobbyCodeInt === this.lastState.lobbyCodeInt
+							? this.gameCode
+							: this.IntToGameCode(lobbyCodeInt);
+
+				// if (DEBUG) {
+				// 	this.gameCode = 'oof';
+				// }
+
+				const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
+				if (!allPlayersPtr) return null;
+				const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
+				if (!allPlayers) return null;
+
+				const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
+				let playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
+				const players = [];
+
+				const hostId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.hostId);
+				const clientId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.clientId);
+				this.isLocalGame = lobbyCodeInt === 32; // is local game
+				let lightRadius = 1;
+				let comsSabotaged = false;
+				let mixupSabotaged = false;
+				const camouflaged = false;
+				let currentCamera = CameraLocation.NONE;
+				let map = MapType.UNKNOWN;
+				let maxPlayers = 10;
+				const closedDoors: number[] = [];
+				let localPlayer = undefined;
+				let localObjectFlags = '';
+				let localObjectDiffs = '';
+				let localPlayerDiffs = '';
+				let innerNetDiffs = '';
+				let airshipMeetingByOutfit = false;
+				let currentOutfits = '';
+
+				if ((this.gameCode || this.isLocalGame) && playerCount) {
+					for (let i = 0; i < Math.min(playerCount, 40); i++) {
+						const { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
+						playerAddrPtr += this.is_64bit ? 8 : 4;
+						if (address === 0) continue;
+						let player: Player | undefined;
+						try {
+							const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
+							player = this.parsePlayer(address + last, playerData, clientId);
+						} catch {
+							continue;
+						}
+						if (!player || state === GameState.MENU) {
+							continue;
+						}
+
+						if (this.isLocalGame && player.clientId == hostId) {
+							this.gameCode = (player.nameHash % 99999).toString();
+						}
+						if (player.isLocal) {
+							localPlayer = player;
+						}
+
+						players.push(player);
+					}
+					this.normalizePlayerColors(players);
+					if (localPlayer) {
+						this.fixPingMessage();
+						lightRadius = this.readMemory<number>('float', localPlayer.objectPtr, this.offsets.lightRadius, -1);
+						if (voiceDebugEnabled) {
+							localObjectFlags = this.readLocalObjectFlags(localPlayer.objectPtr);
+							localObjectDiffs = this.readDebugIntDiffs('obj', localPlayer.objectPtr, 0, 240);
+							localPlayerDiffs = this.readDebugIntDiffs('plr', localPlayer.ptr, 0, 140);
+						}
+					}
 					if (voiceDebugEnabled) {
-						currentOutfits = activePlayers.map((player) => `${player.id}:${player.currentOutfit}`).join(',');
+						innerNetDiffs = this.readDebugIntDiffs('net', innerNetClient, 0, 220);
 					}
-					airshipMeetingByOutfit =
-						map === MapType.AIRSHIP &&
-						activePlayers.length >= 2 &&
-						activePlayers.every((player) => player.currentOutfit === 1) &&
-						!mixupSabotaged;
-				}
-				if (state === GameState.TASKS) {
-					const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
+					const gameOptionsPtr = this.readMemory<number>(
+						'ptr',
+						this.gameAssembly.modBaseAddr,
+						this.offsets.gameoptionsData
+					);
+					maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
+					map = this.normalizeMapType(
+						this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId, MapType.UNKNOWN)
+					);
+					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
+					if (map === MapType.UNKNOWN && shipPtr) {
+						map = this.normalizeMapType(
+							this.readMemory<number>('byte', shipPtr, this.offsets.shipStatus_map, MapType.UNKNOWN)
+						);
+					}
+					if (state === GameState.TASKS) {
+						const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
+						const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
+						const shiftedPlayerCount = shiftedPlayers.length;
+						const mixupThreshold = 1;
+						mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
+						if (voiceDebugEnabled) {
+							currentOutfits = activePlayers.map((player) => `${player.id}:${player.currentOutfit}`).join(',');
+						}
+						airshipMeetingByOutfit =
+							map === MapType.AIRSHIP &&
+							activePlayers.length >= 2 &&
+							activePlayers.every((player) => player.currentOutfit === 1) &&
+							!mixupSabotaged;
+					}
+					if (state === GameState.TASKS) {
+						const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
 
-					if (systemsPtr !== 0 && state === GameState.TASKS) {
-						this.readDictionary(systemsPtr, 64, (k, v) => {
-							const key = this.readMemory<number>('int32', k);
-							if (key === 14) {
-								const value = this.readMemory<number>('ptr', v);
-								switch (map) {
-									case MapType.AIRSHIP:
-									case MapType.POLUS:
-									case MapType.THE_SKELD:
-									case MapType.SUBMERGED: {
-										comsSabotaged =
-											this.readMemory<number>('uint32', value, this.offsets!.HudOverrideSystemType_isActive) === 1;
-										break;
+						if (systemsPtr !== 0 && state === GameState.TASKS) {
+							this.readDictionary(systemsPtr, 64, (k, v) => {
+								const key = this.readMemory<number>('int32', k);
+								if (key === 14) {
+									const value = this.readMemory<number>('ptr', v);
+									switch (map) {
+										case MapType.AIRSHIP:
+										case MapType.POLUS:
+										case MapType.THE_SKELD:
+										case MapType.SUBMERGED: {
+											comsSabotaged =
+												this.readMemory<number>('uint32', value, this.offsets!.HudOverrideSystemType_isActive) === 1;
+											break;
+										}
+										case MapType.FUNGLE:
+										case MapType.MIRA_HQ: {
+											comsSabotaged =
+												this.readMemory<number>('uint32', value, this.offsets!.hqHudSystemType_CompletedConsoles) < 2;
+											break;
+										}
 									}
-									case MapType.FUNGLE:
-									case MapType.MIRA_HQ: {
-										comsSabotaged =
-											this.readMemory<number>('uint32', value, this.offsets!.hqHudSystemType_CompletedConsoles) < 2;
-										break;
+								} else if (key === 18 && map === MapType.MIRA_HQ) {
+									//SystemTypes Decontamination
+									const value = this.readMemory<number>('ptr', v);
+									const lowerDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorLowerOpen);
+									const upperDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorUpperOpen);
+									if (!lowerDoorOpen) {
+										closedDoors.push(0);
+									}
+									if (!upperDoorOpen) {
+										closedDoors.push(1);
 									}
 								}
-							} else if (key === 18 && map === MapType.MIRA_HQ) {
-								//SystemTypes Decontamination
-								const value = this.readMemory<number>('ptr', v);
-								const lowerDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorLowerOpen);
-								const upperDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorUpperOpen);
-								if (!lowerDoorOpen) {
-									closedDoors.push(0);
+							});
+						}
+
+						const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets!.miniGame);
+						const minigameCachePtr = this.readMemory<number>('ptr', minigamePtr, this.offsets!.objectCachePtr);
+						if (minigameCachePtr && minigameCachePtr !== 0 && localPlayer) {
+							if (map === MapType.POLUS || map === MapType.AIRSHIP) {
+								const currentCameraId = this.readMemory<number>(
+									'uint32',
+									minigamePtr,
+									this.offsets!.planetSurveillanceMinigame_currentCamera
+								);
+								const camarasCount = this.readMemory<number>(
+									'uint32',
+									minigamePtr,
+									this.offsets!.planetSurveillanceMinigame_camarasCount
+								);
+
+								if (currentCameraId >= 0 && currentCameraId <= 5 && camarasCount === 6) {
+									currentCamera = currentCameraId as CameraLocation;
 								}
-								if (!upperDoorOpen) {
-									closedDoors.push(1);
+							} else if (map === MapType.THE_SKELD) {
+								const roomCount = this.readMemory<number>(
+									'uint32',
+									minigamePtr,
+									this.offsets!.surveillanceMinigame_FilteredRoomsCount
+								);
+								if (roomCount === 4) {
+									const dist = Math.sqrt(Math.pow(localPlayer.x - -12.9364, 2) + Math.pow(localPlayer.y - -2.7928, 2));
+									if (dist < 0.6) {
+										currentCamera = CameraLocation.Skeld;
+									}
 								}
 							}
-						});
-					}
-
-					const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets!.miniGame);
-					const minigameCachePtr = this.readMemory<number>('ptr', minigamePtr, this.offsets!.objectCachePtr);
-					if (minigameCachePtr && minigameCachePtr !== 0 && localPlayer) {
-						if (map === MapType.POLUS || map === MapType.AIRSHIP) {
-							const currentCameraId = this.readMemory<number>(
-								'uint32',
-								minigamePtr,
-								this.offsets!.planetSurveillanceMinigame_currentCamera
-							);
-							const camarasCount = this.readMemory<number>(
-								'uint32',
-								minigamePtr,
-								this.offsets!.planetSurveillanceMinigame_camarasCount
-							);
-
-							if (currentCameraId >= 0 && currentCameraId <= 5 && camarasCount === 6) {
-								currentCamera = currentCameraId as CameraLocation;
-							}
-						} else if (map === MapType.THE_SKELD) {
-							const roomCount = this.readMemory<number>(
-								'uint32',
-								minigamePtr,
-								this.offsets!.surveillanceMinigame_FilteredRoomsCount
-							);
-							if (roomCount === 4) {
-								const dist = Math.sqrt(Math.pow(localPlayer.x - -12.9364, 2) + Math.pow(localPlayer.y - -2.7928, 2));
-								if (dist < 0.6) {
-									currentCamera = CameraLocation.Skeld;
+						}
+						if (map !== MapType.MIRA_HQ) {
+							const allDoors = this.readMemory<number>('ptr', shipPtr, this.offsets.shipstatus_allDoors);
+							const doorCount = Math.min(this.readMemory<number>('int', allDoors, this.offsets.playerCount), 16);
+							for (let doorNr = 0; doorNr < doorCount; doorNr++) {
+								const door = this.readMemory<number>(
+									'ptr',
+									allDoors + this.offsets.playerAddrPtr + doorNr * (this.is_64bit ? 0x8 : 0x4)
+								);
+								const doorOpen = this.readMemory<number>('int', door + this.offsets.door_isOpen) === 1;
+								//	const doorId = this.readMemory<number>('int', door + this.offsets.door_doorId);
+								//console.log(doorId);
+								if (!doorOpen) {
+									closedDoors.push(doorNr);
 								}
 							}
 						}
 					}
-					if (map !== MapType.MIRA_HQ) {
-						const allDoors = this.readMemory<number>('ptr', shipPtr, this.offsets.shipstatus_allDoors);
-						const doorCount = Math.min(this.readMemory<number>('int', allDoors, this.offsets.playerCount), 16);
-						for (let doorNr = 0; doorNr < doorCount; doorNr++) {
-							const door = this.readMemory<number>(
-								'ptr',
-								allDoors + this.offsets.playerAddrPtr + doorNr * (this.is_64bit ? 0x8 : 0x4)
-							);
-							const doorOpen = this.readMemory<number>('int', door + this.offsets.door_isOpen) === 1;
-							//	const doorId = this.readMemory<number>('int', door + this.offsets.door_doorId);
-							//console.log(doorId);
-							if (!doorOpen) {
-								closedDoors.push(doorNr);
+					//	console.log('doorcount: ', doorCount, doorsOpen);
+				}
+
+				// if (this.oldGameState === GameState.DISCUSSION && state === GameState.TASKS) {
+				// 	if (impostors === 0 || impostors >= crewmates) {
+				// 		this.exileCausesEnd = true;
+				// 		state = GameState.LOBBY;
+				// 	}
+				// }
+
+				if (
+					this.oldGameState === GameState.MENU &&
+					state === GameState.LOBBY &&
+					this.menuUpdateTimer > 0 &&
+					(this.lastPlayerPtr === allPlayers || !players.find((p) => p.isLocal))
+				) {
+					state = GameState.MENU;
+					this.menuUpdateTimer--;
+				} else {
+					this.menuUpdateTimer = 20;
+					this.lastPlayerPtr = allPlayers;
+				}
+				const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
+				const newState: AmongUsState = {
+					lobbyCode: lobbyCode,
+					lobbyCodeInt,
+					players,
+					gameState: lobbyCode === 'MENU' ? GameState.MENU : state,
+					oldGameState: this.oldGameState,
+					isHost: (hostId && clientId && hostId === clientId) as boolean,
+					hostId: hostId,
+					clientId: clientId,
+					comsSabotaged,
+					mixupSabotaged,
+					camouflaged,
+					currentCamera,
+					lightRadius,
+					lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
+					map,
+					mod: this.loadedMod.id,
+					closedDoors,
+					maxPlayers,
+					oldMeetingHud: this.oldMeetingHud,
+					airshipMeetingByOutfit,
+					...(voiceDebugEnabled
+						? {
+								debug: {
+									rawGameState: gameState,
+									meetingHud,
+									meetingHudCachePtr: meetingHud_cachePtr,
+									meetingHudState,
+									onlineScene: this.readMemory<number>(
+										'int',
+										innerNetClient,
+										this.offsets.innerNetClient.onlineScene,
+										-1
+									),
+									mainMenuScene: this.readMemory<number>(
+										'int',
+										innerNetClient,
+										this.offsets.innerNetClient.mainMenuScene,
+										-1
+									),
+									localTaskPtr: localPlayer?.taskPtr || 0,
+									localObjectFlags,
+									initPatternDebug: this.initPatternDebug,
+									airshipMeetingByOutfit,
+									currentOutfits,
+									localObjectDiffs,
+									localPlayerDiffs,
+									innerNetDiffs,
+									localRoleTeam: localPlayer?.roleTeam ?? -1,
+									localRoleLabel: this.formatRoleLabel(localPlayer),
+									localRolePtr: localPlayer?.rolePtr || 0,
+									localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
+									localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
+									colorDebug: this.formatColorDebug(players, localPlayer),
+									sizeDebug: this.formatSizeDebug(players),
+								},
 							}
-						}
+						: {}),
+				};
+				//	const stateHasChanged = !equal(this.lastState, newState);
+				if (state !== GameState.MENU || this.oldGameState !== GameState.MENU) {
+					try {
+						this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
+					} catch {
+						process.exit(0);
 					}
 				}
-				//	console.log('doorcount: ', doorCount, doorsOpen);
-			}
-
-			// if (this.oldGameState === GameState.DISCUSSION && state === GameState.TASKS) {
-			// 	if (impostors === 0 || impostors >= crewmates) {
-			// 		this.exileCausesEnd = true;
-			// 		state = GameState.LOBBY;
-			// 	}
-			// }
-
-			if (
-				this.oldGameState === GameState.MENU &&
-				state === GameState.LOBBY &&
-				this.menuUpdateTimer > 0 &&
-				(this.lastPlayerPtr === allPlayers || !players.find((p) => p.isLocal))
-			) {
-				state = GameState.MENU;
-				this.menuUpdateTimer--;
-			} else {
-				this.menuUpdateTimer = 20;
-				this.lastPlayerPtr = allPlayers;
-			}
-			const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
-			const newState: AmongUsState = {
-				lobbyCode: lobbyCode,
-				lobbyCodeInt,
-				players,
-				gameState: lobbyCode === 'MENU' ? GameState.MENU : state,
-				oldGameState: this.oldGameState,
-				isHost: (hostId && clientId && hostId === clientId) as boolean,
-				hostId: hostId,
-				clientId: clientId,
-				comsSabotaged,
-				mixupSabotaged,
-				camouflaged,
-				currentCamera,
-				lightRadius,
-				lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
-				map,
-				mod: this.loadedMod.id,
-				closedDoors,
-				currentServer: this.currentServer,
-				maxPlayers,
-				oldMeetingHud: this.oldMeetingHud,
-				airshipMeetingByOutfit,
-				...(voiceDebugEnabled
-					? {
-						debug: {
-							rawGameState: gameState,
-							meetingHud,
-							meetingHudCachePtr: meetingHud_cachePtr,
-							meetingHudState,
-							onlineScene: this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.onlineScene, -1),
-							mainMenuScene: this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.mainMenuScene, -1),
-							localTaskPtr: localPlayer?.taskPtr || 0,
-							localObjectFlags,
-							initPatternDebug: this.initPatternDebug,
-							airshipMeetingByOutfit,
-							currentOutfits,
-							localObjectDiffs,
-							localPlayerDiffs,
-							innerNetDiffs,
-							localRoleTeam: localPlayer?.roleTeam ?? -1,
-							localRoleLabel: this.formatRoleLabel(localPlayer),
-							localRolePtr: localPlayer?.rolePtr || 0,
-							localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
-							localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
-							colorDebug: this.formatColorDebug(players, localPlayer),
-							sizeDebug: this.formatSizeDebug(players),
-						},
-					}
-					: {}),
-			};
-			//	const stateHasChanged = !equal(this.lastState, newState);
-			if (state !== GameState.MENU || this.oldGameState !== GameState.MENU) {
-				try {
-					this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
-				} catch (e) {
-					process.exit(0);
+				this.lastState = newState;
+				this.oldGameState = state;
+				if (state === GameState.MENU) {
+					this.stablePlayerColors = {};
+					this.debugBaselines = {};
 				}
-			}
-			this.lastState = newState;
-			this.oldGameState = state;
-			if (state === GameState.MENU) {
-				this.stablePlayerColors = {};
-				this.debugBaselines = {};
-			}
-			this.nativeReadFailureCount = 0;
+				this.nativeReadFailureCount = 0;
 			} catch (e) {
 				this.nativeReadFailureCount++;
 				console.error('Failed to read Among Us memory:', e);
@@ -548,7 +575,7 @@ export default class GameReader {
 		this.debugBaselines = {};
 		try {
 			this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, false);
-		} catch (e) {
+		} catch {
 			/* empty */
 		}
 	}
@@ -606,8 +633,8 @@ export default class GameReader {
 		};
 		const local = localPlayer
 			? `${describePlayerName(localPlayer)} base=${describeColor(localPlayer.colorId)} shown=${describeColor(
-				localPlayer.appearanceColorId
-			)} shifted=${localPlayer.shiftedColor}`
+					localPlayer.appearanceColorId
+				)} shifted=${localPlayer.shiftedColor}`
 			: '-';
 		return [
 			`palette=${this.playercolors.length} rainbow=${this.rainbowColor}`,
@@ -647,41 +674,8 @@ export default class GameReader {
 	private readLocalObjectFlags(objectPtr: number): string {
 		if (!this.offsets || !objectPtr) return '';
 		const offsets = [
-			56,
-			60,
-			64,
-			68,
-			72,
-			76,
-			80,
-			84,
-			88,
-			92,
-			96,
-			100,
-			104,
-			108,
-			112,
-			116,
-			120,
-			124,
-			128,
-			132,
-			136,
-			140,
-			144,
-			148,
-			152,
-			156,
-			160,
-			164,
-			168,
-			172,
-			176,
-			180,
-			184,
-			188,
-			192,
+			56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 148, 152,
+			156, 160, 164, 168, 172, 176, 180, 184, 188, 192,
 		];
 		return offsets
 			.map((offset) => {
@@ -729,11 +723,7 @@ export default class GameReader {
 			player.appearanceVisorId
 		);
 
-		return (
-			player.currentOutfit > 0 &&
-			player.currentOutfit <= 10 &&
-			displayAppearance !== originalAppearance
-		);
+		return player.currentOutfit > 0 && player.currentOutfit <= 10 && displayAppearance !== originalAppearance;
 	}
 
 	private normalizePlayerColors(players: Player[]): void {
@@ -785,7 +775,7 @@ export default class GameReader {
 		this.initializedWrite = false;
 		this.disableWriting = false;
 
-		const offsetLookups = await fetchOffsetLookup() as IOffsetsLookup;
+		const offsetLookups = (await fetchOffsetLookup()) as IOffsetsLookup;
 		let broadcastVersionAddr = undefined;
 		if (this.is_64bit) {
 			broadcastVersionAddr = this.findPattern(
@@ -794,7 +784,7 @@ export default class GameReader {
 				offsetLookups.patterns.x64.broadcastVersion.addressOffset,
 				false,
 				true
-			); 
+			);
 		} else {
 			broadcastVersionAddr = this.findPattern(
 				offsetLookups.patterns.x86.broadcastVersion.sig,
@@ -802,21 +792,16 @@ export default class GameReader {
 				offsetLookups.patterns.x86.broadcastVersion.addressOffset,
 				false,
 				true
-			); 
+			);
 		}
 
-		var broadcastVersion = this.readMemory<number>(
-			'int',
-			this.gameAssembly!.modBaseAddr,
-			broadcastVersionAddr
-		);
-		console.log("broadcastVersion: ", broadcastVersion)
+		const broadcastVersion = this.readMemory<number>('int', this.gameAssembly!.modBaseAddr, broadcastVersionAddr);
+		console.log('broadcastVersion: ', broadcastVersion);
+		this.broadcastVersion = broadcastVersion;
 
-		if (offsetLookups.versions[broadcastVersion]) {
-			this.offsets = await fetchOffsets(this.is_64bit, offsetLookups.versions[broadcastVersion].file, offsetLookups.versions[broadcastVersion].offsetsVersion);
-		} else {
-			this.offsets = await fetchOffsets(this.is_64bit, offsetLookups.versions["default"].file, offsetLookups.versions["default"].offsetsVersion); // can't find file for this client, return default
-		}
+		const versionLookup = offsetLookups.versions[broadcastVersion] ?? offsetLookups.versions['default'];
+		this.offsetsVersion = versionLookup.offsetsVersion;
+		this.offsets = await fetchOffsets(this.is_64bit, versionLookup.file, versionLookup.offsetsVersion);
 
 		this.disableWriting = this.offsets.disableWriting;
 		this.oldMeetingHud = this.offsets.oldMeetingHud;
@@ -859,14 +844,17 @@ export default class GameReader {
 			this.offsets.signatures.playerControl.patternOffset,
 			this.offsets.signatures.playerControl.addressOffset
 		);
-		if(this.offsets.newGameOptions){
+		if (this.offsets.newGameOptions) {
 			const gameOptionsManager = this.findPattern(
 				this.offsets.signatures.gameOptionsManager.sig,
 				this.offsets.signatures.gameOptionsManager.patternOffset,
 				this.offsets.signatures.gameOptionsManager.addressOffset
 			);
-			this.offsets.gameoptionsData[0] = this.patternResultOrFallback(gameOptionsManager, this.offsets.gameoptionsData[0]);
-		}else{
+			this.offsets.gameoptionsData[0] = this.patternResultOrFallback(
+				gameOptionsManager,
+				this.offsets.gameoptionsData[0]
+			);
+		} else {
 			this.offsets.gameoptionsData[0] = this.patternResultOrFallback(playerControl, this.offsets.gameoptionsData[0]);
 		}
 		const originalOffsets = {
@@ -881,7 +869,10 @@ export default class GameReader {
 		this.offsets.palette[0] = this.patternResultOrFallback(palette, this.offsets.palette[0]);
 		this.offsets.meetingHud[0] = this.resolveMeetingHudOffset(meetingHud, this.offsets.meetingHud[0]);
 		this.offsets.allPlayersPtr[0] = this.patternResultOrFallback(gameData, this.offsets.allPlayersPtr[0]);
-		this.offsets.innerNetClient.base[0] = this.patternResultOrFallback(innerNetClient, this.offsets.innerNetClient.base[0]);
+		this.offsets.innerNetClient.base[0] = this.patternResultOrFallback(
+			innerNetClient,
+			this.offsets.innerNetClient.base[0]
+		);
 		this.offsets.shipStatus[0] = this.patternResultOrFallback(shipStatus, this.offsets.shipStatus[0]);
 		this.offsets.miniGame[0] = this.patternResultOrFallback(miniGame, this.offsets.miniGame[0]);
 		this.initPatternDebug = [
@@ -921,15 +912,8 @@ export default class GameReader {
 				true
 			);
 		}
-		this.offsets.serverManager_currentServer[0] = this.findPattern(
-			this.offsets.signatures.serverManager.sig,
-			this.offsets.signatures.serverManager.patternOffset,
-			this.offsets.signatures.serverManager.addressOffset
-		);
-
 		this.colorsInitialized = false;
-		console.log('serverManager_currentServer', this.offsets.serverManager_currentServer[0].toString(16));
-		
+
 		this.PlayerStruct = new Struct();
 		for (const member of this.offsets.player.struct) {
 			if (member.type === 'SKIP' && member.skip) {
@@ -941,15 +925,21 @@ export default class GameReader {
 				);
 			}
 		}
-		console.log(JSON.stringify(this.offsets,function(k,v){
-			if(v instanceof Array && k != "struct")
-			   return JSON.stringify(v);
-			return v;
-		 },2).replace(/\\/g, '')
-		 .replace(/\"\[/g, '[')
-		 .replace(/\]\"/g,']')
-		 .replace(/\"\{/g, '{')
-		 .replace(/\}\"/g,'}'));
+		console.log(
+			JSON.stringify(
+				this.offsets,
+				function (k, v) {
+					if (v instanceof Array && k != 'struct') return JSON.stringify(v);
+					return v;
+				},
+				2
+			)
+				.replace(/\\/g, '')
+				.replace(/"\[/g, '[')
+				.replace(/\]"/g, ']')
+				.replace(/"\{/g, '{')
+				.replace(/\}"/g, '}')
+		);
 		this.initializeWrites();
 	}
 
@@ -1033,10 +1023,7 @@ export default class GameReader {
 		this.writeString(shellCodeAddr + 0x70, 'OnlineGame');
 		this.writeString(shellCodeAddr + 0x95, 'MMOnline');
 
-		this.writeString(
-			shellCodeAddr + 0xd5,
-			'Ping: {0}ms'
-		);
+		this.writeString(shellCodeAddr + 0xd5, 'Ping: {0}ms');
 
 		writeBuffer(this.amongUs!.handle, shellCodeAddr, Buffer.from(shellcode));
 		writeBuffer(this.amongUs!.handle, fixedUpdateFunc, Buffer.from(shellcodeJMP));
@@ -1114,7 +1101,7 @@ export default class GameReader {
 		}
 	}
 
-	joinGame(code: string, server: string): boolean {
+	joinGame(_code: string, _server: string): boolean {
 		return false;
 		// if (
 		// 	!this.amongUs ||
@@ -1202,11 +1189,17 @@ export default class GameReader {
 		this.colorsInitialized = colorLength > 0;
 		this.playercolors = playercolors;
 		try {
-			this.sendIPC(IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, playercolors);
 			GenerateAvatars(playercolors)
-				.then(() => console.log('done generate'))
-				.catch((e) => console.error(e));
-		} catch (e) {
+				.then(() => {
+					if (this.playercolors !== playercolors) return;
+					console.log('done generate');
+					this.sendIPC(IpcOverlayMessages.NOTIFY_PLAYERCOLORS_CHANGED, playercolors);
+				})
+				.catch((e) => {
+					if (this.playercolors === playercolors) this.colorsInitialized = false;
+					console.error(e);
+				});
+		} catch {
 			/* Empty block */
 		}
 	}
@@ -1226,15 +1219,6 @@ export default class GameReader {
 		);
 		//	console.log(optionalHeader_magic, 'optionalHeader_magic');
 		return optionalHeader_magic === 0x20b;
-	}
-
-	readCurrentServer(): void {
-		const currentServer = this.readMemory<number>(
-			'ptr',
-			this.gameAssembly!.modBaseAddr,
-			this.offsets!.serverManager_currentServer
-		);
-		this.currentServer = this.readString(currentServer);
 	}
 
 	readMemory<T>(dataType: DataType, address: number, offsets?: number[] | number, defaultParam?: T): T {
@@ -1267,7 +1251,7 @@ export default class GameReader {
 
 	readString(address: number, maxLength = 50): string {
 		try {
-			if (address === 0 || !this.amongUs) {
+			if (!address || !this.amongUs) {
 				return '';
 			}
 			const length = Math.max(
@@ -1281,7 +1265,7 @@ export default class GameReader {
 			} else {
 				return '';
 			}
-		} catch (e) {
+		} catch {
 			return '';
 		}
 	}
@@ -1380,9 +1364,7 @@ export default class GameReader {
 	}
 
 	gameCodeToInt(code: string): number {
-		return code.length === 4
-			? this.gameCodeToIntV1Impl(code)
-			: this.gameCodeToIntV2Impl(code);
+		return code.length === 4 ? this.gameCodeToIntV1Impl(code) : this.gameCodeToIntV2Impl(code);
 	}
 
 	gameCodeToIntV1Impl(code: string): number {
@@ -1456,9 +1438,17 @@ export default class GameReader {
 			data.taskPtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('taskPtr')]);
 			data.rolePtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('rolePtr')]);
 
-			// data.name = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('name')]);
+			if (Object.prototype.hasOwnProperty.call(data, 'friendCode')) {
+				data.friendCode = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('friendCode')]);
+				data.puid = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('puid')]);
+			}
 		}
-		const clientId = this.readMemory<number>('uint32', data.objectPtr, this.offsets.player.clientId);
+		if (data.objectPtr === 0) {
+			return undefined;
+		}
+		const clientId = Object.prototype.hasOwnProperty.call(data, 'clientId')
+			? data.clientId
+			: this.readMemory<number>('uint32', data.objectPtr, this.offsets.player.clientId);
 		const isLocal = clientId === LocalclientId && data.disconnected === 0;
 
 		const positionOffsets = isLocal
@@ -1467,8 +1457,12 @@ export default class GameReader {
 
 		let x = this.readMemory<number>('float', data.objectPtr, positionOffsets[0]);
 		let y = this.readMemory<number>('float', data.objectPtr, positionOffsets[1]);
-		let currentOutfit = this.readMemory<number>('uint32', data.objectPtr, this.offsets.player.currentOutfit);
+		const currentOutfit = this.readMemory<number>('uint32', data.objectPtr, this.offsets.player.currentOutfit);
 		const isDummy = this.readMemory<boolean>('boolean', data.objectPtr, this.offsets.player.isDummy);
+		const friendCode = this.readString(data.friendCode);
+		const playerUid = this.readString(data.puid);
+		const playerIdentifier = playerUid || (clientId === undefined ? '' : clientId.toString());
+
 		let name = 'error';
 		let shiftedColor = -1;
 		let currentName = '';
@@ -1477,7 +1471,7 @@ export default class GameReader {
 		let currentSkin = '';
 		let currentVisor = '';
 		let hasCurrentOutfit = false;
-		if (data.hasOwnProperty('name')) {
+		if (Object.prototype.hasOwnProperty.call(data, 'name')) {
 			name = this.readString(data.name, 1000).split(/<.*?>/).join('');
 		} else {
 			this.readDictionary(data.outfitsPtr, 12, (k, v, i) => {
@@ -1490,8 +1484,7 @@ export default class GameReader {
 					data.hat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId));
 					data.skin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
 					data.visor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId));
-					if (currentOutfit == 0 || currentOutfit > 10)
-						return;
+					if (currentOutfit == 0 || currentOutfit > 10) return;
 				} else if (key === currentOutfit) {
 					const currentNamePtr = this.readMemory<number>('pointer', val, this.offsets!.player.outfit.playerName); // 0x40
 					currentName = this.readString(currentNamePtr, 1000).split(/<.*?>/).join('');
@@ -1504,20 +1497,18 @@ export default class GameReader {
 				}
 			});
 
-			const roleTeam = this.readMemory<number>('uint32', data.rolePtr, this.offsets!.player.roleTeam)
+			const roleTeam = this.readMemory<number>('uint32', data.rolePtr, this.offsets!.player.roleTeam);
 			data.impostor = roleTeam;
-
-		//	if (this.offsets!.player.nameText && shiftedColor == -1 && (this.loadedMod.id == "THE_OTHER_ROLES")) {
-		//		let nameText = this.readMemory<number>('ptr', data.objectPtr, this.offsets!.player.nameText);
-		//		var nameText_name = this.readString(nameText);
-		//		if (nameText_name != name) {
-		//			shiftedColor = data.color;
-		//		}
-		//	}
 		}
 		name = name.split(/<.*?>/).join('');
 		let bugged = false;
-		if (x === undefined || y === undefined || data.disconnected != 0 || data.color < 0 || data.color > this.playercolors.length) {
+		if (
+			x === undefined ||
+			y === undefined ||
+			data.disconnected != 0 ||
+			data.color < 0 ||
+			data.color > this.playercolors.length
+		) {
 			x = 9999;
 			y = 9999;
 			bugged = true;
@@ -1528,13 +1519,17 @@ export default class GameReader {
 
 		const sizeScale = this.readRoleSizeScale(data.rolePtr);
 		const specialRole = this.getSpecialRoleFromSize(sizeScale);
-		const roleName = specialRole !== 'UNKNOWN' ? specialRole : this.formatRoleLabel({
-			roleTeam: data.impostor,
-			isImpostor: data.impostor == 1,
-			isThirdParty: data.impostor != 0 && data.impostor != 1,
-			specialRole,
-		} as Player);
+		const roleName =
+			specialRole !== 'UNKNOWN'
+				? specialRole
+				: this.formatRoleLabel({
+						roleTeam: data.impostor,
+						isImpostor: data.impostor == 1,
+						isThirdParty: data.impostor != 0 && data.impostor != 1,
+						specialRole,
+					} as Player);
 		const nameHash = this.hashCode(name);
+		const playerConfigId = playerUid ? this.hashCode(playerUid) : nameHash;
 		const colorId = data.color === this.rainbowColor ? RainbowColorId : data.color;
 		const visibleColorId = currentColor === this.rainbowColor ? RainbowColorId : currentColor;
 		const hasDisplayOutfit = currentOutfit > 0 && currentOutfit <= 10 && hasCurrentOutfit;
@@ -1549,9 +1544,13 @@ export default class GameReader {
 			clientId: clientId,
 			name,
 			nameHash,
+			playerConfigId,
+			friendCode,
+			playerUid,
+			playerIdentifier,
 			colorId,
 			hatId: data.hat ?? '',
-			petId: data.pet ?? '',
+			petId: data.pet,
 			skinId: data.skin ?? '',
 			visorId: data.visor ?? '',
 			currentOutfit,

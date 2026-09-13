@@ -31,7 +31,20 @@
 				"language": "اللغة",
 				"enable_warning": "تفعيل هذا سيؤدي إلى جعل الردهة الخاصة بك عامة لمستخدمي BetterCrewLinkKai الآخرين!",
 				"ban_warning": "سيؤدي النص الغير مناسب إلى حظر من BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "راديو المحتال الخاص",
+			"impostor_radio_private_description": "لا يسمع أعضاء الطاقم القريبون المحتال عبر الراديو.",
+			"impostor_radio_private_requires": "فعّل راديو المحتال أولاً.",
+			"host_notice": "يحدد المضيف إعدادات الغرفة.",
+			"host_notice_you": "أنت المضيف؛ تستخدم الغرفة إعداداتك.",
+			"edit_as_host": "تغيير",
+			"tab_current": "الغرفة الحالية",
+			"tab_mine": "إعداداتي",
+			"host": "المضيف",
+			"host_you": "أنت",
+			"host_unknown": "غير معروف",
+			"no_lobby": "لست في غرفة. انضم أو استضف لعبة لرؤية الإعدادات.",
+			"mine_notice": "تنطبق إعداداتك على الجميع عندما تكون المضيف."
 		},
 		"customplatforms": {
 			"title": "منصة مخصصة",
@@ -55,14 +68,21 @@
 			"crewvolume": "صوت الفريق كشبح",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "اختبار مكبر الصوت",
-			"test_speaker_stop": "إيقاف اختبار مكبر الصوت"
+			"test_speaker_stop": "إيقاف اختبار مكبر الصوت",
+			"auto_gain_disabled": "معطل عند تشغيل التحكم التلقائي بالكسب.",
+			"test_microphone_start": "اختبار الميكروفون",
+			"test_microphone_stop": "إيقاف اختبار الميكروفون",
+			"mode": "وضع الصوت"
 		},
 		"keyboard": {
 			"title": "اختصارات لوحة المفاتيح",
 			"push_to_talk": "اضغط للتحدث",
 			"mute": "كتم الصوت",
 			"deafen": "وقف السمع",
-			"impostor_radio": "راديو المحتال"
+			"impostor_radio": "راديو المحتال",
+			"hint": "انقر اختصاراً، ثم اضغط مفتاحاً أو زر فأرة. Escape يعطله.",
+			"press_key": "اضغط مفتاحاً…",
+			"disabled": "معطل"
 		},
 		"overlay": {
 			"title": "تراكب",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "قمع الضوضاء",
 			"spatial_audio": "صوت الفضاء",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "اختبار الميكروفون يتجاهل إلغاء الصدى. استخدم سماعات.",
+			"autoGainControl": "التحكم التلقائي بالكسب",
+			"autoGainControl_warning": "تجريبي: يضبط الميكروفون الصوت تلقائياً. اختبره أولاً."
 		},
 		"streaming": {
 			"title": "إعدادات البث",
@@ -110,13 +133,24 @@
 			"obs_overlay": "تراكب متصفح OBS",
 			"obs_url": "عنوان URL لمصدر متصفح OBS",
 			"voice_server_comp": "وضع التوافق مع خادم الصوت",
-			"voice_server_comp_warning": "يوصى بتغيير خادم الصوت إلى خادم صوت BetterCrewLinkKai (https://bettercrewl.ink) على سبيل المثال."
+			"voice_server_comp_warning": "يوصى بتغيير خادم الصوت إلى خادم صوت BetterCrewLinkKai (https://bettercrewl.ink) على سبيل المثال.",
+			"copy_url": "نسخ الرابط"
 		},
 		"troubleshooting": {
 			"title": "استكشاف الأخطاء وإصلاحها",
 			"restore": "استعادة الضبط الافتراضي",
 			"restore_warning": "سيؤدي هذا إلى إعادة تعيين كافة الإعدادات إلى قيمها الافتراضية.",
 			"warning": "غير متوفر كمضيف في اللعبة!"
+		},
+		"general": "عام",
+		"players": {
+			"title": "اللاعبون",
+			"volume": "مستوى الصوت",
+			"empty": "لا يوجد لاعبون آخرون. انضم لغرفة لتغيير صوتهم.",
+			"disconnected": "غير متصل",
+			"mute": "كتم",
+			"unmute": "إلغاء الكتم",
+			"muted": "مكتوم"
 		}
 	},
 	"lobbybrowser": {

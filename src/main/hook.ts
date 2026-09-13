@@ -1,19 +1,13 @@
 import { app, ipcMain } from 'electron';
 import GameReader from './GameReader';
-import { keyboardWatcher } from 'node-keyboard-watcher';
+import keyboardWatcherModule from 'node-keyboard-watcher';
+const { keyboardWatcher } = keyboardWatcherModule;
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 import { IpcHandlerMessages, IpcMessages, IpcRendererMessages, IpcSyncMessages } from '../common/ipc-messages';
 
 const store = new Store<ISettings>({ name: getVariantStoreName() });
-
-const currentPlayerConfigMap = store.get('playerConfigMap', {});
-const playerConfigMapLength = Object.keys(currentPlayerConfigMap).length;
-console.log('CONFIG count: ', playerConfigMapLength);
-if (playerConfigMapLength > 50) {
-	store.set('playerConfigMap', {});
-}
 
 let readingGame = false;
 export let gameReader: GameReader;
@@ -74,7 +68,12 @@ ipcMain.on(IpcSyncMessages.GET_INITIAL_STATE, (event) => {
 });
 
 ipcMain.handle(IpcMessages.REQUEST_MOD, () => {
-	return gameReader.loadedMod.id;
+	return gameReader?.loadedMod.id ?? 'NONE';
+});
+
+ipcMain.handle(IpcMessages.REQUEST_GAME_INFO, () => {
+	if (!readingGame) return null;
+	return gameReader.getGameInfo();
 });
 
 ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
@@ -93,7 +92,12 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 					if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
 						speaking += 1;
 					}
-					if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+					if (
+						keyCodeMatches(impostorRadioShortcut!, keyId) &&
+						gameReader?.lastState.players?.find((value) => {
+							return value.clientId === gameReader.lastState.clientId;
+						})?.isImpostor
+					) {
 						speaking += 1;
 						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, true);
 					}
@@ -121,7 +125,12 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 					if (keyCodeMatches(muteShortcut!, keyId)) {
 						sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_MUTE);
 					}
-					if (keyCodeMatches(impostorRadioShortcut!, keyId) && gameReader?.lastState.players?.find((value) => {return value.clientId === gameReader.lastState.clientId})?.isImpostor) {
+					if (
+						keyCodeMatches(impostorRadioShortcut!, keyId) &&
+						gameReader?.lastState.players?.find((value) => {
+							return value.clientId === gameReader.lastState.clientId;
+						})?.isImpostor
+					) {
 						speaking -= 1;
 						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, false);
 					}
@@ -173,26 +182,35 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 	}
 });
 
-ipcMain.on('reload', async (_, lobbybrowser) => {
-	if (!lobbybrowser) {
-		global.mainWindow?.reload();
+type WindowTarget = 'main' | 'lobbies' | 'settings' | 'inquiry';
+
+function targetWindow(target: WindowTarget = 'main') {
+	switch (target) {
+		case 'lobbies':
+			return global.lobbyBrowser;
+		case 'inquiry':
+			return global.inquiryWindow;
+		case 'settings':
+			return global.settingsWindow;
+		default:
+			return global.mainWindow;
 	}
-	global.lobbyBrowser?.reload();
+}
+
+ipcMain.on('reload', async (_, target: WindowTarget) => {
+	targetWindow(target)?.reload();
 });
 
-ipcMain.on('minimize', async (_, lobbybrowser) => {
-	if (!lobbybrowser) {
-		global.mainWindow?.minimize();
-	}
-	global.lobbyBrowser?.minimize();
+ipcMain.on('minimize', async (_, target: WindowTarget) => {
+	targetWindow(target)?.minimize();
 });
 
-ipcMain.handle("getlocale", () => {
+ipcMain.handle('getlocale', () => {
 	return app.getLocale();
 });
 
 ipcMain.on('relaunch', async () => {
-	app.relaunch();  
+	app.relaunch();
 	app.exit();
 });
 

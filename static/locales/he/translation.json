@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "רדיו מתחזה פרטי",
+			"impostor_radio_private_description": "אנשי צוות קרובים לא שומעים מתחזה ברדיו.",
+			"impostor_radio_private_requires": "הפעל תחילה את רדיו המתחזה.",
+			"host_notice": "המארח קובע את הגדרות הלובי.",
+			"host_notice_you": "אתה המארח; הלובי משתמש בהגדרות שלך.",
+			"edit_as_host": "שנה",
+			"tab_current": "הלובי הנוכחי",
+			"tab_mine": "ההגדרות שלי",
+			"host": "מארח",
+			"host_you": "אתה",
+			"host_unknown": "לא ידוע",
+			"no_lobby": "אינך בלובי. הצטרף או ארח משחק כדי לראות את ההגדרות.",
+			"mine_notice": "כשאתה מארח, ההגדרות שלך חלות על כולם."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "מושבת כשהגברה אוטומטית פעילה.",
+			"test_microphone_start": "בדיקת מיקרופון",
+			"test_microphone_stop": "עצור בדיקת מיקרופון",
+			"mode": "מצב קול"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "לחץ על קיצור ואז על מקש או כפתור עכבר. Escape משבית אותו.",
+			"press_key": "לחץ על מקש…",
+			"disabled": "מושבת"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "בדיקת המיקרופון מתעלמת מביטול הד. השתמש באוזניות.",
+			"autoGainControl": "הגברה אוטומטית",
+			"autoGainControl_warning": "בטא: המיקרופון מכוון עוצמה אוטומטית. בדוק אותו תחילה."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "העתק כתובת"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "כללי",
+		"players": {
+			"title": "שחקנים",
+			"volume": "עוצמת קול",
+			"empty": "אין שחקנים אחרים. הצטרף ללובי כדי לשנות את עוצמת הקול שלהם.",
+			"disconnected": "מנותק",
+			"mute": "השתק",
+			"unmute": "בטל השתקה",
+			"muted": "מושתק"
 		}
 	},
 	"lobbybrowser": {

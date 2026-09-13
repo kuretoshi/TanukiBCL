@@ -31,7 +31,20 @@
 				"language": "Język",
 				"enable_warning": "Włączenie tego sprawi, że Twoja poczekalnia stanie się publiczna dla innych użytkowników BetterCrewLinkKai!",
 				"ban_warning": "Nieodpowiednia nazwa spowoduje otrzymanie blokady od BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Prywatne radio impostora",
+			"impostor_radio_private_description": "Pobliska załoga nie słyszy impostora przez radio.",
+			"impostor_radio_private_requires": "Najpierw włącz radio impostora.",
+			"host_notice": "Host ustala ustawienia lobby.",
+			"host_notice_you": "Jesteś hostem; lobby używa twoich ustawień.",
+			"edit_as_host": "Zmień",
+			"tab_current": "Obecne lobby",
+			"tab_mine": "Moje ustawienia",
+			"host": "Host",
+			"host_you": "Ty",
+			"host_unknown": "Nieznany",
+			"no_lobby": "Nie jesteś w lobby. Dołącz lub utwórz grę, by zobaczyć ustawienia.",
+			"mine_notice": "Jako host stosujesz swoje ustawienia dla wszystkich."
 		},
 		"customplatforms": {
 			"title": "Niestandardowa platforma",
@@ -55,14 +68,21 @@
 			"crewvolume": "Głośność żywych graczy dla duchów",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Przetestuj dźwięk",
-			"test_speaker_stop": "Zatrzymaj test dźwięku"
+			"test_speaker_stop": "Zatrzymaj test dźwięku",
+			"auto_gain_disabled": "Wyłączone przy automatycznym wzmocnieniu.",
+			"test_microphone_start": "Testuj mikrofon",
+			"test_microphone_stop": "Zatrzymaj test mikrofonu",
+			"mode": "Tryb głosu"
 		},
 		"keyboard": {
 			"title": "Skróty klawiszowe",
 			"push_to_talk": "Naciśnij by mówić",
 			"mute": "Wycisz mikrofon",
 			"deafen": "Wycisz dźwięk",
-			"impostor_radio": "Radio dla impostorów"
+			"impostor_radio": "Radio dla impostorów",
+			"hint": "Kliknij skrót i naciśnij klawisz lub przycisk myszy. Escape go wyłącza.",
+			"press_key": "Naciśnij klawisz…",
+			"disabled": "Wyłączone"
 		},
 		"overlay": {
 			"title": "Nakładka",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Tłumienie hałasu",
 			"spatial_audio": "Dźwięk przestrzenny",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Test mikrofonu pomija redukcję echa. Użyj słuchawek.",
+			"autoGainControl": "Automatyczne wzmocnienie",
+			"autoGainControl_warning": "Beta: mikrofon automatycznie reguluje głośność. Najpierw go przetestuj."
 		},
 		"streaming": {
 			"title": "Ustawienia streamingu",
@@ -110,13 +133,24 @@
 			"obs_overlay": "Nakładka przeglądarki do OBS",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "Tryb kompatybilnośći z serwerem głosowym",
-			"voice_server_comp_warning": "Zaleca się zamianę serwera głosowego na oficjalny serwer BetterCrewlink, czyli https://bettercrewl.ink"
+			"voice_server_comp_warning": "Zaleca się zamianę serwera głosowego na oficjalny serwer BetterCrewlink, czyli https://bettercrewl.ink",
+			"copy_url": "Kopiuj URL"
 		},
 		"troubleshooting": {
 			"title": "Rozwiązywanie problemów",
 			"restore": "Przywróć domyślne ustawienia",
 			"restore_warning": "Spowoduje to zresetowanie WSZYSTKICH ustawień do ich wartości domyślnych.",
 			"warning": "Niedostępne bo host nie jest w grze!"
+		},
+		"general": "Ogólne",
+		"players": {
+			"title": "Gracze",
+			"volume": "Głośność",
+			"empty": "Brak innych graczy. Dołącz do lobby, by zmienić ich głośność.",
+			"disconnected": "Rozłączono",
+			"mute": "Wycisz",
+			"unmute": "Wyłącz wyciszenie",
+			"muted": "Wyciszony"
 		}
 	},
 	"lobbybrowser": {

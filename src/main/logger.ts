@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron';
-import log from 'electron-log';
+import log from 'electron-log/main.js';
 import { join as joinPath } from 'path';
 import { getAppArgs } from './args';
 
@@ -26,7 +26,7 @@ export function isDebugLoggingEnabled() {
 
 export function initializeDebugLogging() {
 	log.transports.file.level = debugLoggingEnabled ? 'debug' : 'warn';
-	log.transports.file.resolvePath = () => logFilePath;
+	log.transports.file.resolvePathFn = () => logFilePath;
 	log.transports.console.level = false;
 	Object.assign(console, log.functions);
 
@@ -49,9 +49,11 @@ export function registerWindowLogging(window: BrowserWindow, name: string) {
 		log[logLevel](`[renderer:${name}] ${message}`, sourceId ? `(${sourceId}:${line})` : '');
 	});
 
-	(window.webContents as Electron.WebContents & {
-		on(event: 'crashed', listener: () => void): Electron.WebContents;
-	}).on('crashed', () => {
+	(
+		window.webContents as Electron.WebContents & {
+			on(event: 'crashed', listener: () => void): Electron.WebContents;
+		}
+	).on('crashed', () => {
 		log.error(`[renderer:${name}] crashed`);
 	});
 }

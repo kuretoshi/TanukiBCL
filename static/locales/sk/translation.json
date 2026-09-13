@@ -31,7 +31,20 @@
 				"language": "Jazyk",
 				"enable_warning": "Toto povolenie urobí tvoje lobby verejné pre ostatných BCL používateľov!",
 				"ban_warning": "Nevhodný text bude mať za následok ban z BCL."
-			}
+			},
+			"impostor_radio_private": "Súkromné rádio podvodníkov",
+			"impostor_radio_private_description": "Blízki členovia posádky podvodníka v rádiu nepočujú.",
+			"impostor_radio_private_requires": "Najprv zapnite rádio podvodníkov.",
+			"host_notice": "Nastavenia lobby určuje hostiteľ.",
+			"host_notice_you": "Ste hostiteľ; lobby používa vaše nastavenia.",
+			"edit_as_host": "Zmeniť",
+			"tab_current": "Aktuálne lobby",
+			"tab_mine": "Moje nastavenia",
+			"host": "Hostiteľ",
+			"host_you": "Vy",
+			"host_unknown": "Neznámy",
+			"no_lobby": "Nie ste v lobby. Pripojte sa alebo ju vytvorte a uvidíte nastavenia.",
+			"mine_notice": "Keď ste hostiteľ, vaše nastavenia platia pre všetkých."
 		},
 		"customplatforms": {
 			"title": "Vlastná platforma",
@@ -55,14 +68,21 @@
 			"crewvolume": "Hlasitosť posádky, keď si duch",
 			"ghostvolumeasimpostor": "Hlasitosť duchov, keď si podvodník",
 			"test_speaker_start": "Test reproduktora",
-			"test_speaker_stop": "Zastaviť test reproduktora"
+			"test_speaker_stop": "Zastaviť test reproduktora",
+			"auto_gain_disabled": "Vypnuté pri automatickom zosilnení.",
+			"test_microphone_start": "Otestovať mikrofón",
+			"test_microphone_stop": "Zastaviť test mikrofónu",
+			"mode": "Režim hlasu"
 		},
 		"keyboard": {
 			"title": "Klávesové skratky",
 			"push_to_talk": "Stlač pre rozprávanie",
 			"mute": "Stlmiť mikrofón",
 			"deafen": "Stlmiť zvuk",
-			"impostor_radio": "Rádio podvodníkov"
+			"impostor_radio": "Rádio podvodníkov",
+			"hint": "Kliknite na skratku a stlačte kláves alebo tlačidlo myši. Escape ju vypne.",
+			"press_key": "Stlačte kláves…",
+			"disabled": "Vypnuté"
 		},
 		"overlay": {
 			"title": "Prekrytie",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Potlačenie šumu",
 			"spatial_audio": "Priestorový zvuk",
 			"oldsampledebug": "Ukážka ladenia",
-			"oldsampledebug_warning": "Toto je testovacia funkcia povolená LEN na požiadanie."
+			"oldsampledebug_warning": "Toto je testovacia funkcia povolená LEN na požiadanie.",
+			"echocancellation_description": "Test mikrofónu ignoruje potlačenie ozveny. Použite slúchadlá.",
+			"autoGainControl": "Automatické zosilnenie",
+			"autoGainControl_warning": "Beta: mikrofón upravuje hlasitosť automaticky. Najprv ho otestujte."
 		},
 		"streaming": {
 			"title": "Nastavenie streamovania",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS prekrytie prehliadača",
 			"obs_url": "OBS URL zdroj",
 			"voice_server_comp": "Režim kompatibility HS",
-			"voice_server_comp_warning": "Odporúča sa hlasový server BetterCrewLinkKai (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "Odporúča sa hlasový server BetterCrewLinkKai (https://bettercrewl.ink).",
+			"copy_url": "Kopírovať URL"
 		},
 		"troubleshooting": {
 			"title": "Riešenie problémov",
 			"restore": "Obnoviť predvolené nastavenia",
 			"restore_warning": "Týmto sa obnovia VŠETKY nastavenia na pôvodné hodnoty.",
 			"warning": "Nie je k dispozícii ako hostiteľ v hre!"
+		},
+		"general": "Všeobecné",
+		"players": {
+			"title": "Hráči",
+			"volume": "Hlasitosť",
+			"empty": "Žiadni ďalší hráči. Pripojte sa do lobby a zmeňte ich hlasitosť.",
+			"disconnected": "Odpojený",
+			"mute": "Stlmiť",
+			"unmute": "Zapnúť zvuk",
+			"muted": "Stlmený"
 		}
 	},
 	"lobbybrowser": {

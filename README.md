@@ -46,7 +46,15 @@ Windows では `TanukiBCL-Setup-x.x.x.exe` を実行してインストールし�
 
 設定画面の `ボイスエフェクトの強さ` で効果量を調整できます。`ボイスエフェクトテスト` を使うと、実際にどのように聞こえるか確認できます。
 
+## アップデート
+
+設定画面の「アップデート」で「アップデートを確認」を押します。更新があれば「最新バージョンv…」が表示され、「アップデート開始」が有効になります。更新がなければ「最新バージョンです」と表示します。更新は開始ボタンを押した場合だけ行い、ダウンロード完了後にアプリを終了してインストールします。時間経過や通常のアプリ終了による自動インストールは行いません。
+
+Lite版の「ロビー設定」は「現在のロビー」の表示のみで、「自分の設定」は表示しません。
+
 ## 不具合報告
+
+アプリ下部の問い合わせボタンから、専用ウィンドウで件名・本文・添付ファイルを入力できます。アプリを起動したまま問い合わせウィンドウを閉じて開き直しても、入力途中の内容は保持されます。
 
 こちらのDiscordサーバーに報告をお願いします。
 https://discord.gg/cUX5KUkZPD
@@ -55,25 +63,25 @@ https://discord.gg/cUX5KUkZPD
 
 ### 必要なもの
 
-- Node.js 16.14.2
-- npm 8.5.0
-- Yarn 1.22.22
+- Windows 64bit
+- Node.js 24.13.0（`.node-version` に記載）と付属のnpm
 - Git
-- Windows でビルドする場合は Windows 環境
 
-このブランチは古い Electron 11 系を使っているため、Node.js 22 以上ではなく Node.js 16.14.2 を使ってください。Windows では [nvm-windows](https://github.com/coreybutler/nvm-windows) で切り替えるのがおすすめです。
+3.2.0ではElectron 43、React 19、MUI 9、Vite、ES Modulesへ移行しました。依存は`package-lock.json`で固定しています。
 
-### セットアップ
+### セットアップと確認
 
 ```powershell
-git clone https://github.com/kuretoshi/TanukiBCL.git
-cd TanukiBCL
-nvm use 16.14.2
-npm.cmd install -g yarn@1.22.22
-yarn.cmd install --frozen-lockfile --ignore-scripts
+npm.cmd ci
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run test:upstream
+npm.cmd run verify:esm
 ```
 
-PowerShell で `npm` が実行ポリシーにより止まる場合は、`npm.cmd` を使ってください。
+Windows用ネイティブ依存のビルド補正は`vendor`に収録しています。通常の依存取得・64bitビルドにVisual StudioやSSH鍵は不要です。由来と再構築手順は[ネイティブ依存の説明](vendor/README.md)を参照してください。
+
+PowerShellの実行ポリシーで`npm`が止まる場合は、上記のように`npm.cmd`を使用します。
 
 ### 開発起動
 
@@ -81,28 +89,21 @@ PowerShell で `npm` が実行ポリシーにより止まる場合は、`npm.cmd
 npm.cmd run dev
 ```
 
-### コンパイル
+Lite版の開発起動では、現在のPowerShellで`$env:BETTERCREWLINK_LITE = '1'`を設定してから実行します。通常版へ戻すときはこの環境変数を削除します。
+
+### Windows 64bitビルド
 
 ```powershell
-npm.cmd run compile
+npm.cmd run build
+.\node_modules\.bin\electron-builder.cmd --win --x64 --publish never
+.\node_modules\.bin\electron-builder.cmd --win --x64 --config electron-builder-lite.yml --publish never
 ```
 
-### Windows 64bit ビルド
+- 通常版: `dist/TanukiBCL-Setup-3.2.0.exe`
+- Lite版: `dist-lite/TanukiBCLLite-Setup-3.2.0.exe`
 
-```powershell
-npm.cmd run compile
-.\node_modules\.bin\electron-builder.cmd --win --x64 --config.npmRebuild=false
-```
+N-API対応の検証済みビルドを使うため、配布設定の`npmRebuild`は無効です。ネイティブ依存を変更した場合は、NodeとElectronの両方で読み込みとメモリ読み取りを再検証してください。今回の配布確認対象はWindows x64です。
 
-生成物は `dist\TanukiBCL-Setup-X.X.X.exe` に出力されます。
-
-### Windows 32bit / 64bit ビルド
-
-```powershell
-npm.cmd run dist
-```
-
-`npm.cmd run dist` や `npm.cmd run dist:64` は内部で native dependency の rebuild を実行するため、環境によっては `electron-overlay-window` などのビルドで長時間止まる場合があります。その場合は上記の Windows 64bit ビルド手順を使ってください。
 
 ## 貢献
 

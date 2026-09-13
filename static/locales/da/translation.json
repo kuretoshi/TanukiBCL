@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Privat bedrager-radio",
+			"impostor_radio_private_description": "Spillere i nærheden kan ikke høre en bedrager i radioen.",
+			"impostor_radio_private_requires": "Slå bedrager-radio til først.",
+			"host_notice": "Værten styrer lobbyens indstillinger.",
+			"host_notice_you": "Du er vært; lobbyen bruger dine indstillinger.",
+			"edit_as_host": "Skift",
+			"tab_current": "Nuværende lobby",
+			"tab_mine": "Mine indstillinger",
+			"host": "Vært",
+			"host_you": "Dig",
+			"host_unknown": "Ukendt",
+			"no_lobby": "Ikke i en lobby. Deltag eller vær vært for at se indstillingerne.",
+			"mine_notice": "Dine indstillinger gælder for alle, når du er vært."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "Slået fra, mens automatisk forstærkning er aktiv.",
+			"test_microphone_start": "Test mikrofon",
+			"test_microphone_stop": "Stop mikrofontest",
+			"mode": "Stemmetilstand"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Klik på en genvej, og tryk på en tast eller museknap. Escape slår den fra.",
+			"press_key": "Tryk på en tast…",
+			"disabled": "Slået fra"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Mikrofontesten bruger ikke ekkoreduktion. Brug hovedtelefoner.",
+			"autoGainControl": "Automatisk forstærkning",
+			"autoGainControl_warning": "Beta: Mikrofonen justerer lydstyrken automatisk. Test den først."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "Kopiér URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Generelt",
+		"players": {
+			"title": "Spillere",
+			"volume": "Lydstyrke",
+			"empty": "Ingen andre spillere. Deltag i en lobby for at ændre deres lydstyrke.",
+			"disconnected": "Afbrudt",
+			"mute": "Slå lyd fra",
+			"unmute": "Slå lyd til",
+			"muted": "Lydløs"
 		}
 	},
 	"lobbybrowser": {

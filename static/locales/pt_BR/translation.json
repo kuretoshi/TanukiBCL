@@ -31,7 +31,20 @@
 				"language": "Idioma",
 				"enable_warning": "Habilitando isso tornará sua sala pública para outros usuários do BetterCrewLinkKai!",
 				"ban_warning": "Texto inapropriado resultará em banimento do BrewCrewLink."
-			}
+			},
+			"impostor_radio_private": "Rádio privado de impostor",
+			"impostor_radio_private_description": "Tripulantes próximos não ouvem o impostor pelo rádio.",
+			"impostor_radio_private_requires": "Ative primeiro o rádio de impostor.",
+			"host_notice": "O anfitrião controla as configurações da sala.",
+			"host_notice_you": "Você é o anfitrião; a sala usa suas configurações.",
+			"edit_as_host": "Alterar",
+			"tab_current": "Sala atual",
+			"tab_mine": "Minhas configurações",
+			"host": "Anfitrião",
+			"host_you": "Você",
+			"host_unknown": "Desconhecido",
+			"no_lobby": "Você não está em uma sala. Entre ou crie uma para ver as configurações.",
+			"mine_notice": "Suas configurações valem para todos quando você é anfitrião."
 		},
 		"customplatforms": {
 			"title": "Plataforma Personalizada",
@@ -55,14 +68,21 @@
 			"crewvolume": "Volume da Tripulação como Fantasma",
 			"ghostvolumeasimpostor": "Volume do Fantasma como Impostor",
 			"test_speaker_start": "Iniciar o Teste de Alto-falante",
-			"test_speaker_stop": "Parar o Teste de Alto-falante"
+			"test_speaker_stop": "Parar o Teste de Alto-falante",
+			"auto_gain_disabled": "Desativado com ganho automático.",
+			"test_microphone_start": "Testar microfone",
+			"test_microphone_stop": "Parar teste",
+			"mode": "Modo de voz"
 		},
 		"keyboard": {
 			"title": "Atalhos de Teclado",
 			"push_to_talk": "Aperte Para Falar",
 			"mute": "Silenciado",
 			"deafen": "Sem Áudio",
-			"impostor_radio": "Rádio do Impostor"
+			"impostor_radio": "Rádio do Impostor",
+			"hint": "Clique em um atalho e pressione uma tecla ou botão do mouse. Escape o desativa.",
+			"press_key": "Pressione uma tecla…",
+			"disabled": "Desativado"
 		},
 		"overlay": {
 			"title": "Sobreposição",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Supressão de Ruído",
 			"spatial_audio": "Áudio Espacial",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "Isso é uma função de teste SOMENTE habilitada quando solicitada."
+			"oldsampledebug_warning": "Isso é uma função de teste SOMENTE habilitada quando solicitada.",
+			"echocancellation_description": "O teste ignora o cancelamento de eco. Use fones de ouvido.",
+			"autoGainControl": "Ganho automático",
+			"autoGainControl_warning": "Beta: o microfone ajusta o volume automaticamente. Teste primeiro."
 		},
 		"streaming": {
 			"title": "Configurações de Streaming",
@@ -110,13 +133,24 @@
 			"obs_overlay": "Sobreposição do OBS",
 			"obs_url": "URL da Sobreposição do OBS",
 			"voice_server_comp": "Modo de Compatibilidade com servidores CrewLink",
-			"voice_server_comp_warning": "É recomendado mudar o Servidor de Voz para o Servidor de Voz do BetterCrewLinkKai (https://bettercrewl.ink)."
+			"voice_server_comp_warning": "É recomendado mudar o Servidor de Voz para o Servidor de Voz do BetterCrewLinkKai (https://bettercrewl.ink).",
+			"copy_url": "Copiar URL"
 		},
 		"troubleshooting": {
 			"title": "Solução de Problemas",
 			"restore": "Restaurar Padrões",
 			"restore_warning": "Isso irá redefinir TODAS as configurações para seus valores padrões.",
 			"warning": "Opção indisponível como anfitrião do jogo!"
+		},
+		"general": "Geral",
+		"players": {
+			"title": "Jogadores",
+			"volume": "Volume",
+			"empty": "Não há outros jogadores. Entre em uma sala para alterar o volume deles.",
+			"disconnected": "Desconectado",
+			"mute": "Silenciar",
+			"unmute": "Ativar som",
+			"muted": "Silenciado"
 		}
 	},
 	"lobbybrowser": {

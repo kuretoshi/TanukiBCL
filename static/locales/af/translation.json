@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Privaat Bedrieër-radio",
+			"impostor_radio_private_description": "Naby bemanningslede hoor nie bedrieërs oor die radio nie.",
+			"impostor_radio_private_requires": "Skakel eers Bedrieër-radio aan.",
+			"host_notice": "Die gasheer stel die kamerinstellings.",
+			"host_notice_you": "Jy is die gasheer; die kamer gebruik jou instellings.",
+			"edit_as_host": "Verander",
+			"tab_current": "Huidige kamer",
+			"tab_mine": "My instellings",
+			"host": "Gasheer",
+			"host_you": "Jy",
+			"host_unknown": "Onbekend",
+			"no_lobby": "Nie in 'n kamer nie. Sluit aan of skep een om instellings te sien.",
+			"mine_notice": "Jou instellings geld vir almal wanneer jy gasheer is."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "Afgeskakel terwyl outomatiese versterking aan is.",
+			"test_microphone_start": "Toets mikrofoon",
+			"test_microphone_stop": "Stop mikrofoontoets",
+			"mode": "Stemmodus"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Klik 'n kortpad, druk dan 'n sleutel of muisknoppie. Escape skakel dit af.",
+			"press_key": "Druk 'n sleutel…",
+			"disabled": "Afgeskakel"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Die mikrofoontoets ignoreer egokansellasie. Gebruik oorfone.",
+			"autoGainControl": "Outomatiese versterking",
+			"autoGainControl_warning": "Beta: die mikrofoon pas volume outomaties aan. Toets dit eers."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "Kopieer URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Algemeen",
+		"players": {
+			"title": "Spelers",
+			"volume": "Volume",
+			"empty": "Geen ander spelers nie. Sluit aan om hul volume te verander.",
+			"disconnected": "Ontkoppel",
+			"mute": "Demp",
+			"unmute": "Ontdemp",
+			"muted": "Gedemp"
 		}
 	},
 	"lobbybrowser": {

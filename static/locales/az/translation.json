@@ -31,7 +31,20 @@
 				"language": "Dil",
 				"enable_warning": "Bunu fəallaşdırmaq, lobbini digər BetterCrewLinkKai istifadəçiləri üçün ictimai edəcək!",
 				"ban_warning": "Uyğunsuz mətn, BetterCrewLinkKai-də qadağa qoyulmasına səbəb olacaqdır."
-			}
+			},
+			"impostor_radio_private": "Şəxsi İmpostor Radiosu",
+			"impostor_radio_private_description": "Yaxındakı ekipaj impostoru radioda eşitmir.",
+			"impostor_radio_private_requires": "Əvvəl İmpostor Radiosunu aktiv edin.",
+			"host_notice": "Lobbi ayarlarını host seçir.",
+			"host_notice_you": "Siz hostsunuz; lobbi sizin ayarlarınızı işlədir.",
+			"edit_as_host": "Dəyiş",
+			"tab_current": "Cari lobbi",
+			"tab_mine": "Ayarlarım",
+			"host": "Host",
+			"host_you": "Siz",
+			"host_unknown": "Naməlum",
+			"no_lobby": "Lobbidə deyilsiniz. Ayarları görmək üçün qoşulun və ya oyun yaradın.",
+			"mine_notice": "Host olduqda ayarlarınız hamıya tətbiq edilir."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Ruh kimi İşçi Səs Səviyyəsi",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Dinamiki test edin",
-			"test_speaker_stop": "Testi dayandırın"
+			"test_speaker_stop": "Testi dayandırın",
+			"auto_gain_disabled": "Avtomatik qazanc aktiv olanda söndürülür.",
+			"test_microphone_start": "Mikrofonu sına",
+			"test_microphone_stop": "Mikrofon sınağını dayandır",
+			"mode": "Səs rejimi"
 		},
 		"keyboard": {
 			"title": "Klaviatura Qısayolları",
 			"push_to_talk": "Danışmaq üçün Basın",
 			"mute": "Səsi kəs",
 			"deafen": "Karlaşdır",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Qısayola klikləyin, sonra düymə basın. Escape onu söndürür.",
+			"press_key": "Düymə basın…",
+			"disabled": "Söndürülüb"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Səs-küy azaltma",
 			"spatial_audio": "Məkan səsi",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Mikrofon sınağı əks-səda ləğvini saymır. Qulaqlıq istifadə edin.",
+			"autoGainControl": "Avtomatik qazanc",
+			"autoGainControl_warning": "Beta: mikrofon səsi avtomatik tənzimləyir. Əvvəl sınaqdan keçirin."
 		},
 		"streaming": {
 			"title": "Axın tənzimləmələri",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Səyyah Overlay-ı",
 			"obs_url": "OBS Səyyah Mənbə URL-si",
 			"voice_server_comp": "Səs Server Uyğunluq Rejimi",
-			"voice_server_comp_warning": "Məsələn, səs serverini BetterCrewLinkKai Voice Server (https://bettercrewl.ink) olaraq dəyişdirməyiniz tövsiyə edilir."
+			"voice_server_comp_warning": "Məsələn, səs serverini BetterCrewLinkKai Voice Server (https://bettercrewl.ink) olaraq dəyişdirməyiniz tövsiyə edilir.",
+			"copy_url": "URL-ni kopyala"
 		},
 		"troubleshooting": {
 			"title": "Problemlərin aradan qaldırılması",
 			"restore": "İlkin vəziyyəti bərpa edin",
 			"restore_warning": "BÜTÜN tənzimləmələr ilkin dəyərlərinə qaytarılacaq.",
 			"warning": "Oyunda host kimi əlçatan deyil!"
+		},
+		"general": "Ümumi",
+		"players": {
+			"title": "Oyunçular",
+			"volume": "Səs",
+			"empty": "Başqa oyunçu yoxdur. Səslərini dəyişmək üçün lobbiyə qoşulun.",
+			"disconnected": "Bağlantı kəsildi",
+			"mute": "Səssiz et",
+			"unmute": "Səsi aç",
+			"muted": "Səssiz"
 		}
 	},
 	"lobbybrowser": {

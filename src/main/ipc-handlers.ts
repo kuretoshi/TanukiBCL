@@ -1,6 +1,7 @@
-import { app, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { platform, homedir } from 'os';
-import { enumerateValues, enumerateKeys, HKEY } from 'registry-js';
+import registryJs from 'registry-js';
+const { enumerateValues, enumerateKeys, HKEY } = registryJs;
 import {
 	DefaultGamePlatforms,
 	GamePlatform,
@@ -8,13 +9,19 @@ import {
 	GamePlatformMap,
 	PlatformRunType,
 } from '../common/GamePlatform';
-import { parse } from 'vdf-parser';
+import vdfParser from 'vdf-parser';
+const { parse } = vdfParser;
 import spawn from 'cross-spawn';
 import path from 'path';
 import fs from 'fs';
-import fetch from 'node-fetch';
 
-import { InquiryPayload, IpcHandlerMessages, IpcMessages, IpcOverlayMessages } from '../common/ipc-messages';
+import {
+	InquiryPayload,
+	IpcSettingsMessages,
+	IpcHandlerMessages,
+	IpcMessages,
+	IpcOverlayMessages,
+} from '../common/ipc-messages';
 import { INQUIRY_DISCORD_FORUM_TAG_IDS, INQUIRY_DISCORD_FORUM_WEBHOOK_URL } from './inquiryConfig';
 import { getLogFilePaths } from './logger';
 
@@ -161,12 +168,12 @@ async function submitDiscordInquiry(inquiry: InquiryPayload) {
 						headers: { 'Content-Type': multipart.contentType },
 						body: multipart.body,
 					});
-			  })()
+				})()
 			: await fetch(webhookUrl, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(payload),
-			  });
+				});
 
 	if (!response.ok) {
 		const text = await response.text();
@@ -197,7 +204,7 @@ export const initializeIpcListeners = (): void => {
 				});
 				process.on('error', error);
 				process.unref();
-			} catch (e) {
+			} catch {
 				error();
 			}
 		}
@@ -211,26 +218,40 @@ export const initializeIpcListeners = (): void => {
 	ipcMain.on(IpcMessages.SEND_TO_OVERLAY, (_, event: IpcOverlayMessages, ...args: unknown[]) => {
 		try {
 			if (global.overlay) global.overlay.webContents.send(event, ...args);
-		} catch (e) {
+		} catch {
 			/*empty*/
 		}
 	});
 
-	ipcMain.on(IpcMessages.SEND_TO_MAINWINDOW, (_, event: IpcOverlayMessages, ...args: unknown[]) => {
-		console.log('SEND TO MAINWINDOW CALLLED');
+	ipcMain.on(IpcMessages.SEND_TO_SETTINGS, (_, event: IpcSettingsMessages, ...args: unknown[]) => {
 		try {
-			if (global.mainWindow) global.mainWindow.webContents.send(event, ...args);
-		} catch (e) {
+			if (global.settingsWindow) global.settingsWindow.webContents.send(event, ...args);
+		} catch {
 			/*empty*/
 		}
 	});
+
+	ipcMain.on(
+		IpcMessages.SEND_TO_MAINWINDOW,
+		(_, event: IpcOverlayMessages | IpcSettingsMessages, ...args: unknown[]) => {
+			console.log('SEND TO MAINWINDOW CALLLED');
+			try {
+				if (global.mainWindow) global.mainWindow.webContents.send(event, ...args);
+			} catch {
+				/*empty*/
+			}
+		}
+	);
 
 	ipcMain.on(IpcMessages.QUIT_CREWLINK, () => {
 		try {
 			const mainWindow = global.mainWindow;
 			const overlay = global.overlay;
+			const settingsWindow = global.settingsWindow;
 			global.mainWindow = null;
 			global.overlay = null;
+			global.settingsWindow = null;
+			settingsWindow?.close();
 			mainWindow?.close();
 			overlay?.close();
 			mainWindow?.destroy();
@@ -246,14 +267,15 @@ export const initializeIpcListeners = (): void => {
 // or the caller should be "await"'ing them.  If neither of these are the case
 // consider making it a "listener" instead for performance and readability
 export const initializeIpcHandlers = (): void => {
-	ipcMain.handle(IpcHandlerMessages.SELECT_INQUIRY_ATTACHMENTS, async () => {
-		const result = global.mainWindow
-			? await dialog.showOpenDialog(global.mainWindow, {
+	ipcMain.handle(IpcHandlerMessages.SELECT_INQUIRY_ATTACHMENTS, async (event) => {
+		const parent = BrowserWindow.fromWebContents(event.sender);
+		const result = parent
+			? await dialog.showOpenDialog(parent, {
 					properties: ['openFile', 'multiSelections'],
-			  })
+				})
 			: await dialog.showOpenDialog({
 					properties: ['openFile', 'multiSelections'],
-			  });
+				});
 		if (result.canceled) {
 			return [];
 		}
@@ -329,7 +351,7 @@ export const initializeIpcHandlers = (): void => {
 				if (vdfObject['Registry']['HKCU']['Software']['Valve']['Steam']['Apps']['945360']['installed'] == 1) {
 					availableGamePlatforms[GamePlatform.STEAM] = DefaultGamePlatforms[GamePlatform.STEAM];
 				}
-			} catch (e) {
+			} catch {
 				/* empty */
 			}
 		}

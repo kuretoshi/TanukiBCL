@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Приватни радио варалице",
+			"impostor_radio_private_description": "Оближњи чланови посаде не чују варалицу преко радија.",
+			"impostor_radio_private_requires": "Прво укључите радио варалице.",
+			"host_notice": "Домаћин одређује подешавања лобија.",
+			"host_notice_you": "Ви сте домаћин; лоби користи ваша подешавања.",
+			"edit_as_host": "Промени",
+			"tab_current": "Тренутни лоби",
+			"tab_mine": "Моја подешавања",
+			"host": "Домаћин",
+			"host_you": "Ви",
+			"host_unknown": "Непознато",
+			"no_lobby": "Нисте у лобију. Придружите се или направите игру да видите подешавања.",
+			"mine_notice": "Када сте домаћин, ваша подешавања важе за све."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "Искључено док је аутоматско појачање укључено.",
+			"test_microphone_start": "Тестирај микрофон",
+			"test_microphone_stop": "Заустави тест",
+			"mode": "Гласовни режим"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Кликните пречицу, па притисните тастер или дугме миша. Escape је искључује.",
+			"press_key": "Притисните тастер…",
+			"disabled": "Искључено"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Тест микрофона не користи уклањање одјека. Користите слушалице.",
+			"autoGainControl": "Аутоматско појачање",
+			"autoGainControl_warning": "Бета: микрофон сам подешава јачину. Прво га тестирајте."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "Копирај URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Опште",
+		"players": {
+			"title": "Играчи",
+			"volume": "Јачина звука",
+			"empty": "Нема других играча. Уђите у лоби да промените њихову јачину.",
+			"disconnected": "Прекинута веза",
+			"mute": "Утишај",
+			"unmute": "Укључи звук",
+			"muted": "Утишан"
 		}
 	},
 	"lobbybrowser": {

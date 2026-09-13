@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Yksityinen huijariradio",
+			"impostor_radio_private_description": "Lähellä olevat miehistön jäsenet eivät kuule huijaria radiosta.",
+			"impostor_radio_private_requires": "Ota huijariradio ensin käyttöön.",
+			"host_notice": "Isäntä määrittää aulan asetukset.",
+			"host_notice_you": "Olet isäntä; aula käyttää asetuksiasi.",
+			"edit_as_host": "Muuta",
+			"tab_current": "Nykyinen aula",
+			"tab_mine": "Omat asetukset",
+			"host": "Isäntä",
+			"host_you": "Sinä",
+			"host_unknown": "Tuntematon",
+			"no_lobby": "Et ole aulassa. Liity peliin tai isännöi nähdäksesi asetukset.",
+			"mine_notice": "Asetuksesi koskevat kaikkia, kun olet isäntä."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "Pois käytöstä automaattisen vahvistuksen aikana.",
+			"test_microphone_start": "Testaa mikrofoni",
+			"test_microphone_stop": "Lopeta mikrofonitesti",
+			"mode": "Äänitila"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Napsauta pikanäppäintä ja paina näppäintä tai hiiren painiketta. Escape poistaa sen käytöstä.",
+			"press_key": "Paina näppäintä…",
+			"disabled": "Pois käytöstä"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Mikrofonitesti ohittaa kaiunpoiston. Käytä kuulokkeita.",
+			"autoGainControl": "Automaattinen vahvistus",
+			"autoGainControl_warning": "Beta: mikrofoni säätää äänenvoimakkuuden automaattisesti. Testaa ensin."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "Kopioi URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Yleiset",
+		"players": {
+			"title": "Pelaajat",
+			"volume": "Äänenvoimakkuus",
+			"empty": "Ei muita pelaajia. Liity aulaan muuttaaksesi heidän äänenvoimakkuuttaan.",
+			"disconnected": "Yhteys katkaistu",
+			"mute": "Mykistä",
+			"unmute": "Poista mykistys",
+			"muted": "Mykistetty"
 		}
 	},
 	"lobbybrowser": {

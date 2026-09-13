@@ -1,4 +1,4 @@
-import { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
+import type { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
 
 // Renderer --> Main (send/on)
 export enum IpcMessages {
@@ -9,8 +9,10 @@ export enum IpcMessages {
 	QUIT_CREWLINK = 'QUIT_CREWLINK',
 	SEND_TO_OVERLAY = 'SEND_TO_OVERLAY',
 	SEND_TO_MAINWINDOW = 'SEND_TO_MAINWINDOW',
+	SEND_TO_SETTINGS = 'SEND_TO_SETTINGS',
 	RESTART_AND_UPDATE = 'RESTART_AND_UPDATE',
 	REQUEST_MOD = 'REQUEST_MOD',
+	REQUEST_GAME_INFO = 'REQUEST_GAME_INFO',
 }
 
 // Renderer --> Main (sendSync/on)
@@ -35,6 +37,15 @@ export enum IpcHandlerMessages {
 	OPEN_LOBBYBROWSER = 'OPEN_LOBBYBROWSER',
 	SELECT_INQUIRY_ATTACHMENTS = 'SELECT_INQUIRY_ATTACHMENTS',
 	SUBMIT_INQUIRY = 'SUBMIT_INQUIRY',
+	OPEN_SETTINGS = 'OPEN_SETTINGS',
+}
+
+export enum IpcSettingsMessages {
+	NOTIFY_GAME_STATE_CHANGED = 'SETTINGS_NOTIFY_GAME_STATE_CHANGED',
+	NOTIFY_ACTIVE_LOBBY_SETTINGS_CHANGED = 'SETTINGS_NOTIFY_ACTIVE_LOBBY_SETTINGS_CHANGED',
+	NOTIFY_HOST_ID_CHANGED = 'SETTINGS_NOTIFY_HOST_ID_CHANGED',
+	NOTIFY_PLAYER_COLORS_CHANGED = 'SETTINGS_NOTIFY_PLAYER_COLORS_CHANGED',
+	REQUEST_INITVALUES = 'SETTINGS_REQUEST_INITVALUES',
 }
 
 // Main --> Renderer (send/on)
@@ -50,7 +61,7 @@ export enum IpcRendererMessages {
 }
 
 export interface AutoUpdaterState {
-	state: 'error' | 'available' | 'downloading' | 'downloaded' | 'unavailable';
+	state: 'idle' | 'checking' | 'error' | 'available' | 'downloading' | 'downloaded' | 'unavailable';
 	error?: string;
 	progress?: ProgressInfo;
 	info?: UpdateInfo;

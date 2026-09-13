@@ -1,8 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Button from '@mui/material/Button';
-import makeStyles from '@mui/styles/makeStyles';
-import { ExtendedAudioElement } from '../Voice';
-import { createVoiceDisguiseEffect, disconnectVoiceDisguiseEffect, updateVoiceDisguiseEffect, VoiceDisguiseEffect } from '../voiceEffect';
+
+import { ExtendedAudioElement } from '../voice/types';
+import {
+	createVoiceDisguiseEffect,
+	disconnectVoiceDisguiseEffect,
+	updateVoiceDisguiseEffect,
+	VoiceDisguiseEffect,
+} from '../voiceEffect';
 
 interface TestVoiceEffectButtonProps {
 	t: (key: string) => string;
@@ -11,23 +16,15 @@ interface TestVoiceEffectButtonProps {
 	voiceEffectStrength: number;
 }
 
-const useStyles = makeStyles(() => ({
-	button: {
-		width: 'fit-content',
-		margin: '5px auto',
-	},
-}));
-
 const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	t,
 	microphone,
 	speaker,
 	voiceEffectStrength,
 }: TestVoiceEffectButtonProps) => {
-	const classes = useStyles();
 	const [playing, setPlaying] = useState(false);
-	const cleanupRef = useRef<(() => void) | undefined>();
-	const effectNodesRef = useRef<VoiceDisguiseEffect | undefined>();
+	const cleanupRef = useRef<(() => void) | undefined>(undefined);
+	const effectNodesRef = useRef<VoiceDisguiseEffect | undefined>(undefined);
 	const playingRef = useRef(false);
 	const stopRequestedRef = useRef(false);
 
@@ -59,7 +56,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 		setPlaying(true);
 
 		try {
-			const audioOptions: any = {
+			const audioOptions: MediaTrackConstraints & Record<string, unknown> = {
 				deviceId: microphone ?? 'default',
 				autoGainControl: false,
 				echoCancellation: false,
@@ -118,7 +115,13 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	};
 
 	return (
-		<Button variant="contained" color="secondary" size="small" className={classes.button} onClick={testVoiceEffect}>
+		<Button
+			variant="contained"
+			color="secondary"
+			size="small"
+			sx={{ width: 240, maxWidth: '100%', minHeight: 40, px: 2, fontSize: 14 }}
+			onClick={testVoiceEffect}
+		>
 			{playing ? t('settings.audio.test_voice_effect_stop') : t('settings.audio.test_voice_effect_start')}
 		</Button>
 	);

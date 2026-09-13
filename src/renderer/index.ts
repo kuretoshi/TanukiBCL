@@ -1,16 +1,25 @@
+// Node globals required at runtime by browser-bundled deps
+if (typeof globalThis.global === 'undefined') globalThis.global = globalThis;
+if (typeof globalThis.process === 'undefined') {
+	globalThis.process = {
+		env: {},
+		nextTick: (fn: (...args: unknown[]) => void, ...args: unknown[]) => queueMicrotask(() => fn(...args)),
+	} as unknown as NodeJS.Process;
+}
+
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 
-	console.log('HEY');
 	const view = query.get('view') || 'app';
-	const isLiteApp = query.get('lite') === '1';
-	if (view === 'app' && isLiteApp) {
-		import('./LiteApp');
-	} else if (view === 'app') {
-		import('./App');
-	} else if (view === 'lobbies' && !isLiteApp) {
-		import('./LobbyBrowser/LobbyBrowserContainer');
+	if (view === 'app') {
+		import('./views/App');
+	} else if (view === 'lobbies') {
+		import('./views/LobbyBrowser/LobbyBrowserContainer');
+	} else if (view === 'inquiry') {
+		import('./views/InquiryWindow');
+	} else if (view === 'settings') {
+		import('./views/SettingsWindow');
 	} else {
-		import('./Overlay');
+		import('./views/Overlay');
 	}
 }

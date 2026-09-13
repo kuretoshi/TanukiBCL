@@ -1,17 +1,17 @@
-'use strict'; // eslint-disable-line
-
-import { autoUpdater } from 'electron-updater';
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import electronUpdater from 'electron-updater';
+import { app, BrowserWindow, ipcMain, session, net, protocol } from 'electron';
 import windowStateKeeper from 'electron-window-state';
 import { platform } from 'os';
 import { join as joinPath } from 'path';
-import { format as formatUrl } from 'url';
+import { pathToFileURL } from 'url';
 import './hook';
-import { overlayWindow } from 'electron-overlay-window';
+import overlayWindowModule from 'electron-overlay-window';
+const { overlayWindow } = overlayWindowModule;
 import { initializeIpcHandlers, initializeIpcListeners } from './ipc-handlers';
 import { AutoUpdaterState, IpcRendererMessages, IpcHandlerMessages } from '../common/ipc-messages';
 import { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
-import { protocol } from 'electron';
+import { initSettingsIpc } from './settingsStore';
+const { autoUpdater } = electronUpdater;
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
@@ -21,15 +21,12 @@ import { getAppArgs } from './args';
 import { initializeDebugLogging, registerWindowLogging } from './logger';
 const args = getAppArgs();
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const isDevelopment = !app.isPackaged;
 const rawAppVersion: string = isDevelopment ? 'DEV' : autoUpdater.currentVersion.version;
 const appVersion: string = rawAppVersion;
 const displayAppVersion: string = rawAppVersion === '3.1.6-20' ? '3.1.6-2' : rawAppVersion;
-const shouldCheckForUpdates = !isDevelopment;
 const isLiteApp =
-	process.env.BETTERCREWLINK_LITE === '1' ||
-	/lite/i.test(process.execPath) ||
-	/lite/i.test(app.getName());
+	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName());
 const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
 const appDisplayName = isLiteApp ? 'タヌキのベタクルLite' : 'タヌキのベタクル';
 const internalAppName = isLiteApp ? 'TanukiBCLLite' : 'TanukiBCL';
@@ -52,9 +49,7 @@ const overlayTargetName = String(
 		'Among Us'
 );
 const nativeOverlayEnabled =
-	process.env.BETTERCREWLINK_ENABLE_OVERLAY === '1' ||
-	args['enable-overlay'] === true ||
-	args.enableOverlay === true;
+	process.env.BETTERCREWLINK_ENABLE_OVERLAY === '1' || args['enable-overlay'] === true || args.enableOverlay === true;
 const allowMultiInstance =
 	args['multi-instance'] === true ||
 	args.multiInstance === true ||
@@ -65,8 +60,8 @@ const voiceDebugEnabled =
 	args['debug-voice'] ||
 	args.debugVoice ||
 	/debug/i.test(process.execPath);
-let latestAutoUpdaterState: AutoUpdaterState = { state: 'unavailable' };
-let hasCheckedForUpdates = false;
+let latestAutoUpdaterState: AutoUpdaterState = { state: 'idle' };
+let checkingForUpdates = false;
 let acceptedUpdateInfo: UpdateInfo | null = null;
 let updateInstallRequested = false;
 
@@ -74,20 +69,40 @@ declare global {
 	var mainWindow: BrowserWindow | null;
 	var overlay: BrowserWindow | null;
 	var lobbyBrowser: BrowserWindow | null;
+	var settingsWindow: BrowserWindow | null;
+	var inquiryWindow: BrowserWindow | null;
 }
+
+protocol.registerSchemesAsPrivileged([
+	{
+		scheme: 'static',
+		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+	},
+	{
+		scheme: 'generate',
+		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+	},
+	{
+		scheme: 'app',
+		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+	},
+]);
+
 // global reference to mainWindow (necessary to prevent window from being garbage collected)
 global.mainWindow = null;
 global.overlay = null;
+global.settingsWindow = null;
+global.lobbyBrowser = null;
+global.inquiryWindow = null;
 const store = new Store<ISettings>({ name: getVariantStoreName() });
 let isQuitting = false;
 app.commandLine.appendSwitch('disable-pinch');
 
 if (isLiteApp || platform() === 'linux' || !store.get('hardware_acceleration', true)) {
 	app.disableHardwareAcceleration();
-
 }
 
-if(platform() === 'linux'){
+if (platform() === 'linux') {
 	app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
@@ -98,7 +113,9 @@ function closeAppWindows() {
 		/* empty */
 	}
 
-	const windows = [global.lobbyBrowser, global.overlay, global.mainWindow];
+	const windows = [global.inquiryWindow, global.settingsWindow, global.lobbyBrowser, global.overlay, global.mainWindow];
+	global.inquiryWindow = null;
+	global.settingsWindow = null;
 	global.lobbyBrowser = null;
 	global.overlay = null;
 	global.mainWindow = null;
@@ -116,31 +133,22 @@ function closeAppWindows() {
 }
 
 function sendAutoUpdaterState(state: AutoUpdaterState) {
-	latestAutoUpdaterState = { ...latestAutoUpdaterState, ...state };
-	try {
-		global.mainWindow?.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, latestAutoUpdaterState);
-	} catch {
-		/* empty */
+	latestAutoUpdaterState = {
+		...state,
+		info:
+			state.info ??
+			(['downloading', 'downloaded'].includes(state.state) ? (acceptedUpdateInfo ?? undefined) : undefined),
+	};
+	for (const window of [global.mainWindow, global.settingsWindow]) {
+		if (window && !window.isDestroyed())
+			window.webContents.send(IpcRendererMessages.AUTO_UPDATER_STATE, latestAutoUpdaterState);
 	}
-}
-
-function isMissingUpdateMetadataError(err: Error | unknown): boolean {
-	const message = err instanceof Error ? err.message : String(err);
-	return message.includes('404') && (message.includes('latest.yml') || message.includes('lite.yml'));
 }
 
 function sendAutoUpdaterError(err: Error | unknown) {
-	if (isMissingUpdateMetadataError(err)) {
-		sendAutoUpdaterState({
-			state: 'unavailable',
-		});
-		return;
-	}
-
-	sendAutoUpdaterState({
-		state: 'error',
-		error: err instanceof Error ? err.message : String(err),
-	});
+	acceptedUpdateInfo = null;
+	updateInstallRequested = false;
+	sendAutoUpdaterState({ state: 'error', error: err instanceof Error ? err.message : String(err) });
 }
 
 function parseVersion(version: string): number[] {
@@ -172,15 +180,37 @@ function isRemoteVersionNewer(info: UpdateInfo): boolean {
 	return compareVersions(info.version, rawAppVersion) > 0;
 }
 
-function checkForUpdates() {
-	if (!shouldCheckForUpdates || hasCheckedForUpdates) {
+async function checkForUpdates() {
+	if (checkingForUpdates || updateInstallRequested) return;
+	if (isDevelopment) {
+		sendAutoUpdaterError(new Error('開発モードではアップデートを確認できません。配布版で確認してください。'));
 		return;
 	}
-
-	hasCheckedForUpdates = true;
-	autoUpdater.checkForUpdates().catch(sendAutoUpdaterError);
+	checkingForUpdates = true;
+	acceptedUpdateInfo = null;
+	sendAutoUpdaterState({ state: 'checking' });
+	try {
+		const result = await autoUpdater.checkForUpdates();
+		if (!result) sendAutoUpdaterError(new Error('アップデートを確認できませんでした。'));
+	} catch (error) {
+		sendAutoUpdaterError(error);
+	} finally {
+		checkingForUpdates = false;
+	}
 }
 
+const preload = () => joinPath(import.meta.dirname, '../preload/index.mjs');
+function loadView(window: BrowserWindow, view: string) {
+	const query = new URLSearchParams({
+		view,
+		version: displayAppVersion,
+		lite: isLiteApp ? '1' : '0',
+		debugVoice: voiceDebugEnabled ? '1' : '0',
+	});
+	const base =
+		isDevelopment && process.env.ELECTRON_RENDERER_URL ? process.env.ELECTRON_RENDERER_URL : 'app://bundle/index.html';
+	void window.loadURL(base + '?' + query.toString());
+}
 function createMainWindow() {
 	const mainWindowState = windowStateKeeper({});
 
@@ -197,8 +227,10 @@ function createMainWindow() {
 		fullscreenable: false,
 		maximizable: true,
 		webPreferences: {
-			nodeIntegration: true,
-			contextIsolation: false
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
 		},
 	});
 	mainWindowState.manage(window);
@@ -210,41 +242,15 @@ function createMainWindow() {
 			window.webContents.openDevTools({
 				mode: 'detach',
 			});
-		})
+		});
 	}
 
-	if (isDevelopment) {
-		window.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=app&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
-		);
-	} else {
-		window.loadURL(
-			formatUrl({
-				pathname: joinPath(__dirname, 'index.html'),
-				protocol: 'file',
-				query: {
-					version: displayAppVersion,
-					view: 'app',
-					lite: isLiteApp ? '1' : '0',
-					debugVoice: voiceDebugEnabled ? '1' : '0',
-				},
-				slashes: true,
-			})
-		);
-	}
+	loadView(window, 'app');
 	//window.webContents.userAgent = `CrewLink/${crewlinkVersion} (${process.platform})`;
 	window.webContents.userAgent = `${internalAppName}/${appVersion} (${process.platform})`;
 	window.webContents.once('did-finish-load', () => {
 		if (latestAutoUpdaterState.state !== 'unavailable') {
 			sendAutoUpdaterState(latestAutoUpdaterState);
-		}
-		checkForUpdates();
-	});
-
-	window.on('close', () => {
-		if (!isQuitting) {
-			isQuitting = true;
-			setImmediate(() => app.quit());
 		}
 	});
 
@@ -282,8 +288,10 @@ function createLobbyBrowser() {
 		closable: true,
 		maximizable: false,
 		webPreferences: {
-			nodeIntegration: true,
-			contextIsolation: false,
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
 		},
 	});
 
@@ -297,27 +305,103 @@ function createLobbyBrowser() {
 	// 		mode: 'detach',
 	// 	});
 	// }
-	if (isDevelopment) {
-		window.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=DEV&view=lobbies&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
-		);
-	} else {
-		window.loadURL(
-			formatUrl({
-				pathname: joinPath(__dirname, 'index.html'),
-				protocol: 'file',
-				query: {
-					version: displayAppVersion,
-					view: 'lobbies',
-					lite: isLiteApp ? '1' : '0',
-					debugVoice: voiceDebugEnabled ? '1' : '0',
-				},
-				slashes: true,
-			})
-		);
-	}
+	loadView(window, 'lobbies');
 	window.webContents.userAgent = `${internalAppName}/${appVersion} (${process.platform})`;
 	console.log('Opened app version: ', appVersion);
+	return window;
+}
+
+function createSettingsWindow() {
+	const settingsWindowState = windowStateKeeper({
+		file: 'settings-window-state.json',
+		defaultWidth: 750,
+		defaultHeight: 630,
+	});
+
+	const window = new BrowserWindow({
+		title: isLiteApp ? 'TanukiBCL Lite Settings' : 'TanukiBCL Settings',
+		width: settingsWindowState.width,
+		height: settingsWindowState.height,
+		x: settingsWindowState.x,
+		y: settingsWindowState.y,
+		minWidth: 620,
+		minHeight: 440,
+		backgroundColor: '#25232a',
+		resizable: true,
+		frame: false,
+		fullscreenable: false,
+		closable: true,
+		maximizable: true,
+		show: false,
+		webPreferences: {
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
+		},
+	});
+	settingsWindowState.manage(window);
+
+	if (devTools) {
+		window.webContents.openDevTools({ mode: 'detach' });
+	}
+
+	window.once('ready-to-show', () => window.show());
+	window.on('closed', () => {
+		global.settingsWindow = null;
+	});
+
+	loadView(window, 'settings');
+	return window;
+}
+
+function createInquiryWindow() {
+	const inquiryWindowState = windowStateKeeper({
+		file: 'inquiry-window-state.json',
+		defaultWidth: 620,
+		defaultHeight: 640,
+	});
+
+	const window = new BrowserWindow({
+		title: isLiteApp ? 'TanukiBCL Lite Inquiry' : 'TanukiBCL Inquiry',
+		width: inquiryWindowState.width,
+		height: inquiryWindowState.height,
+		x: inquiryWindowState.x,
+		y: inquiryWindowState.y,
+		minWidth: 460,
+		minHeight: 480,
+		backgroundColor: '#25232a',
+		resizable: true,
+		frame: false,
+		fullscreenable: false,
+		closable: true,
+		maximizable: true,
+		show: false,
+		webPreferences: {
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
+		},
+	});
+	inquiryWindowState.manage(window);
+
+	if (devTools) {
+		window.webContents.openDevTools({ mode: 'detach' });
+	}
+
+	window.once('ready-to-show', () => window.show());
+	window.on('close', (event) => {
+		if (!isQuitting) {
+			event.preventDefault();
+			window.hide();
+		}
+	});
+	window.on('closed', () => {
+		global.inquiryWindow = null;
+	});
+
+	loadView(window, 'inquiry');
 	return window;
 }
 
@@ -327,8 +411,10 @@ function createOverlay() {
 		width: 400,
 		height: 300,
 		webPreferences: {
-			nodeIntegration: true,
-			contextIsolation: false,
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
 		},
 		fullscreenable: true,
 		skipTaskbar: true,
@@ -348,25 +434,7 @@ function createOverlay() {
 		});
 	}
 
-	if (isDevelopment) {
-		overlay.loadURL(
-			`http://localhost:${process.env.ELECTRON_WEBPACK_WDS_PORT}?version=${displayAppVersion}&view=overlay&lite=${isLiteApp ? '1' : '0'}&debugVoice=${voiceDebugEnabled ? '1' : '0'}`
-		);
-	} else {
-		overlay.loadURL(
-			formatUrl({
-				pathname: joinPath(__dirname, 'index.html'),
-				protocol: 'file',
-				query: {
-					version: displayAppVersion,
-					view: 'overlay',
-					lite: isLiteApp ? '1' : '0',
-					debugVoice: voiceDebugEnabled ? '1' : '0',
-				},
-				slashes: true,
-			})
-		);
-	}
+	loadView(overlay, 'overlay');
 	overlay.setIgnoreMouseEvents(true);
 	overlayWindow.attachTo(overlay, overlayTargetName);
 	overlay.setBackgroundColor('#00000000');
@@ -417,6 +485,7 @@ if (!gotTheLock) {
 		autoUpdater.channel = 'lite';
 	}
 	autoUpdater.autoDownload = false;
+	autoUpdater.autoInstallOnAppQuit = false;
 	autoUpdater.allowDowngrade = false;
 	autoUpdater.allowPrerelease = true;
 	autoUpdater.on('update-available', (info: UpdateInfo) => {
@@ -478,7 +547,7 @@ if (!gotTheLock) {
 	});
 
 	app.on('activate', () => {
-		console.log("ACTIVATE???")
+		console.log('ACTIVATE???');
 		// on macOS it is common to re-create a window even after all windows have been closed
 		if (global.mainWindow === null) {
 			global.mainWindow = createMainWindow();
@@ -500,26 +569,39 @@ if (!gotTheLock) {
 	});
 
 	// create main BrowserWindow when electron is ready
-	app.whenReady().then(() => {
-		protocol.registerFileProtocol('static', (request, callback) => {
-			const pathname = app.getPath('userData') + '/static/' + request.url.replace('static:///', '');
-			callback(pathname);
+	app.whenReady().then(async () => {
+		protocol.handle('static', (request) => {
+			const url = new URL(request.url);
+			const filePath = app.getPath('userData') + '/static/' + decodeURIComponent(url.host + url.pathname);
+			return net.fetch(pathToFileURL(filePath).toString());
 		});
 
-		protocol.registerFileProtocol('generate', async (request, callback) => {
-			const url = new URL(request.url.replace('generate:///', ''));
-			const path = await GenerateHat(url, gameReader.playercolors, Number(url.searchParams.get('color')), '');
-			callback(path);
+		protocol.handle('generate', async (request) => {
+			const requestUrl = new URL(request.url);
+			const imagePath = new URL(requestUrl.searchParams.get('url')!);
+			const filePath = await GenerateHat(
+				imagePath,
+				gameReader.playercolors,
+				Number(requestUrl.searchParams.get('color'))
+			);
+			return net.fetch(pathToFileURL(filePath).toString());
+		});
+
+		protocol.handle('app', (request) => {
+			const { pathname } = new URL(request.url);
+			const filePath = joinPath(import.meta.dirname, '../renderer', decodeURIComponent(pathname));
+			return net.fetch(pathToFileURL(filePath).toString());
 		});
 
 		initializeIpcListeners();
 		initializeIpcHandlers();
+		initSettingsIpc();
 		global.mainWindow = createMainWindow();
 
 		if (isDevelopment && !isLiteApp) {
-			const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer');
+			const { installExtension, REACT_DEVELOPER_TOOLS } = await import('electron-devtools-installer');
 			installExtension(REACT_DEVELOPER_TOOLS)
-				.then((name: string) => console.log(`Added Extension:  ${name}`))
+				.then((name) => console.log(`Added Extension:  ${name}`))
 				.catch((err: string) => console.log('An error occurred: ', err));
 		}
 	});
@@ -532,7 +614,17 @@ if (!gotTheLock) {
 		}
 	});
 
+	ipcMain.handle('updater:get-state', () => latestAutoUpdaterState);
+	ipcMain.on('updater:check', () => {
+		void checkForUpdates();
+	});
 	ipcMain.on('update-app', () => {
+		if (
+			checkingForUpdates ||
+			updateInstallRequested ||
+			!['available', 'downloaded'].includes(latestAutoUpdaterState.state)
+		)
+			return;
 		if (!acceptedUpdateInfo || !isRemoteVersionNewer(acceptedUpdateInfo)) {
 			sendAutoUpdaterState({
 				state: 'unavailable',
@@ -544,7 +636,26 @@ if (!gotTheLock) {
 			autoUpdater.quitAndInstall();
 			return;
 		}
+		sendAutoUpdaterState({ state: 'downloading' });
 		autoUpdater.downloadUpdate().catch(sendAutoUpdaterError);
+	});
+
+	ipcMain.on('OPEN_INQUIRY', () => {
+		if (!global.inquiryWindow) global.inquiryWindow = createInquiryWindow();
+		else {
+			if (global.inquiryWindow.isMinimized()) global.inquiryWindow.restore();
+			global.inquiryWindow.show();
+			global.inquiryWindow.focus();
+		}
+	});
+	ipcMain.on(IpcHandlerMessages.OPEN_SETTINGS, () => {
+		if (!global.settingsWindow) {
+			global.settingsWindow = createSettingsWindow();
+		} else {
+			if (global.settingsWindow.isMinimized()) global.settingsWindow.restore();
+			global.settingsWindow.show();
+			global.settingsWindow.focus();
+		}
 	});
 
 	ipcMain.on(IpcHandlerMessages.OPEN_LOBBYBROWSER, () => {
@@ -570,12 +681,10 @@ if (!gotTheLock) {
 	});
 
 	ipcMain.on('setAlwaysOnTop', async (_event, enable) => {
-		console.log("SETALWAYSONTOP?")
+		console.log('SETALWAYSONTOP?');
 		if (global.mainWindow) {
-			console.log("SETALWAYSONTOP?1")
+			console.log('SETALWAYSONTOP?1');
 			global.mainWindow.setAlwaysOnTop(enable, 'screen-saver');
 		}
 	});
-
-
 }

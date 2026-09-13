@@ -31,7 +31,20 @@
 				"language": "Language",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Ιδιωτικός ασύρματος Προδότη",
+			"impostor_radio_private_description": "Οι κοντινοί παίκτες δεν ακούν τον Προδότη στον ασύρματο.",
+			"impostor_radio_private_requires": "Ενεργοποιήστε πρώτα τον ασύρματο Προδότη.",
+			"host_notice": "Ο οικοδεσπότης ορίζει τις ρυθμίσεις λόμπι.",
+			"host_notice_you": "Είστε ο οικοδεσπότης· το λόμπι χρησιμοποιεί τις ρυθμίσεις σας.",
+			"edit_as_host": "Αλλαγή",
+			"tab_current": "Τρέχον λόμπι",
+			"tab_mine": "Οι ρυθμίσεις μου",
+			"host": "Οικοδεσπότης",
+			"host_you": "Εσείς",
+			"host_unknown": "Άγνωστος",
+			"no_lobby": "Δεν είστε σε λόμπι. Μπείτε ή δημιουργήστε ένα για να δείτε τις ρυθμίσεις.",
+			"mine_notice": "Οι ρυθμίσεις σας ισχύουν για όλους όταν είστε οικοδεσπότης."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Crew Volume as Ghost",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Test Speaker",
-			"test_speaker_stop": "Stop Test Speaker"
+			"test_speaker_stop": "Stop Test Speaker",
+			"auto_gain_disabled": "Απενεργοποιείται με την αυτόματη ενίσχυση.",
+			"test_microphone_start": "Δοκιμή μικροφώνου",
+			"test_microphone_stop": "Διακοπή δοκιμής μικροφώνου",
+			"mode": "Λειτουργία φωνής"
 		},
 		"keyboard": {
 			"title": "Keyboard Shortcuts",
 			"push_to_talk": "Push to Talk",
 			"mute": "Mute",
 			"deafen": "Deafen",
-			"impostor_radio": "Impostor Radio"
+			"impostor_radio": "Impostor Radio",
+			"hint": "Κάντε κλικ σε συντόμευση και πατήστε πλήκτρο ή κουμπί ποντικιού. Το Escape την απενεργοποιεί.",
+			"press_key": "Πατήστε ένα πλήκτρο…",
+			"disabled": "Απενεργοποιημένο"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Η δοκιμή αγνοεί την ακύρωση ηχούς. Χρησιμοποιήστε ακουστικά.",
+			"autoGainControl": "Αυτόματη ενίσχυση",
+			"autoGainControl_warning": "Beta: Το μικρόφωνο ρυθμίζει αυτόματα την ένταση. Δοκιμάστε το πρώτα."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "Αντιγραφή URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Γενικά",
+		"players": {
+			"title": "Παίκτες",
+			"volume": "Ένταση",
+			"empty": "Δεν υπάρχουν άλλοι παίκτες. Μπείτε σε λόμπι για να αλλάξετε την έντασή τους.",
+			"disconnected": "Αποσυνδεδεμένος",
+			"mute": "Σίγαση",
+			"unmute": "Κατάργηση σίγασης",
+			"muted": "Σε σίγαση"
 		}
 	},
 	"lobbybrowser": {

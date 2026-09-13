@@ -1,3 +1,4 @@
+// prettier-ignore
 export type ModsType =
 	| 'NONE'
 	| 'SUPER_NEW_ROLES'

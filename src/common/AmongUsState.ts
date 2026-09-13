@@ -18,7 +18,6 @@ export interface AmongUsState {
 	lightRadius: number;
 	lightRadiusChanged: boolean;
 	closedDoors: number[];
-	currentServer: string;
 	maxPlayers: number;
 	mod: ModsType;
 	oldMeetingHud: boolean;
@@ -54,6 +53,10 @@ export interface Player {
 	clientId: number;
 	name: string;
 	nameHash: number;
+	playerConfigId: number;
+	friendCode: string;
+	playerUid: string;
+	playerIdentifier: string;
 	colorId: number;
 	hatId: string;
 	petId: number;
@@ -78,7 +81,7 @@ export interface Player {
 	taskPtr: number;
 	objectPtr: number;
 	isLocal: boolean;
-	shiftedColor : number;
+	shiftedColor: number;
 	bugged: boolean;
 	x: number;
 	y: number;

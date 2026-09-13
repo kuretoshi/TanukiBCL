@@ -1,10 +1,10 @@
 import React from 'react';
-import makeStyles from '@mui/styles/makeStyles';
+import Box from '@mui/material/Box';
 import MicOff from '@mui/icons-material/MicOff';
 import VolumeOff from '@mui/icons-material/VolumeOff';
 import WifiOff from '@mui/icons-material/WifiOff';
 import LinkOff from '@mui/icons-material/LinkOff';
-import ErrorOutline from '@mui/icons-material/ErrorOutline';
+import ErrorOutline from '@mui/icons-material/ErrorOutlineOutlined';
 // @ts-ignore
 import RadioSVG from '../../static/radio.svg';
 // @ts-ignore
@@ -30,7 +30,7 @@ const defaultPlayerColors = [
 	['#50EF39', '#15A742'],
 ];
 
-const useStyles = makeStyles(() => ({
+const useStyles = () => ({
 	relative: {
 		position: 'relative',
 	},
@@ -42,7 +42,7 @@ const useStyles = makeStyles(() => ({
 		transform: 'translate(-50%, -50%)',
 		border: '2px solid #690a00',
 		borderRadius: '50%',
-		padding: 2,
+		padding: '2px',
 		zIndex: 10,
 	},
 	radio: {
@@ -52,10 +52,10 @@ const useStyles = makeStyles(() => ({
 		width: '30px',
 		transform: 'translate(-50%, -50%)',
 		fill: 'white',
-		padding: 2,
+		padding: '2px',
 		zIndex: 12,
 	},
-}));
+});
 
 export interface LiteAvatarProps {
 	talking: boolean;
@@ -104,26 +104,26 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 	switch (connectionState) {
 		case 'connected':
 			if (deafened) {
-				icon = <VolumeOff className={classes.icon} />;
+				icon = <VolumeOff sx={classes.icon} />;
 			} else if (muted) {
-				icon = <MicOff className={classes.icon} />;
+				icon = <MicOff sx={classes.icon} />;
 			}
 			break;
 		case 'novoice':
-			icon = <LinkOff className={classes.icon} style={{ background: '#e67e22', borderColor: '#694900' }} />;
+			icon = <LinkOff sx={classes.icon} style={{ background: '#e67e22', borderColor: '#694900' }} />;
 			break;
 		case 'disconnected':
-			icon = <WifiOff className={classes.icon} />;
+			icon = <WifiOff sx={classes.icon} />;
 			break;
 	}
 	if (player.bugged) {
-		icon = <ErrorOutline className={classes.icon} style={{ background: 'red', borderColor: '' }} />;
+		icon = <ErrorOutline sx={classes.icon} style={{ background: 'red', borderColor: '' }} />;
 	}
 
 	return (
-		<div className={classes.relative}>
-			<div
-				className={classes.relative}
+		<Box sx={classes.relative}>
+			<Box
+				sx={classes.relative}
 				onClick={onConfigChange}
 				style={{
 					width: '100%',
@@ -140,7 +140,7 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 					transform: lookLeft ? 'scaleX(-1)' : 'scaleX(1)',
 				}}
 			>
-				<div
+				<Box
 					style={{
 						position: 'absolute',
 						left: '17%',
@@ -151,7 +151,7 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 						background: 'rgba(0, 0, 0, 0.32)',
 					}}
 				/>
-				<div
+				<Box
 					style={{
 						position: 'absolute',
 						left: '9%',
@@ -161,7 +161,7 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 						filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
 					}}
 				>
-					<div
+					<Box
 						style={{
 							position: 'absolute',
 							inset: 0,
@@ -202,11 +202,11 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 							pointerEvents: 'none',
 						}}
 					/>
-				</div>
-				{isUsingRadio && <img src={RadioSVG} className={classes.radio} />}
-			</div>
+				</Box>
+				{isUsingRadio && <Box component="img" src={RadioSVG} sx={classes.radio} />}
+			</Box>
 			{icon}
-		</div>
+		</Box>
 	);
 };
 

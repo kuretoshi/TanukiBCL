@@ -1,7 +1,7 @@
 appId: net.ottomated.crewlinkkai.lite
 extraMetadata:
   name: bettercrewlinkkailite
-  version: 3.1.97
+  version: 3.2.0
 productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
@@ -11,9 +11,10 @@ files:
   - from: .
     filter:
       - package.json
-      - app
+      - out
 asarUnpack:
   - "**/*.node"
+npmRebuild: false
 
 win:
   icon: resources/icon.ico

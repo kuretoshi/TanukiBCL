@@ -31,7 +31,20 @@
 				"language": "Dil",
 				"enable_warning": "Bunu aktif ederek lobini diğer BetterCrewLinkKai kullanıcılarına açabilirsin!",
 				"ban_warning": "Uygunsuz dil kullanmak BetterCrewLinkKai'ten banlanmana sebep olabilir."
-			}
+			},
+			"impostor_radio_private": "Özel Sahtekâr Telsizi",
+			"impostor_radio_private_description": "Yakındaki ekip üyeleri sahtekârı telsizden duyamaz.",
+			"impostor_radio_private_requires": "Önce Sahtekâr Telsizini açın.",
+			"host_notice": "Lobi ayarlarını kurucu yönetir.",
+			"host_notice_you": "Kurucu sizsiniz; lobi ayarlarınızı kullanır.",
+			"edit_as_host": "Değiştir",
+			"tab_current": "Mevcut Lobi",
+			"tab_mine": "Ayarlarım",
+			"host": "Kurucu",
+			"host_you": "Siz",
+			"host_unknown": "Bilinmiyor",
+			"no_lobby": "Lobide değilsiniz. Ayarları görmek için katılın veya oyun kurun.",
+			"mine_notice": "Kurucu olduğunuzda ayarlarınız herkese uygulanır."
 		},
 		"customplatforms": {
 			"title": "Özel Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Hayaletken Crew Seviyesi",
 			"ghostvolumeasimpostor": "Impostor iken Hayaletlerin Sesi",
 			"test_speaker_start": "Hoparlörü Test Et",
-			"test_speaker_stop": "Hoparlör Testini Durdur"
+			"test_speaker_stop": "Hoparlör Testini Durdur",
+			"auto_gain_disabled": "Otomatik kazanç açıkken devre dışıdır.",
+			"test_microphone_start": "Mikrofonu Test Et",
+			"test_microphone_stop": "Mikrofon Testini Durdur",
+			"mode": "Ses Modu"
 		},
 		"keyboard": {
 			"title": "Klavye Kısayolları",
 			"push_to_talk": "Bas Konuş",
 			"mute": "Sustur",
 			"deafen": "Sağırlaştır",
-			"impostor_radio": "Impostor Telsizi"
+			"impostor_radio": "Impostor Telsizi",
+			"hint": "Kısayola tıklayın, sonra bir tuşa veya fare düğmesine basın. Escape devre dışı bırakır.",
+			"press_key": "Bir tuşa basın…",
+			"disabled": "Devre dışı"
 		},
 		"overlay": {
 			"title": "Arayüz",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Gürültü Azaltma",
 			"spatial_audio": "Uzamsal Ses",
 			"oldsampledebug": "Örnek Oranı Debug",
-			"oldsampledebug_warning": "Bu bir test fonksiyonudur, SADECE istendiğinde etkinleştirin."
+			"oldsampledebug_warning": "Bu bir test fonksiyonudur, SADECE istendiğinde etkinleştirin.",
+			"echocancellation_description": "Mikrofon testi yankı gidermeyi kullanmaz. Kulaklık takın.",
+			"autoGainControl": "Otomatik Kazanç",
+			"autoGainControl_warning": "Beta: mikrofon sesi otomatik ayarlar. Önce test edin."
 		},
 		"streaming": {
 			"title": "Yayın Ayarları",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Tarayıcı Arayüzü",
 			"obs_url": "OBS Tarayıcı Kaynağı URL",
 			"voice_server_comp": "Ses Sunucusu Uyumluluk Modu",
-			"voice_server_comp_warning": "Ses sunucusunu, bir BetterCrewlink sunucusuna değiştirmeniz tavsiye edilir. Örneğin https://bettercrewl.ink ."
+			"voice_server_comp_warning": "Ses sunucusunu, bir BetterCrewlink sunucusuna değiştirmeniz tavsiye edilir. Örneğin https://bettercrewl.ink .",
+			"copy_url": "URL'yi Kopyala"
 		},
 		"troubleshooting": {
 			"title": "Sorun Giderme",
 			"restore": "Varsayılanlara Sıfırla",
 			"restore_warning": "Bütün ayarları varsayılan değerlerine döndürür.",
 			"warning": "Oyun Kurucu iken yapılamaz!"
+		},
+		"general": "Genel",
+		"players": {
+			"title": "Oyuncular",
+			"volume": "Ses",
+			"empty": "Başka oyuncu yok. Seslerini değiştirmek için lobiye katılın.",
+			"disconnected": "Bağlantı kesildi",
+			"mute": "Sustur",
+			"unmute": "Sesi aç",
+			"muted": "Susturuldu"
 		}
 	},
 	"lobbybrowser": {

@@ -31,7 +31,20 @@
 				"language": "Nyelv",
 				"enable_warning": "Enabling this will make your lobby public to other BetterCrewLinkKai users!",
 				"ban_warning": "Inappropriate text will result in a ban from BetterCrewLinkKai."
-			}
+			},
+			"impostor_radio_private": "Privát imposztor rádió",
+			"impostor_radio_private_description": "A közeli legénység nem hallja az imposztort a rádión.",
+			"impostor_radio_private_requires": "Előbb kapcsold be az imposztor rádiót.",
+			"host_notice": "A lobbi beállításait a házigazda kezeli.",
+			"host_notice_you": "Te vagy a házigazda; a lobbi a beállításaidat használja.",
+			"edit_as_host": "Módosítás",
+			"tab_current": "Jelenlegi lobbi",
+			"tab_mine": "Saját beállítások",
+			"host": "Házigazda",
+			"host_you": "Te",
+			"host_unknown": "Ismeretlen",
+			"no_lobby": "Nem vagy lobbiban. Csatlakozz vagy indíts játékot a beállításokhoz.",
+			"mine_notice": "Házigazdaként a beállításaid mindenkire érvényesek."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Az emberek hangereje a szellemeknek",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Hangszóró tesztelése",
-			"test_speaker_stop": "Hangszóró tesztelésének leállítása"
+			"test_speaker_stop": "Hangszóró tesztelésének leállítása",
+			"auto_gain_disabled": "Automatikus erősítés mellett kikapcsolva.",
+			"test_microphone_start": "Mikrofon tesztelése",
+			"test_microphone_stop": "Mikrofonteszt leállítása",
+			"mode": "Hangmód"
 		},
 		"keyboard": {
 			"title": "Gyorsbillentyűk",
 			"push_to_talk": "Nyomd hogy beszélj",
 			"mute": "Némít",
 			"deafen": "Süketít",
-			"impostor_radio": "Impostor Rádió"
+			"impostor_radio": "Impostor Rádió",
+			"hint": "Kattints egy gyorsgombra, majd nyomj meg egy billentyűt vagy egérgombot. Az Escape kikapcsolja.",
+			"press_key": "Nyomj meg egy billentyűt…",
+			"disabled": "Kikapcsolva"
 		},
 		"overlay": {
 			"title": "Overlay",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Zajcsökkentés",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "A mikrofonteszt figyelmen kívül hagyja a visszhangszűrést. Használj fejhallgatót.",
+			"autoGainControl": "Automatikus erősítés",
+			"autoGainControl_warning": "Béta: a mikrofon automatikusan állítja a hangerőt. Előbb teszteld."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Böngésző Overlay",
 			"obs_url": "OBS Böngésző Overlay Link",
 			"voice_server_comp": "VS Kompatibilitási mód használata",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "URL másolása"
 		},
 		"troubleshooting": {
 			"title": "Hibaelhárítás",
 			"restore": "Alapértékek visszaállítása",
 			"restore_warning": "Ez vissza fogja állítani az ÖSSZES beállítást az alap értékeikre.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "Általános",
+		"players": {
+			"title": "Játékosok",
+			"volume": "Hangerő",
+			"empty": "Nincs más játékos. Csatlakozz egy lobbihoz a hangerő módosításához.",
+			"disconnected": "Nincs kapcsolat",
+			"mute": "Némítás",
+			"unmute": "Némítás feloldása",
+			"muted": "Némítva"
 		}
 	},
 	"lobbybrowser": {

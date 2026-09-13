@@ -19,7 +19,7 @@ export interface ISettings {
 	enableOverlay: boolean;
 	meetingOverlay: boolean;
 
-	localLobbySettings: ILobbySettings;
+	myLobbySettings: ILobbySettings;
 	ghostVolumeAsImpostor: number;
 	crewVolumeAsGhost: number;
 	masterVolume: number;
@@ -29,7 +29,6 @@ export interface ISettings {
 	micSensitivity: number;
 	micSensitivityEnabled: boolean;
 	mobileHost: boolean;
-	vadEnabled: boolean;
 	hardware_acceleration: boolean;
 	echoCancellation: boolean;
 	noiseSuppression: boolean;

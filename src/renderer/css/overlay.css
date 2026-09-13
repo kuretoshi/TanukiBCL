@@ -9,49 +9,6 @@ body,
 	font-family: 'Varela', sans-serif;
 }
 
-.tanuki-overlay-watermark {
-	position: fixed;
-	top: 8px;
-	left: 10px;
-	z-index: 2147483647;
-	pointer-events: none;
-	color: rgba(186, 104, 200, 0.58);
-	font-family: 'Varela', sans-serif;
-	font-weight: 700;
-	font-size: 16px;
-	line-height: 1.05;
-	text-shadow:
-		0 1px 2px rgba(0, 0, 0, 0.95),
-		0 0 5px rgba(0, 0, 0, 0.75);
-	white-space: nowrap;
-}
-
-.tanuki-overlay-watermark_snr {
-	top: 96px;
-}
-
-.tanuki-overlay-watermark_nos {
-	top: 58px;
-}
-
-.tanuki-overlay-watermark_game {
-	top: 10px;
-	left: 50%;
-	transform: translateX(-50%);
-	text-align: center;
-}
-
-.tanuki-overlay-watermark_game.tanuki-overlay-watermark_nos {
-	top: 58px;
-}
-
-.tanuki-overlay-watermark > div:last-child {
-	margin-top: 1px;
-	font-size: 11px;
-	font-weight: 600;
-	opacity: 0.8;
-}
-
 .overlay-wrapper {
 	width: 100px;
 	border-radius: 8px;
@@ -122,7 +79,7 @@ body,
 
 .overlay-wrapper.overlay_postion_right .playername,
 .overlay-wrapper.overlay_postion_left .playername {
-    transition:opacity 400ms;
+	transition: opacity 400ms;
 	padding-top: 3vh;
 	font-weight: bold;
 	padding-left: 5px;
@@ -189,12 +146,10 @@ body,
 
 .overlay-wrapper.compactoverlay.overlay_postion_left .player_wrapper > div:first-of-type {
 	padding-right: 0px;
-
 }
 .overlay-wrapper.compactoverlay.overlay_postion_right .player_wrapper > div:first-of-type {
 	padding-left: 0px;
 	float: left !important;
-
 }
 
 .otherplayers {
@@ -261,12 +216,54 @@ body,
 	padding: 5px;
 }
 
-
-.volumeicons{
+.volumeicons {
 	position: absolute;
-	left:0;
+	left: 0;
 	bottom: 0;
 	background-color: #25232ac0;
-	padding:4px;
+	padding: 4px;
 	border-top-right-radius: 10px;
+}
+
+.tanuki-overlay-watermark {
+	position: fixed;
+	top: 8px;
+	left: 10px;
+	z-index: 2147483647;
+	pointer-events: none;
+	color: rgba(186, 104, 200, 0.58);
+	font-family: 'Varela', sans-serif;
+	font-weight: 700;
+	font-size: 16px;
+	line-height: 1.05;
+	text-shadow:
+		0 1px 2px rgba(0, 0, 0, 0.95),
+		0 0 5px rgba(0, 0, 0, 0.75);
+	white-space: nowrap;
+}
+
+.tanuki-overlay-watermark_snr {
+	top: 96px;
+}
+
+.tanuki-overlay-watermark_nos {
+	top: 58px;
+}
+
+.tanuki-overlay-watermark_game {
+	top: 10px;
+	left: 50%;
+	transform: translateX(-50%);
+	text-align: center;
+}
+
+.tanuki-overlay-watermark_game.tanuki-overlay-watermark_nos {
+	top: 58px;
+}
+
+.tanuki-overlay-watermark > div:last-child {
+	margin-top: 1px;
+	font-size: 11px;
+	font-weight: 600;
+	opacity: 0.8;
 }

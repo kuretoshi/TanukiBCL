@@ -31,7 +31,20 @@
 				"language": "语言",
 				"enable_warning": "启用此项会让你的大厅向其他BetterCrewLinkKai用户公开！",
 				"ban_warning": "过激文本将会让你被BetterCrewLinkKai封禁。"
-			}
+			},
+			"impostor_radio_private": "私密内鬼无线电",
+			"impostor_radio_private_description": "附近的船员听不到无线电中的内鬼。",
+			"impostor_radio_private_requires": "请先启用内鬼无线电。",
+			"host_notice": "房主控制大厅设置。",
+			"host_notice_you": "你是房主；大厅使用你的设置。",
+			"edit_as_host": "更改",
+			"tab_current": "当前大厅",
+			"tab_mine": "我的设置",
+			"host": "房主",
+			"host_you": "你",
+			"host_unknown": "未知",
+			"no_lobby": "尚未连接大厅。加入或创建游戏即可查看设置。",
+			"mine_notice": "你是房主时，设置会应用于所有人。"
 		},
 		"customplatforms": {
 			"title": "自定义平台",
@@ -55,14 +68,21 @@
 			"crewvolume": "作为幽灵时的船员音量",
 			"ghostvolumeasimpostor": "内鬼听见的幽灵音量",
 			"test_speaker_start": "扬声器测试",
-			"test_speaker_stop": "停止扬声器测试"
+			"test_speaker_stop": "停止扬声器测试",
+			"auto_gain_disabled": "启用自动增益时不可用。",
+			"test_microphone_start": "测试麦克风",
+			"test_microphone_stop": "停止麦克风测试",
+			"mode": "语音模式"
 		},
 		"keyboard": {
 			"title": "快捷键",
 			"push_to_talk": "按键说话",
 			"mute": "闭麦",
 			"deafen": "静音",
-			"impostor_radio": "内鬼私密通话"
+			"impostor_radio": "内鬼私密通话",
+			"hint": "点击快捷键，再按下键盘或鼠标按键。按 Escape 可禁用。",
+			"press_key": "请按键…",
+			"disabled": "已禁用"
 		},
 		"overlay": {
 			"title": "游戏内覆盖",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "降噪",
 			"spatial_audio": "空间音频",
 			"oldsampledebug": "采样率调试",
-			"oldsampledebug_warning": "这是一个测试函数，请在被要求时开启。"
+			"oldsampledebug_warning": "这是一个测试函数，请在被要求时开启。",
+			"echocancellation_description": "麦克风测试不使用回声消除。请戴耳机。",
+			"autoGainControl": "自动增益",
+			"autoGainControl_warning": "测试功能：麦克风会自动调节音量。请先测试。"
 		},
 		"streaming": {
 			"title": "直播设置",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS 浏览器覆盖源",
 			"obs_url": "OBS浏览器源URL",
 			"voice_server_comp": "VS 兼容模式",
-			"voice_server_comp_warning": "建议将语音服务器更改为BetterCrewLinkKai Voice Server ，例如：https://bettercrewl.ink 。"
+			"voice_server_comp_warning": "建议将语音服务器更改为BetterCrewLinkKai Voice Server ，例如：https://bettercrewl.ink 。",
+			"copy_url": "复制 URL"
 		},
 		"troubleshooting": {
 			"title": "故障处理",
 			"restore": "恢复默认设置",
 			"restore_warning": "这将重置所有设置为默认值。",
 			"warning": "游戏中没有可用房主！"
+		},
+		"general": "常规",
+		"players": {
+			"title": "玩家",
+			"volume": "音量",
+			"empty": "暂无其他玩家。加入大厅即可调节他们的音量。",
+			"disconnected": "已断开连接",
+			"mute": "静音",
+			"unmute": "取消静音",
+			"muted": "已静音"
 		}
 	},
 	"lobbybrowser": {

@@ -1,20 +1,8 @@
 import React, { useState } from 'react';
-import { ipcRenderer } from 'electron';
-import {
-	Alert,
-	Button,
-	Dialog,
-	DialogActions,
-	DialogContent,
-	DialogTitle,
-	IconButton,
-	MenuItem,
-	Select,
-	TextField,
-	Tooltip,
-	Typography,
-} from '@mui/material';
-import makeStyles from '@mui/styles/makeStyles';
+import { ipcRenderer } from './lib/electron-bridge';
+import { Alert, Button, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
+import Box from '@mui/material/Box';
+import { useTheme, Theme } from '@mui/material/styles';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ContactSupportIcon from '@mui/icons-material/ContactSupport';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -37,7 +25,7 @@ const TEXT = {
 	tooltip: '\u554f\u3044\u5408\u308f\u305b\u3092\u9001\u4fe1',
 };
 
-const useStyles = makeStyles((theme) => ({
+const getStyles = (theme: Theme) => ({
 	form: {
 		display: 'flex',
 		flexDirection: 'column',
@@ -59,11 +47,10 @@ const useStyles = makeStyles((theme) => ({
 	icon: {
 		marginRight: theme.spacing(1),
 	},
-}));
+});
 
-const InquiryButton: React.FC = function () {
-	const classes = useStyles();
-	const [open, setOpen] = useState(false);
+export const InquiryForm: React.FC = function () {
+	const classes = getStyles(useTheme());
 	const [subject, setSubject] = useState('');
 	const [body, setBody] = useState('');
 	const [tag, setTag] = useState<InquiryTag>('question');
@@ -114,85 +101,95 @@ const InquiryButton: React.FC = function () {
 
 	return (
 		<>
-			<Button color="grey" onClick={() => setOpen(true)}>
-				<Tooltip title={TEXT.tooltip} arrow>
-					<ContactSupportIcon htmlColor="white" fontSize="large" />
-				</Tooltip>
-			</Button>
-			<Dialog fullWidth maxWidth="sm" open={open} onClose={() => !sending && setOpen(false)}>
-				<DialogTitle>{TEXT.inquiry}</DialogTitle>
-				<DialogContent>
-					<div className={classes.form}>
-						{message && <Alert severity="success">{message}</Alert>}
-						{error && <Alert severity="error">{error}</Alert>}
-						<Select
-							value={tag}
-							onChange={(event) => setTag(event.target.value as InquiryTag)}
-							disabled={sending}
-							fullWidth
-							displayEmpty
-						>
-							<MenuItem value="question">{TEXT.tagQuestion}</MenuItem>
-							<MenuItem value="bug">{TEXT.tagBug}</MenuItem>
-							<MenuItem value="request">{TEXT.tagRequest}</MenuItem>
-						</Select>
-						<TextField
-							label={TEXT.subject}
-							value={subject}
-							onChange={(event) => setSubject(event.target.value)}
-							disabled={sending}
-							fullWidth
-							required
-							inputProps={{ maxLength: 100 }}
-						/>
-						<TextField
-							label={TEXT.body}
-							value={body}
-							onChange={(event) => setBody(event.target.value)}
-							disabled={sending}
-							fullWidth
-							required
-							multiline
-							minRows={6}
-							inputProps={{ maxLength: 1800 }}
-						/>
-						<div>
-							<Button variant="outlined" color="secondary" onClick={selectAttachments} disabled={sending}>
-								<AttachFileIcon className={classes.icon} />
-								{TEXT.attachmentSelect}
-							</Button>
-							{attachments.map((attachment) => (
-								<div className={classes.attachmentRow} key={attachment.path}>
-									<Typography className={classes.attachmentName}>{attachment.name}</Typography>
-									<IconButton
-										size="small"
-										disabled={sending}
-										onClick={() => setAttachments(attachments.filter((current) => current.path !== attachment.path))}
-									>
-										<DeleteIcon fontSize="small" />
-									</IconButton>
-								</div>
-							))}
-						</div>
-					</div>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={() => setOpen(false)} disabled={sending}>
-						{TEXT.cancel}
-					</Button>
-					<Button
-						variant="contained"
-						color="secondary"
-						onClick={submitInquiry}
-						disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
+			<Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 3, py: 2 }}>
+				<Box sx={classes.form}>
+					{message && <Alert severity="success">{message}</Alert>}
+					{error && <Alert severity="error">{error}</Alert>}
+					<Select
+						value={tag}
+						onChange={(event) => setTag(event.target.value as InquiryTag)}
+						disabled={sending}
+						fullWidth
+						displayEmpty
 					>
-						<SendIcon className={classes.icon} />
-						{TEXT.send}
-					</Button>
-				</DialogActions>
-			</Dialog>
+						<MenuItem value="question">{TEXT.tagQuestion}</MenuItem>
+						<MenuItem value="bug">{TEXT.tagBug}</MenuItem>
+						<MenuItem value="request">{TEXT.tagRequest}</MenuItem>
+					</Select>
+					<TextField
+						label={TEXT.subject}
+						value={subject}
+						onChange={(event) => setSubject(event.target.value)}
+						disabled={sending}
+						fullWidth
+						required
+						slotProps={{ htmlInput: { maxLength: 100 } }}
+					/>
+					<TextField
+						label={TEXT.body}
+						value={body}
+						onChange={(event) => setBody(event.target.value)}
+						disabled={sending}
+						fullWidth
+						required
+						multiline
+						minRows={6}
+						slotProps={{ htmlInput: { maxLength: 1800 } }}
+					/>
+					<Box>
+						<Button variant="outlined" color="secondary" onClick={selectAttachments} disabled={sending}>
+							<AttachFileIcon sx={classes.icon} />
+							{TEXT.attachmentSelect}
+						</Button>
+						{attachments.map((attachment) => (
+							<Box sx={classes.attachmentRow} key={attachment.path}>
+								<Typography sx={classes.attachmentName}>{attachment.name}</Typography>
+								<IconButton
+									size="small"
+									disabled={sending}
+									onClick={() => setAttachments(attachments.filter((current) => current.path !== attachment.path))}
+								>
+									<DeleteIcon fontSize="small" />
+								</IconButton>
+							</Box>
+						))}
+					</Box>
+				</Box>
+			</Box>
+			<Box
+				sx={{
+					display: 'flex',
+					justifyContent: 'flex-end',
+					gap: 1,
+					px: 3,
+					py: 2,
+					borderTop: '1px solid rgba(255,255,255,0.08)',
+				}}
+			>
+				<Button onClick={() => window.close()} disabled={sending}>
+					{TEXT.cancel}
+				</Button>
+				<Button
+					variant="contained"
+					color="secondary"
+					onClick={submitInquiry}
+					disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
+				>
+					<SendIcon sx={classes.icon} />
+					{TEXT.send}
+				</Button>
+			</Box>
 		</>
 	);
 };
 
+const InquiryButton: React.FC = function () {
+	return (
+		<Button color="grey" aria-label={TEXT.inquiry} onClick={() => ipcRenderer.send('OPEN_INQUIRY')}>
+			<Tooltip title={TEXT.tooltip} arrow>
+				<ContactSupportIcon htmlColor="white" fontSize="large" />
+			</Tooltip>
+		</Button>
+	);
+};
 export default InquiryButton;

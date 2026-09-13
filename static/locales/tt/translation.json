@@ -31,7 +31,20 @@
 				"language": "Тел",
 				"enable_warning": "Бу көйләнүне эшләтеп җибәрү сезнең бүлмәне бүтән BetterCrewLinkKai кулланучылары өчен ачык итәчәк!",
 				"ban_warning": "Килешмәгән текстлар BetterCrewLinkKai-та блокировкага китерәчәк."
-			}
+			},
+			"impostor_radio_private": "Яшерен хыянәтче радиосы",
+			"impostor_radio_private_description": "Якындагы экипаж хыянәтчене радио аша ишетми.",
+			"impostor_radio_private_requires": "Башта хыянәтче радиосын кабызыгыз.",
+			"host_notice": "Лобби көйләүләрен хуҗа билгели.",
+			"host_notice_you": "Сез хуҗа; лобби сезнең көйләүләрне куллана.",
+			"edit_as_host": "Үзгәртү",
+			"tab_current": "Хәзерге лобби",
+			"tab_mine": "Минем көйләүләр",
+			"host": "Хуҗа",
+			"host_you": "Сез",
+			"host_unknown": "Билгесез",
+			"no_lobby": "Сез лоббида түгел. Көйләүләрне күрү өчен кушылыгыз яки уен төзегез.",
+			"mine_notice": "Хуҗа булганда көйләүләрегез һәркемгә кулланыла."
 		},
 		"customplatforms": {
 			"title": "Custom Platform",
@@ -55,14 +68,21 @@
 			"crewvolume": "Экипаж тавышы өрәкләр сыман",
 			"ghostvolumeasimpostor": "Ghost Volume as Impostor",
 			"test_speaker_start": "Тавышны тикшерү",
-			"test_speaker_stop": "Тавышны тикшерүне туктату"
+			"test_speaker_stop": "Тавышны тикшерүне туктату",
+			"auto_gain_disabled": "Автоматик көчәйтү кабызылганда сүндерелә.",
+			"test_microphone_start": "Микрофонны сынау",
+			"test_microphone_stop": "Сынауны туктату",
+			"mode": "Тавыш режимы"
 		},
 		"keyboard": {
 			"title": "Клавиатура кыскартулары",
 			"push_to_talk": "Тавыш активациясе",
 			"mute": "Тавышны сүндерү",
 			"deafen": "Тавышны сүндерү",
-			"impostor_radio": "Хыянәтчеләр радиосы"
+			"impostor_radio": "Хыянәтчеләр радиосы",
+			"hint": "Төймәгә басыгыз, аннары клавиша яки тычкан төймәсен басыгыз. Escape аны сүндерә.",
+			"press_key": "Клавиша басыгыз…",
+			"disabled": "Сүндерелгән"
 		},
 		"overlay": {
 			"title": "Оверлей",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Тавыш бетерүче",
 			"spatial_audio": "Киңлектәге тавыш",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "Микрофон сынавы яңгырашны бетерми. Колакчын кулланыгыз.",
+			"autoGainControl": "Автоматик көчәйтү",
+			"autoGainControl_warning": "Бета: микрофон тавышны автоматик көйли. Башта сынагыз."
 		},
 		"streaming": {
 			"title": "Стрим көйләүләре",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS-браузер оверлее",
 			"obs_url": "OBS-браузер чыганак URL",
 			"voice_server_comp": "VS белән яраклашу шарты",
-			"voice_server_comp_warning": "Тавыш серверын BetterCrewLinkKai тавыш серверына үзгәртү тәкъдим ителә (https://bettercrewl.ink), мәсәлән."
+			"voice_server_comp_warning": "Тавыш серверын BetterCrewLinkKai тавыш серверына үзгәртү тәкъдим ителә (https://bettercrewl.ink), мәсәлән.",
+			"copy_url": "URL-ны күчерү"
 		},
 		"troubleshooting": {
 			"title": "Диагностика",
 			"restore": "Әүвәлге",
 			"restore_warning": "Бу БӨТЕН көйләүләрне әүвәлге әйләндерә.",
 			"warning": "Уен вакытында бүлмә хуҗасы өчен мөмкин түгел!"
+		},
+		"general": "Гомуми",
+		"players": {
+			"title": "Уенчылар",
+			"volume": "Тавыш",
+			"empty": "Башка уенчылар юк. Тавышларын үзгәртү өчен лоббига кушылыгыз.",
+			"disconnected": "Тоташу өзелде",
+			"mute": "Тавышны сүндерү",
+			"unmute": "Тавышны кабызу",
+			"muted": "Тавыш сүндерелгән"
 		}
 	},
 	"lobbybrowser": {

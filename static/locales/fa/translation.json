@@ -31,7 +31,20 @@
 				"language": "زبان",
 				"enable_warning": "فعال کردن این باعث میشود که ورودی تو برای دیگر استفاده کننده های بترکرولینک همگانی شود!",
 				"ban_warning": "متن نامناسب منجر به محرومیت از بترکرولینک میشود."
-			}
+			},
+			"impostor_radio_private": "رادیوی خصوصی خائن",
+			"impostor_radio_private_description": "خدمه نزدیک صدای خائن را در رادیو نمی‌شنوند.",
+			"impostor_radio_private_requires": "ابتدا رادیوی خائن را فعال کنید.",
+			"host_notice": "میزبان تنظیمات لابی را تعیین می‌کند.",
+			"host_notice_you": "شما میزبان هستید؛ لابی از تنظیمات شما استفاده می‌کند.",
+			"edit_as_host": "تغییر",
+			"tab_current": "لابی فعلی",
+			"tab_mine": "تنظیمات من",
+			"host": "میزبان",
+			"host_you": "شما",
+			"host_unknown": "ناشناخته",
+			"no_lobby": "در لابی نیستید. برای دیدن تنظیمات وارد شوید یا بازی بسازید.",
+			"mine_notice": "وقتی میزبانید، تنظیمات شما برای همه اعمال می‌شود."
 		},
 		"customplatforms": {
 			"title": "پلتفرم مناسب",
@@ -55,14 +68,21 @@
 			"crewvolume": "حجم خدمه بعنوان ارواح",
 			"ghostvolumeasimpostor": "صدای ارواح برای ایمپوستر",
 			"test_speaker_start": "اسپیکر امتحان کن",
-			"test_speaker_stop": "تمام کردن اسپیکر امتحان کن"
+			"test_speaker_stop": "تمام کردن اسپیکر امتحان کن",
+			"auto_gain_disabled": "هنگام فعال بودن تقویت خودکار غیرفعال است.",
+			"test_microphone_start": "آزمایش میکروفون",
+			"test_microphone_stop": "توقف آزمایش میکروفون",
+			"mode": "حالت صدا"
 		},
 		"keyboard": {
 			"title": "میانبر کیبورد",
 			"push_to_talk": "فشار دید تا صحبت کنید",
 			"mute": "سکوت",
 			"deafen": "صدا را بستن",
-			"impostor_radio": "رادیوی ایمپستر"
+			"impostor_radio": "رادیوی ایمپستر",
+			"hint": "روی میانبر کلیک کنید، سپس کلید یا دکمه ماوس را بزنید. Escape آن را غیرفعال می‌کند.",
+			"press_key": "یک کلید بزنید…",
+			"disabled": "غیرفعال"
 		},
 		"overlay": {
 			"title": "پوشش",
@@ -102,7 +122,10 @@
 			"noiseSuppression": "Noise Suppression",
 			"spatial_audio": "Spatial Audio",
 			"oldsampledebug": "Samplerate Debug",
-			"oldsampledebug_warning": "This is a test function ONLY enabled when asked."
+			"oldsampledebug_warning": "This is a test function ONLY enabled when asked.",
+			"echocancellation_description": "آزمایش میکروفون حذف پژواک را نادیده می‌گیرد. از هدفون استفاده کنید.",
+			"autoGainControl": "تقویت خودکار",
+			"autoGainControl_warning": "آزمایشی: میکروفون صدا را خودکار تنظیم می‌کند. ابتدا آزمایش کنید."
 		},
 		"streaming": {
 			"title": "Streaming Settings",
@@ -110,13 +133,24 @@
 			"obs_overlay": "OBS Browser Overlay",
 			"obs_url": "OBS Browser Source URL",
 			"voice_server_comp": "VS Compatibility Mode",
-			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example."
+			"voice_server_comp_warning": "It is recommended to just change the voice server to a BetterCrewLinkKai Voice Server (https://bettercrewl.ink) for example.",
+			"copy_url": "کپی URL"
 		},
 		"troubleshooting": {
 			"title": "Troubleshooting",
 			"restore": "Restore to Default",
 			"restore_warning": "This will reset ALL settings to their default values.",
 			"warning": "Not available as host in game!"
+		},
+		"general": "عمومی",
+		"players": {
+			"title": "بازیکنان",
+			"volume": "صدا",
+			"empty": "بازیکن دیگری نیست. برای تغییر صدای آن‌ها وارد لابی شوید.",
+			"disconnected": "قطع‌شده",
+			"mute": "بی‌صدا",
+			"unmute": "وصل صدا",
+			"muted": "بی‌صداشده"
 		}
 	},
 	"lobbybrowser": {

@@ -13,5 +13,29 @@ thumbs.db
 .idea/
 yarn-error.log
 .vscode/
-package-lock.json
 debug.log
+
+out/
+
+# Generated bundles from the former build system
+/main.js
+/main.js.map
+
+# Logs and local caches
+*.log
+*.tsbuildinfo
+/.cache/
+/coverage/
+/.eslintcache
+
+# Local environment settings and temporary files
+.env
+.env.*
+!.env.example
+*.tmp
+*.bak
+
+# Legacy native dependency trees; current packages are vendor/*.tgz
+/vendor/memoryjs/
+/vendor/electron-overlay-window/
+/vendor/node-keyboard-watcher/
