@@ -57,6 +57,7 @@ const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	socketClients: {},
 	playerSocketIds: {},
 	audioConnected: {},
+	connectionQuality: {},
 	impostorRadioClientId: -1,
 	activeLobbySettings: null,
 	hostId: 0,
@@ -313,6 +314,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			})
 		);
 
+		add(
+			this.connection.on('peerQuality', (peerId, quality) => {
+				this.patch({ connectionQuality: { ...this.snapshot.connectionQuality, [peerId]: quality } });
+			})
+		);
+
 		add(this.connection.on('peerStream', (peerId, stream) => this.audio.addPeer(peerId, stream)));
 
 		add(
@@ -320,7 +327,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.audio.removePeer(peerId);
 				const audioConnected = { ...this.snapshot.audioConnected };
 				delete audioConnected[peerId];
-				this.patch({ audioConnected });
+				const connectionQuality = { ...this.snapshot.connectionQuality };
+				delete connectionQuality[peerId];
+				this.patch({ audioConnected, connectionQuality });
 			})
 		);
 

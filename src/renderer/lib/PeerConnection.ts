@@ -90,6 +90,10 @@ export default class PeerConnection {
 		return this.pc.connectionState;
 	}
 
+	getStats(): Promise<RTCStatsReport> {
+		return this.pc.getStats();
+	}
+
 	on<E extends keyof PeerConnectionEvents>(event: E, listener: Listener<E>): void {
 		if (this.destroyed) return;
 		(this.listeners[event] ??= []).push(listener);

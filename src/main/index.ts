@@ -60,8 +60,8 @@ const overlayTargetName = String(
 		args.targetWindow ||
 		'Among Us'
 );
-const nativeOverlayEnabled =
-	process.env.BETTERCREWLINK_ENABLE_OVERLAY === '1' || args['enable-overlay'] === true || args.enableOverlay === true;
+let overlayRequested = false;
+let overlayTimer: ReturnType<typeof setTimeout> | undefined;
 const allowMultiInstance =
 	args['multi-instance'] === true ||
 	args.multiInstance === true ||
@@ -121,6 +121,8 @@ if (platform() === 'linux') {
 }
 
 function closeAppWindows() {
+	overlayRequested = false;
+	clearTimeout(overlayTimer);
 	try {
 		overlayWindow.stop();
 	} catch {
@@ -509,6 +511,7 @@ function createOverlay() {
 }
 
 function showOverlayWithRetry(attempt = 0) {
+	if (!overlayRequested || isQuitting) return;
 	try {
 		if (!global.overlay || global.overlay.isDestroyed()) {
 			global.overlay = createOverlay();
@@ -517,30 +520,40 @@ function showOverlayWithRetry(attempt = 0) {
 	} catch (exception) {
 		console.log('Overlay show failed:', exception);
 		if (attempt < 8) {
-			setTimeout(() => showOverlayWithRetry(attempt + 1), 750);
+			overlayTimer = setTimeout(() => showOverlayWithRetry(attempt + 1), 750);
 			return;
 		}
-		try {
-			global.overlay?.hide();
-			global.overlay?.close();
-		} catch {
-			/* empty */
-		}
-		global.overlay = null;
+		hideOverlay();
 	}
 }
 
 function hideOverlay() {
+	clearTimeout(overlayTimer);
+	overlayTimer = undefined;
 	try {
 		overlayWindow.hide();
-		if (global.overlay?.closable) {
-			overlayWindow.stop();
-			global.overlay?.close();
-			global.overlay = null;
-		}
 	} catch (exception) {
 		console.log('Overlay hide failed:', exception);
+	}
+	try {
+		overlayWindow.stop();
+	} catch (exception) {
+		console.log('Overlay stop failed:', exception);
+	}
+	try {
+		if (global.overlay && !global.overlay.isDestroyed()) global.overlay.destroy();
+	} finally {
 		global.overlay = null;
+	}
+}
+
+function setOverlayEnabled(enable: boolean) {
+	overlayRequested = enable;
+	clearTimeout(overlayTimer);
+	if (enable) {
+		overlayTimer = setTimeout(() => showOverlayWithRetry(), 1000);
+	} else {
+		hideOverlay();
 	}
 }
 
@@ -797,14 +810,8 @@ if (!gotTheLock) {
 		}
 	});
 
-	ipcMain.on('enableOverlay', async (_event, enable) => {
-		setTimeout(() => {
-			if (enable && nativeOverlayEnabled) {
-				showOverlayWithRetry();
-			} else {
-				hideOverlay();
-			}
-		}, 1000);
+	ipcMain.on('enableOverlay', (_event, enable: boolean) => {
+		setOverlayEnabled(enable);
 	});
 
 	ipcMain.on('setAlwaysOnTop', async (_event, enable) => {

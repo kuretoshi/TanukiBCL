@@ -505,7 +505,7 @@ MediaStreamSource
 
 ### 13.1 ネイティブオーバーレイ
 
-`electron-overlay-window` で Among Us ウィンドウへ透過 BrowserWindow を attach する。オーバーレイ有効化は `enableOverlay` IPC で行い、実際に表示するには `BETTERCREWLINK_ENABLE_OVERLAY=1` または `--enable-overlay` が必要である。
+`electron-overlay-window` で Among Us ウィンドウへ透過 BrowserWindow を attach する。オーバーレイ有効化は `enableOverlay` IPC で行い、設定が有効なら通常起動でも表示する。追加の起動オプションは不要。無効化時には表示・再試行タイマーを取り消し、ウィンドウとネイティブ監視を終了する。
 
 表示失敗時は最大 8 回リトライする。
 

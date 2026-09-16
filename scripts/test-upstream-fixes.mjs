@@ -278,3 +278,89 @@ try {
   assert.ok(resolve(temp).startsWith(join(resolve(tmpdir()), 'tanukibcl-avatar-')));
   await rm(temp, { recursive: true, force: true });
 }
+
+const { ConnectionQualitySampler, qualityBars } = await bundle('src/renderer/voice/connectionQuality.ts');
+const qualitySampler = new ConnectionQualitySampler();
+const stats = (received, lost, jitter = 0.01, rtt = 0.08, id = 'audio') => new Map([
+  ['transport', { type: 'transport', selectedCandidatePairId: 'selected' }],
+  ['selected', { type: 'candidate-pair', currentRoundTripTime: rtt }],
+  ['unused', { type: 'candidate-pair', currentRoundTripTime: 5 }],
+  [id, { id, type: 'inbound-rtp', kind: 'audio', packetsReceived: received, packetsLost: lost, jitter }],
+]);
+assert.deepEqual(qualitySampler.read(stats(100, 10)), { rttMs: 80, jitterMs: 10, lossPercent: null });
+assert.equal(qualitySampler.read(stats(198, 12)).lossPercent, 2);
+assert.equal(qualitySampler.read(stats(198, 12)).lossPercent, null);
+assert.equal(qualitySampler.read(stats(298, 11)).lossPercent, 0);
+assert.equal(qualitySampler.read(stats(1, 0)).lossPercent, null);
+assert.equal(qualitySampler.read(stats(100, 0, 0.01, 0.08, 'new-stream')).lossPercent, null);
+assert.deepEqual(qualitySampler.read(new Map()), { rttMs: null, jitterMs: null, lossPercent: null });
+assert.equal(qualityBars(), 0);
+assert.equal(qualityBars({ rttMs: null, jitterMs: 0, lossPercent: 0 }), 0);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 0 }), 3);
+assert.equal(qualityBars({ rttMs: 150, jitterMs: 10, lossPercent: 0 }), 2);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 30, lossPercent: 0 }), 2);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 5 }), 1);
+console.log('ok connection quality: selected route, interval loss, idle/reset streams and quality thresholds');
+
+// Exercise the actual main-process overlay lifecycle without native game hooks.
+const mainSource = ts.createSourceFile('index.ts', await readFile('src/main/index.ts', 'utf8'), ts.ScriptTarget.Latest, true);
+const overlayFunctions = mainSource.statements.filter(node => ts.isFunctionDeclaration(node) &&
+  ['setOverlayEnabled', 'showOverlayWithRetry', 'hideOverlay'].includes(node.name?.text)).map(node => node.getText(mainSource));
+assert.equal(overlayFunctions.length, 3);
+const overlayTimers = new Map();
+let overlayTimerId = 0, overlayCreated = 0, overlayShown = 0, overlayStopped = 0, failOverlayShow = false;
+const overlayGlobal = { overlay: null };
+const overlayRuntime = vm.runInNewContext(ts.transpileModule(`
+let overlayRequested = false;
+let overlayTimer;
+let isQuitting = false;
+${overlayFunctions.join('\n')}
+({ setOverlayEnabled, showOverlayWithRetry, quit: () => { isQuitting = true; } });
+`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, {
+  global: overlayGlobal, console: { log() {} },
+  setTimeout: callback => { const id = ++overlayTimerId; overlayTimers.set(id, callback); return id; },
+  clearTimeout: id => overlayTimers.delete(id),
+  createOverlay: () => { overlayCreated++; return { isDestroyed: () => false, destroy() { this.destroyed = true; } }; },
+  overlayWindow: { show() { if (failOverlayShow) throw new Error('temporary failure'); overlayShown++; }, hide() {}, stop() { overlayStopped++; } },
+});
+const runOverlayTimer = () => {
+  const entry = overlayTimers.entries().next().value;
+  assert.ok(entry, 'expected a pending overlay timer');
+  overlayTimers.delete(entry[0]); entry[1]();
+};
+overlayRuntime.setOverlayEnabled(true);
+runOverlayTimer();
+assert.equal(overlayCreated, 1, 'normal startup enables overlay without command-line flags');
+assert.equal(overlayShown, 1);
+const firstOverlay = overlayGlobal.overlay;
+overlayRuntime.setOverlayEnabled(false);
+assert.equal(firstOverlay.destroyed, true);
+assert.equal(overlayGlobal.overlay, null);
+assert.equal(overlayStopped, 1);
+overlayRuntime.setOverlayEnabled(true);
+overlayRuntime.setOverlayEnabled(false);
+assert.equal(overlayTimers.size, 0, 'disable cancels delayed startup');
+overlayRuntime.setOverlayEnabled(true);
+failOverlayShow = true;
+runOverlayTimer();
+assert.equal(overlayTimers.size, 1);
+const staleRetry = overlayTimers.values().next().value;
+overlayRuntime.setOverlayEnabled(false);
+assert.equal(overlayTimers.size, 0, 'disable cancels retries');
+staleRetry();
+assert.equal(overlayGlobal.overlay, null, 'stale retries cannot reopen disabled overlay');
+failOverlayShow = false;
+overlayRuntime.setOverlayEnabled(true);
+runOverlayTimer();
+assert.equal(overlayShown, 2, 'overlay can be enabled again');
+overlayRuntime.setOverlayEnabled(false);
+overlayRuntime.setOverlayEnabled(true);
+failOverlayShow = true;
+for (let attempt = 0; attempt < 9; attempt++) runOverlayTimer();
+assert.equal(overlayTimers.size, 0);
+assert.equal(overlayGlobal.overlay, null, 'exhausted retries release native attachment and window');
+overlayRuntime.setOverlayEnabled(true);
+overlayRuntime.quit();
+runOverlayTimer();
+assert.equal(overlayGlobal.overlay, null, 'shutdown cannot reopen overlay');
+console.log('ok overlay: normal startup, toggle cancellation, retry cleanup, re-enable and shutdown');

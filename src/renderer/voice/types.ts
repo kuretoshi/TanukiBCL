@@ -1,3 +1,4 @@
+import type { ConnectionQuality } from './connectionQuality';
 import { AudioConnected, ClientBoolMap, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
 import { ILobbySettings } from '../../common/ISettings';
 import type { VoiceDisguiseEffect } from '../voiceEffect';
@@ -58,6 +59,7 @@ export interface VoiceSnapshot {
 	socketClients: SocketClientMap;
 	playerSocketIds: numberStringMap;
 	audioConnected: AudioConnected;
+	connectionQuality: Record<string, ConnectionQuality | undefined>;
 	impostorRadioClientId: number;
 	activeLobbySettings: ILobbySettings | null;
 	hostId: number;

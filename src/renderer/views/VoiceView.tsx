@@ -1,3 +1,4 @@
+import ConnectionIndicator from '../components/ConnectionIndicator';
 import { isLiteRuntime } from '../../common/appVariant';
 import React, { useContext, useMemo } from 'react';
 import Typography from '@mui/material/Typography';
@@ -219,7 +220,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 								const theirVadHidden = player.shiftedColor !== -1 && gameState?.gameState !== GameState.DISCUSSION;
 
 								return (
-									<Box key={player.id} sx={{ width: otherPlayerAvatarSize }}>
+									<Box key={player.id} sx={{ width: otherPlayerAvatarSize, position: 'relative' }}>
 										<Avatar
 											hideWhenAppearanceChanged
 											connectionState={
@@ -240,6 +241,10 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 												setSetting(`playerConfigMap.${player.playerConfigId}`, config, persist)
 											}
 											mod={gameState.mod}
+										/>
+										<ConnectionIndicator
+											connected={connected && !!voice.audioConnected[peer]}
+											quality={voice.connectionQuality[peer]}
 										/>
 									</Box>
 								);

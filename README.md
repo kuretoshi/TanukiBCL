@@ -109,8 +109,8 @@ npm.cmd run build
 .\node_modules\.bin\electron-builder.cmd --win --x64 --config electron-builder-lite.yml --publish never
 ```
 
-- 通常版: `dist/TanukiBCL-Setup-3.2.1.exe`
-- Lite版: `dist-lite/TanukiBCLLite-Setup-3.2.1.exe`
+- 通常版: `dist/TanukiBCL-Setup-3.2.2.exe`
+- Lite版: `dist-lite/TanukiBCLLite-Setup-3.2.2.exe`
 
 N-API対応の検証済みビルドを使うため、配布設定の`npmRebuild`は無効です。ネイティブ依存を変更した場合は、NodeとElectronの両方で読み込みとメモリ読み取りを再検証してください。今回の配布確認対象はWindows x64です。
 

@@ -1,3 +1,4 @@
+import { ConnectionQuality, ConnectionQualitySampler } from './connectionQuality';
 import io, { Socket } from 'socket.io-client';
 import { Client, GameState, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
 import { ILobbySettings } from '../../common/ISettings';
@@ -42,6 +43,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	socketClients: [SocketClientMap];
 	peerStream: [peerId: string, stream: MediaStream];
 	peerClosed: [peerId: string];
+	peerQuality: [peerId: string, quality: ConnectionQuality | undefined];
 	peerData: [peerId: string, data: Record<string, unknown>];
 	vad: [clientId: number, activity: boolean];
 	mobileDetected: [];
@@ -55,6 +57,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 	private currentLobby = '';
 	private iceConfig: RTCConfiguration = DEFAULT_ICE_CONFIG;
 
+	private qualityTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private peers = new Map<string, PeerConnection>();
 	private peerConnectionIds = new Map<string, string>();
 	private peerOffers = new Map<string, string>();
@@ -353,6 +356,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 	}
 
 	private destroyPeer(peerId: string): void {
+		this.clearPeerTimer(this.qualityTimers, peerId);
 		this.clearPeerTimer(this.iceDisconnectTimers, peerId);
 		this.clearPeerTimer(this.peerConnectTimers, peerId);
 		this.clearPeerTimer(this.peerRetryTimers, peerId);
@@ -431,6 +435,22 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 			config,
 		});
 		this.peers.set(peer, connection);
+		const sampler = new ConnectionQualitySampler();
+		const sampleQuality = async (): Promise<void> => {
+			let quality: ConnectionQuality | undefined;
+			try {
+				if (connection.connectionState === 'connected') quality = sampler.read(await connection.getStats());
+			} catch {
+				// Closing a peer while getStats is pending is expected.
+			}
+			if (this.peers.get(peer) !== connection) return;
+			this.emit('peerQuality', peer, connection.connectionState === 'connected' ? quality : undefined);
+			this.qualityTimers.set(
+				peer,
+				setTimeout(() => void sampleQuality(), 3000)
+			);
+		};
+		void sampleQuality();
 		if (connectionId !== undefined) this.peerConnectionIds.set(peer, connectionId);
 		this.peerConnectTimers.set(
 			peer,
@@ -454,6 +474,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 
 		connection.on('iceStateChange', (iceState: RTCIceConnectionState) => {
 			if (this.peers.get(peer) !== connection) return;
+			if (iceState !== 'connected' && iceState !== 'completed') this.emit('peerQuality', peer, undefined);
 			if (iceState === 'failed' || iceState === 'closed') {
 				this.retryPeer(peer, connection, `ICE ${iceState}`);
 				return;
