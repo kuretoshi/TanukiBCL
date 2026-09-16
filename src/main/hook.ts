@@ -177,8 +177,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 		};
 		await frame();
 	} else if (gameReader) {
-		gameReader.amongUs = null;
-		gameReader.checkProcessDelay = 0;
+		gameReader.requestReconnect();
 	}
 });
 
@@ -200,7 +199,14 @@ function targetWindow(target: WindowTarget = 'main') {
 }
 
 ipcMain.on('reload', async (_, target: WindowTarget) => {
-	targetWindow(target)?.reload();
+	const window = targetWindow(target);
+	if (!window || window.isDestroyed()) return;
+	// Explicit navigation also reloads views served by the packaged app:// protocol.
+	try {
+		await window.loadURL(window.webContents.getURL());
+	} catch (error) {
+		console.error('Failed to reload window:', error);
+	}
 });
 
 ipcMain.on('minimize', async (_, target: WindowTarget) => {

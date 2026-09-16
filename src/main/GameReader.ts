@@ -245,8 +245,18 @@ export default class GameReader {
 	}
 
 	checkProcessDelay = 0;
+	private reconnectRequested = false;
+
+	requestReconnect(): void {
+		this.reconnectRequested = true;
+	}
 	isLocalGame = false;
 	async loop(): Promise<string | null> {
+		if (this.reconnectRequested) {
+			this.reconnectRequested = false;
+			this.resetAmongUsProcess();
+			this.checkProcessDelay = 0;
+		}
 		if (this.checkProcessDelay-- <= 0) {
 			this.checkProcessDelay = 30;
 			try {

@@ -1,4 +1,5 @@
 import electronUpdater from 'electron-updater';
+import { readSnrRoles } from './snrRoleReader';
 import { verifyDebugPassword } from './debugAuth';
 import { setVoiceDebugEnabled } from './GameReader';
 import { app, BrowserWindow, ipcMain, session, net, protocol, dialog } from 'electron';
@@ -712,6 +713,23 @@ if (!gotTheLock) {
 	ipcMain.handle('debug:get-logs', (event) => {
 		if (event.sender !== global.debugWindow?.webContents) return '';
 		return readDebugLog();
+	});
+	let readingSnrRoles = false;
+	ipcMain.handle('debug:snr-roles', async (event) => {
+		if (event.sender !== global.debugWindow?.webContents) return { status: 'error', message: '開発者認証が必要です。' };
+		if (readingSnrRoles) return { status: 'error', message: '取得中です。' };
+		if (!gameReader.amongUs || gameReader.loadedMod.id !== 'SUPER_NEW_ROLES')
+			return { status: 'error', message: 'SuperNewRolesの起動を確認してください。' };
+		const pid = gameReader.pid;
+		readingSnrRoles = true;
+		try {
+			const result = await readSnrRoles(pid);
+			if (!gameReader.amongUs || gameReader.pid !== pid)
+				return { status: 'error', message: '取得中にゲームが終了または切り替わりました。' };
+			return result;
+		} finally {
+			readingSnrRoles = false;
+		}
 	});
 	let savingDebugLog = false;
 	ipcMain.handle('debug:save-log', async (event) => {

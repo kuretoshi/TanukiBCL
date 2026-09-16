@@ -38,10 +38,10 @@ const useStyles = () => ({
 		height: theme.spacing(3),
 		backgroundColor: '#1d1a23',
 		top: 0,
-		WebkitAppRegion: 'drag',
 		zIndex: 100,
 	},
 	title: {
+		WebkitAppRegion: 'drag',
 		width: '100%',
 		textAlign: 'center',
 		display: 'block',
@@ -51,7 +51,8 @@ const useStyles = () => ({
 	},
 	button: {
 		WebkitAppRegion: 'no-drag',
-		marginLeft: 'auto',
+		width: 24,
+		height: 24,
 		padding: 0,
 		position: 'absolute',
 		top: 0,
@@ -74,7 +75,13 @@ const RawTitleBar: React.FC = function () {
 			>
 				<SettingsIcon htmlColor="#777" />
 			</IconButton>
-			<IconButton sx={classes.button} style={{ left: 22 }} size="small" onClick={() => ipcRenderer.send('reload')}>
+			<IconButton
+				sx={classes.button}
+				style={{ left: 24 }}
+				size="small"
+				aria-label="Reload"
+				onClick={() => ipcRenderer.send('reload')}
+			>
 				<RefreshSharpIcon htmlColor="#777" />
 			</IconButton>
 			<IconButton

@@ -8,6 +8,9 @@ dist-lite-current/
 node_modules/
 .tools/
 tools/
+!/tools/
+/tools/*
+!/tools/SnrRoleReader/
 $extract/
 thumbs.db
 .idea/
@@ -39,3 +42,5 @@ out/
 /vendor/memoryjs/
 /vendor/electron-overlay-window/
 /vendor/node-keyboard-watcher/
+/tools/SnrRoleReader/bin/
+/tools/SnrRoleReader/obj/

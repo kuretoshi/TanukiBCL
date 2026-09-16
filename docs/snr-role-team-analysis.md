@@ -79,3 +79,27 @@ DLLのロード検出と、管理ヒープ上のプレイヤー情報の取得�
 取得手段の候補は、SNR側の協力を得て読み取り用のローカル連携データを出す方法、またはCoreCLRのメタデータと管理ヒープを読み取る方法。前者ではPlayerId・セッション識別子・役職・所属をSNR側で解決して渡せる。後者ではランタイムとDLLバージョンに対応した管理オブジェクトの探索が必要になる。いずれも未実装で、現段階で「役職が取得できた」とは扱わない。
 
 検証ケース: Vanilla、通常クルー、クルー特殊役職、Jackal、JackalFriends、Madmate、SchrodingersCatの所属変更、Modifier付与、死亡/会議、ゲーム再起動。ミニ・ジャンボの未完成判定は引き続き無効のままとする。
+
+## 2026-09-15: 管理メモリ読み取りの試作
+
+`tools/SnrRoleReader`にWindows x86用の読み取りツールを追加した。Microsoft.Diagnostics.Runtime (ClrMD) 3.1.512801でプロセスのスナップショットを作り、SNRのExPlayerControlの静的配列からPlayerId・Role・ModifierRole・GhostRole・roleBaseの陣営値・能力のCurrentTeamを読み取る。列挙値の名前は、実際にロードされたSNR DLLのメタデータから取得する。ゲームへのメモリ書き込みやコード注入は行わない。
+
+デバッグウィンドウの「SNR役職」タブで「SNR役職を取得」を押すと、その時点の値を表示する。取得に失敗した場合は古い結果を消してエラーを表示する。既存の音声判定には反映しない。スナップショット取得は短いゲーム停止を伴う可能性があるため、現段階では連続ポーリングしない。[ClrMDのスナップショット説明](https://github.com/microsoft/clrmd/blob/main/doc/GettingStarted.md#attaching-to-a-live-process)
+
+ビルドには.NET 8 SDKを使用する（この環境では`.tools/dotnet-sdk`に導入済み）。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-snr-reader.ps1
+npm.cmd run build
+```
+
+生成物は`out/debug-reader`。通常版・Lite版ともASARの外に展開する設定を追加した。取得ツールが存在しないビルドでは画面に未ビルドと表示する。
+
+確認済み:
+
+- 型検査、アプリと読み取りツールのビルド。
+- 同じ管理オブジェクト構造のテスト用プロセスから、Role=JackalFriends、AssignedTeam=Crewmate、WinnerTeam=Neutralを実際に読み取った。
+- Electronのデバッグ画面でその結果を表示し、次の取得が失敗すると古い結果が消えることを確認した。
+- 起動中のSNRからCoreCLRとExPlayerControl型を確認できた。ただし現時点の取得結果は「Player array is not initialized」で、実ゲームの役職値は未検証。役職割り当て後の再取得と、実際の役職との照合が必要。
+
+この試作のインストーラーは未作成。テストプロセスでの成功と実ゲームでの成功は区別する。

@@ -175,6 +175,32 @@ await checkProcess.call(switchingReader);
 assert.equal(switchingReader.loadedMod.id, 'NONE');
 assert.equal(switchingReader.loadedMods.length, 0);
 console.log('ok MOD refresh: previous SNR result corrected to Nebula and cleared on game exit');
+const reconnectMethods = [];
+function findReconnectMethods(node) {
+  if (ts.isMethodDeclaration(node) && ['requestReconnect', 'resetAmongUsProcess', 'loop'].includes(node.name.getText(readerSource))) {
+    reconnectMethods.push(node.getText(readerSource).replace(/^private /, ''));
+  }
+  ts.forEachChild(node, findReconnectMethods);
+}
+findReconnectMethods(readerSource);
+const reconnectReader = vm.runInNewContext(ts.transpileModule(`({ ${reconnectMethods.join(',')} })`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2020 },
+}).outputText, { IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } });
+const reconnectEvents = [];
+Object.assign(reconnectReader, { amongUs: {}, colorsInitialized: true, initializedWrite: true, checkProcessDelay: 30,
+  sendIPC: (...args) => reconnectEvents.push(args),
+  async checkProcessOpen() { reconnectEvents.push(['checked']); },
+});
+reconnectReader.requestReconnect();
+assert.equal(reconnectReader.colorsInitialized, true, 'reset waits until the next read loop');
+await reconnectReader.loop();
+assert.equal(reconnectReader.amongUs, null);
+assert.equal(reconnectReader.colorsInitialized, false);
+assert.equal(reconnectReader.initializedWrite, false);
+assert.deepEqual(reconnectEvents, [['opened', false], ['checked']]);
+await reconnectReader.loop();
+assert.equal(reconnectEvents.length, 2, 'reconnect runs only once');
+console.log('ok reload: reset cached game state and colors before reconnecting on the next read loop');
 let parsePlayerMethod;
 function findParser(node) {
   if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'parsePlayer') parsePlayerMethod = node;

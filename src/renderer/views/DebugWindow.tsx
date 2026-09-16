@@ -24,6 +24,7 @@ import { IpcSettingsMessages } from '../../common/ipc-messages';
 import { GameState } from '../../common/AmongUsState';
 import { modList } from '../../common/Mods';
 import '../css/index.css';
+import SnrRolePanel from './SnrRolePanel';
 
 const controlStyles = { WebkitAppRegion: 'no-drag', p: 0, borderRadius: 0, width: 34, height: '100%' };
 
@@ -141,6 +142,7 @@ function DebugWindow(): React.JSX.Element {
 						sx={{ px: 2, flexShrink: 0 }}
 					>
 						<Tab value="live" label="リアルタイム" />
+						<Tab value="snr" label="SNR役職" />
 						<Tab value="game" label="ゲーム状態" />
 						<Tab value="voice" label="音声接続" />
 						<Tab value="logs" label="ログ" />
@@ -161,7 +163,9 @@ function DebugWindow(): React.JSX.Element {
 					<Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1 }}>
 						{tab === 'logs' ? '最新のログ（最大64KB）を1秒ごとに更新します。' : 'ゲーム・音声の状態を自動更新します。'}
 					</Typography>
-					{tab === 'live' ? (
+					{tab === 'snr' ? (
+						<SnrRolePanel gameState={gameState} />
+					) : tab === 'live' ? (
 						<Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2, pb: 2, userSelect: 'text' }}>
 							<Typography sx={{ mb: 1 }}>
 								ゲーム状態: {GameState[gameState.gameState]} ／ プレイヤー: {players.length}人

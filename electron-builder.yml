@@ -10,6 +10,7 @@ files:
       - package.json
       - out
 asarUnpack:
+  - "out/debug-reader/**"
   - "**/*.node"
 npmRebuild: false
 extraFiles:
