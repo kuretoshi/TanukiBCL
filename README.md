@@ -137,3 +137,22 @@ N-API対応の検証済みビルドを使うため、配布設定の`npmRebuild`
 ## 免責
 
 この mod は Among Us または Innersloth LLC とは関係ありません。内容は Innersloth LLC によって承認、支援、提供されたものではありません。Among Us に関する権利は Innersloth LLC に帰属します。
+
+## クレジットとリソース
+
+敬称略
+
+### SpecialThanks
+
+アイコンイラスト、宣伝、多方面からのバグ報告
+- セオノ
+
+NoS対応
+- あつ
+
+デバッグ対応
+- まっすー
+
+### 対応MOD
+- [SuperNewRoles](https://github.com/SuperNewRoles)
+- [Nebula on the Ship](https://github.com/Dolly1016/Nebula)
