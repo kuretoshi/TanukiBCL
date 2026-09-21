@@ -8,6 +8,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import { ISettings } from '../../../common/ISettings';
 import { SettingRow, SettingsSection, SwitchRow } from '../SettingsControls';
+import packageJson from '../../../../package.json';
 
 export interface StreamingSectionProps {
 	t: TFunction;
@@ -17,7 +18,7 @@ export interface StreamingSectionProps {
 
 function obsUrl(settings: ISettings): string {
 	return (
-		`https://kuretoshi.github.io/BetterCrewlink-obs_fix/?compact=${settings.compactOverlay ? '1' : '0'}` +
+		`https://kuretoshi.github.io/BetterCrewlink-obs_fix/?version=${encodeURIComponent(packageJson.version)}&compact=${settings.compactOverlay ? '1' : '0'}` +
 		`&position=${settings.overlayPosition}&meeting=${settings.meetingOverlay ? '1' : '0'}` +
 		`&secret=${encodeURIComponent(settings.obsSecret)}&server=${encodeURIComponent(settings.serverURL)}`
 	);
