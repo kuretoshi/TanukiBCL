@@ -5,6 +5,7 @@ import { ILobbySettings, ISettings, playerConfigMap } from '../../common/ISettin
 import { isLiteRuntime } from '../../common/appVariant';
 import { IpcMessages, IpcOverlayMessages, IpcRendererMessages } from '../../common/ipc-messages';
 import { ObsVoiceState } from '../../common/ObsOverlay';
+import { nosColorHex } from '../../common/NosSnapshot';
 import { VoiceState } from '../../common/AmongUsState';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { TypedEmitter } from '../lib/TypedEmitter';
@@ -818,6 +819,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					shiftedColor: player.shiftedColor,
 					bugged: player.bugged,
 					realColor: playerColors[player.colorId],
+					nosColor: state.mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined,
 					usingRadio: player.clientId === this.snapshot.impostorRadioClientId && myPlayer?.isImpostor,
 					connected:
 						(playerSocketIds[player.clientId] &&

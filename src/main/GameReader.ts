@@ -32,6 +32,13 @@ import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 import { getAppArgs } from './args';
+import { readSnrRoles } from './snrRoleReader';
+import { SnrLiveTracker } from './snrLiveTracker';
+import { formatSnrRole } from '../common/SnrRole';
+import { formatNosTeam } from '../common/NosSnapshot';
+import { NosSnapshotTracker } from './nosSnapshotTracker';
+import { resolveNosSnapshot } from './nosSnapshotReader';
+import { NosPaletteTracker } from './nosPalette';
 
 const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
 void settingsStore;
@@ -123,6 +130,15 @@ export default class GameReader {
 	initPatternDebug = '';
 	debugBaselines: Record<string, Record<number, number>> = {};
 	nativeReadFailureCount = 0;
+	private snrRoles = new SnrLiveTracker(readSnrRoles);
+	private nosSnapshot = new NosSnapshotTracker(resolveNosSnapshot);
+	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette'));
+	private snrRound = 0;
+	private snrInGame = false;
+
+	acceptSnrRoles(pid: number, result: unknown): void {
+		if (this.amongUs && this.pid === pid) this.snrRoles.accept(pid, result);
+	}
 
 	constructor(sendIPC: Electron.WebContents['send']) {
 		this.is_linux = platform() === 'linux';
@@ -136,6 +152,11 @@ export default class GameReader {
 			.sort((a, b) => a.th32ProcessID - b.th32ProcessID);
 		let error = '';
 		const reset = this.amongUs && processesOpen.filter((o) => o.th32ProcessID === this.pid).length === 0;
+		if (!this.amongUs || reset) {
+			this.snrRoles.reset();
+			this.nosSnapshot.reset();
+			this.nosPalette.reset();
+		}
 		if ((!this.amongUs || reset) && processesOpen.length > 0) {
 			for (const processOpen of processesOpen.slice(targetProcessIndex, targetProcessIndex + 1)) {
 				try {
@@ -162,6 +183,9 @@ export default class GameReader {
 				throw error;
 			}
 		} else if (this.amongUs && (processesOpen.length === 0 || reset)) {
+			this.snrRoles.reset();
+			this.nosSnapshot.reset();
+			this.nosPalette.reset();
 			this.amongUs = null;
 			this.loadedMod = modList[0];
 			this.loadedMods = [];
@@ -529,7 +553,50 @@ export default class GameReader {
 					this.lastPlayerPtr = allPlayers;
 				}
 				const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
+				const snrActive = state === GameState.TASKS || state === GameState.DISCUSSION;
+				if (snrActive && !this.snrInGame) this.snrRound++;
+				this.snrInGame = snrActive;
+				if (this.loadedMod.id === 'SUPER_NEW_ROLES' && !this.is_linux) {
+					const roles = snrActive
+						? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
+								readBuffer(this.amongUs!.handle, address, size)
+							)
+						: new Map();
+					for (const player of players) {
+						player.snrRole = player.disconnected ? undefined : roles.get(player.id);
+						player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
+					}
+				} else this.snrRoles.reset();
+				const nos =
+					this.loadedMod.id === 'NoS' && !this.is_linux && snrActive
+						? this.nosSnapshot.update(
+								this.pid,
+								`${lobbyCode}:${this.snrRound}:${snrActive ? 'game' : 'lobby'}`,
+								(address, size) => readBuffer(this.amongUs!.handle, address, size)
+							)
+						: undefined;
+				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosSnapshot.reset();
+				const nosLobbyColors =
+					this.loadedMod.id === 'NoS' && !this.is_linux && state === GameState.LOBBY
+						? this.nosPalette.update(this.pid, (address, size) => readBuffer(this.amongUs!.handle, address, size))
+						: undefined;
+				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
+				if (this.loadedMod.id === 'NoS') {
+					const data = new Map(nos?.players.map((player) => [player.playerId, player]));
+					for (const player of players) {
+						const published = player.disconnected ? undefined : data.get(player.id);
+						// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
+						player.nosLobbyColor = player.disconnected ? undefined : nosLobbyColors?.[player.id];
+						player.nosPlayer = published;
+						// Vanilla's substitute role is not an authoritative NoS team.
+						player.isImpostor = published?.isImpostor ?? false;
+						player.isThirdParty = published?.isNeutral ?? false;
+						player.roleName = published ? formatNosTeam(published) : 'NoS陣営未取得';
+						if (published) player.appearanceName = published.name;
+					}
+				}
 				const newState: AmongUsState = normalizeMeetingState({
+					nosLocalMicPosition: nos?.localMicPosition,
 					lobbyCode: lobbyCode,
 					lobbyCodeInt,
 					players,
@@ -578,12 +645,19 @@ export default class GameReader {
 									localPlayerDiffs,
 									innerNetDiffs,
 									localRoleTeam: localPlayer?.roleTeam ?? -1,
-									localRoleLabel: this.formatRoleLabel(localPlayer),
+									localRoleLabel: localPlayer?.roleName || 'unknown',
 									localRolePtr: localPlayer?.rolePtr || 0,
 									localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
 									localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
 									colorDebug: this.formatColorDebug(players, localPlayer),
 									sizeDebug: this.formatSizeDebug(players),
+									nosSnapshotStatus: this.loadedMod.id === 'NoS' ? this.nosSnapshot.message : undefined,
+									snrRoleStatus:
+										this.loadedMod.id === 'SUPER_NEW_ROLES'
+											? snrActive
+												? this.snrRoles.message
+												: '試合開始後にSNR役職を自動取得します。'
+											: undefined,
 								},
 							}
 						: {}),
@@ -615,6 +689,10 @@ export default class GameReader {
 	}
 
 	private resetAmongUsProcess(): void {
+		this.snrRoles.reset();
+		this.nosSnapshot.reset();
+		this.nosPalette.reset();
+		this.snrInGame = false;
 		this.amongUs = null;
 		this.gameAssembly = null;
 		this.PlayerStruct = undefined;

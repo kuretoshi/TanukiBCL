@@ -2,6 +2,7 @@ import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import { AmongUsMaps, CameraLocation, MapType } from '../../common/AmongusMap';
 import { poseCollide } from '../../common/ColliderMap';
+import { isSnrJackal, isSnrSidekick } from '../../common/SnrRole';
 
 export interface MuffleSetting {
 	type: BiquadFilterType;
@@ -36,7 +37,13 @@ function distance(panPos: [number, number]): number {
 }
 
 export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
-	const { state, settings, activeLobbySettings, me, other, maxDistance, impostorRadioClientId } = input;
+	const { state, settings, activeLobbySettings, maxDistance, impostorRadioClientId } = input;
+	const useNosPositions = state.mod === 'NoS' && activeLobbySettings.nosVoicePositions === true;
+	const me = useNosPositions && state.nosLocalMicPosition ? { ...input.me, ...state.nosLocalMicPosition } : input.me;
+	const other =
+		useNosPositions && input.other.nosPlayer
+			? { ...input.other, x: input.other.nosPlayer.speakerPositionX, y: input.other.nosPlayer.speakerPositionY }
+			: input.other;
 
 	const result: VoiceAudioResult = {
 		gain: 0,
@@ -55,8 +62,35 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	let wallCheckEnabled = false;
 	let skipDistanceCheck = false;
 	let muffleEnabled = false;
-	const canHearGhosts =
-		(me.isImpostor && activeLobbySettings.haunting) || (me.isThirdParty && activeLobbySettings.thirdPartyHaunting);
+	const meJackal = state.mod === 'SUPER_NEW_ROLES' && isSnrJackal(me.snrRole);
+	const otherJackal = state.mod === 'SUPER_NEW_ROLES' && isSnrJackal(other.snrRole);
+	const meSidekick = state.mod === 'SUPER_NEW_ROLES' && isSnrSidekick(me.snrRole);
+	const otherSidekick = state.mod === 'SUPER_NEW_ROLES' && isSnrSidekick(other.snrRole);
+	const meJackalTeam = meJackal || meSidekick;
+	const otherJackalTeam = otherJackal || otherSidekick;
+	const snrVentConversation =
+		meJackalTeam &&
+		otherJackalTeam &&
+		(meSidekick || otherSidekick ? activeLobbySettings.sidekickTalkInVents : activeLobbySettings.jackalTalkInVents);
+	const snrNeutralKillerGhosts =
+		state.mod === 'SUPER_NEW_ROLES' &&
+		activeLobbySettings.jackalHaunting &&
+		me.snrRole?.isNeutral === true &&
+		me.snrRole.canKill === true;
+	const nosKillerGhosts =
+		state.mod === 'NoS' &&
+		activeLobbySettings.nosNeutralKillerHaunting &&
+		me.nosPlayer?.isNeutral === true &&
+		me.nosPlayer.isKiller === true &&
+		me.nosPlayer.isImpostor === false;
+	const canHearGhosts = meJackal
+		? snrNeutralKillerGhosts
+		: meSidekick
+			? activeLobbySettings.sidekickHaunting
+			: nosKillerGhosts ||
+				snrNeutralKillerGhosts ||
+				(me.isImpostor && activeLobbySettings.haunting) ||
+				(me.isThirdParty && activeLobbySettings.thirdPartyHaunting);
 	const meetingFallback =
 		state.map === MapType.AIRSHIP &&
 		state.gameState === GameState.TASKS &&
@@ -91,7 +125,9 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 
 			if (
 				other.inVent &&
-				!(activeLobbySettings.hearImpostorsInVents || (activeLobbySettings.impostersHearImpostersInvent && me.inVent))
+				!((meJackalTeam || otherJackalTeam) && me.inVent
+					? snrVentConversation
+					: activeLobbySettings.hearImpostorsInVents || (activeLobbySettings.impostersHearImpostersInvent && me.inVent))
 			) {
 				endGain = 0;
 			}
@@ -110,10 +146,19 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			if (!me.isDead && other.isDead && canHearGhosts) {
 				result.reverb = true;
 				wallCheckEnabled = false;
-				endGain = settings.ghostVolumeAsImpostor / 100;
+				endGain *= settings.ghostVolumeAsImpostor / 100;
 			} else if (other.isDead && !me.isDead) {
 				endGain = 0;
 			}
+			if (
+				!me.isDead &&
+				meJackalTeam &&
+				me.inVent &&
+				!other.inVent &&
+				!(meJackal ? activeLobbySettings.jackalHearOutsideVents : activeLobbySettings.sidekickHearOutsideVents)
+			)
+				endGain = 0;
+			if (meetingFallback && !me.isDead && other.isDead) endGain = 0;
 			break;
 
 		case GameState.DISCUSSION:

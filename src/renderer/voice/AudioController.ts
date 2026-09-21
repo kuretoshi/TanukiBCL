@@ -549,7 +549,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 				: null;
 		if (effect && this.context) {
 			peer.voiceEffect ??= createVoiceDisguiseEffect(this.context, null, effect.strength);
-			updateVoiceDisguiseEffect(peer.voiceEffect, effect.strength, effect.direction, effect.formantScale);
+			updateVoiceDisguiseEffect(peer.voiceEffect, effect.strength, effect.direction, effect.formantScale, effect.jumbo);
 		} else if (peer.voiceEffect) {
 			disconnectVoiceDisguiseEffect(peer.voiceEffect);
 			peer.voiceEffect = undefined;

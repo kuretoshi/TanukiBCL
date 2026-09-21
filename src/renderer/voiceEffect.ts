@@ -5,6 +5,7 @@ export interface VoiceEffectNodes {
 }
 
 export interface VoiceDisguiseEffect {
+	jumbo?: boolean;
 	input: GainNode;
 	output: GainNode;
 	dryGain: GainNode;
@@ -51,27 +52,28 @@ export function configureVoiceEffectFilter(filter: BiquadFilterNode, strength: n
 	filter.Q.value = 1 + normalizedStrength * 8;
 }
 
-function createDelayTimeBuffer(context: AudioContext, delayTime: number, pitchUp: boolean) {
-	const sampleRate = context.sampleRate;
-	const buffer = context.createBuffer(1, Math.floor(delayTime * sampleRate), sampleRate);
-	const data = buffer.getChannelData(0);
-
-	for (let i = 0; i < data.length; i++) {
-		const phase = i / data.length;
-		data[i] = pitchUp ? delayTime * (1 - phase) : delayTime * phase;
-	}
-
-	return buffer;
-}
-
-function createFadeBuffer(context: AudioContext, delayTime: number, offset: number) {
+function createDelayTimeBuffer(context: AudioContext, delayTime: number, pitchUp: boolean, offset = 0) {
 	const sampleRate = context.sampleRate;
 	const buffer = context.createBuffer(1, Math.floor(delayTime * sampleRate), sampleRate);
 	const data = buffer.getChannelData(0);
 
 	for (let i = 0; i < data.length; i++) {
 		const phase = (i / data.length + offset) % 1;
-		data[i] = Math.sin(Math.PI * phase);
+		data[i] = pitchUp ? delayTime * (1 - phase) : delayTime * phase;
+	}
+
+	return buffer;
+}
+
+function createFadeBuffer(context: AudioContext, delayTime: number, offset: number, squared = false) {
+	const sampleRate = context.sampleRate;
+	const buffer = context.createBuffer(1, Math.floor(delayTime * sampleRate), sampleRate);
+	const data = buffer.getChannelData(0);
+
+	for (let i = 0; i < data.length; i++) {
+		const phase = (i / data.length + offset) % 1;
+		const fade = Math.sin(Math.PI * phase);
+		data[i] = squared ? fade * fade : fade;
 	}
 
 	return buffer;
@@ -107,17 +109,21 @@ export function createVoiceDisguiseEffect(
 	const pitchDownWetGain = context.createGain();
 	const delayTime = 0.035;
 	const delayUpBuffer = createDelayTimeBuffer(context, delayTime, true);
-	const delayDownBuffer = createDelayTimeBuffer(context, delayTime, false);
+	const downDelayTime = 0.08;
+	const delayDownBuffer = createDelayTimeBuffer(context, downDelayTime, false);
 	const fadeBufferA = createFadeBuffer(context, delayTime, 0);
 	const fadeBufferB = createFadeBuffer(context, delayTime, 0.5);
 	const delayModA = createLoopingBufferSource(context, delayUpBuffer);
 	const delayModB = createLoopingBufferSource(context, delayUpBuffer);
 	const delayDownModA = createLoopingBufferSource(context, delayDownBuffer);
-	const delayDownModB = createLoopingBufferSource(context, delayDownBuffer);
+	const delayDownModB = createLoopingBufferSource(context, createDelayTimeBuffer(context, downDelayTime, false, 0.5));
 	const fadeModA = createLoopingBufferSource(context, fadeBufferA);
 	const fadeModB = createLoopingBufferSource(context, fadeBufferB);
-	const fadeDownModA = createLoopingBufferSource(context, fadeBufferA);
-	const fadeDownModB = createLoopingBufferSource(context, fadeBufferB);
+	const fadeDownModA = createLoopingBufferSource(context, createFadeBuffer(context, downDelayTime, 0, true));
+	const fadeDownModB = createLoopingBufferSource(context, createFadeBuffer(context, downDelayTime, 0.5, true));
+	// Modulation supplies the entire window; an intrinsic gain of 1 would leak delay resets.
+	pitchDownGainA.gain.value = 0;
+	pitchDownGainB.gain.value = 0;
 
 	delayModA.connect(pitchDelayA.delayTime);
 	delayModB.connect(pitchDelayB.delayTime);
@@ -190,9 +196,33 @@ export function updateVoiceDisguiseEffect(
 	effect: VoiceDisguiseEffect,
 	strength: number,
 	direction: PitchShiftDirection = 'up',
-	formantScale = 1
+	formantScale = 1,
+	jumbo = false
 ) {
 	const normalizedStrength = clampStrength(strength) / 100;
+	if (jumbo) {
+		// Delay slope sets pitch: 1.0 at zero growth, down to 0.4 at maximum size.
+		// Keep both windows phase locked while smoothing changes in the growth value.
+		const now = effect.input.context.currentTime;
+		for (const source of [effect.delayDownModA, effect.delayDownModB, effect.fadeDownModA, effect.fadeDownModB]) {
+			if (!effect.jumbo) {
+				source.playbackRate.cancelScheduledValues(now);
+				source.playbackRate.value = normalizedStrength * 0.6;
+			}
+			source.playbackRate.setTargetAtTime(normalizedStrength * 0.6, now, 0.06);
+		}
+		effect.filter.type = 'lowpass';
+		effect.filter.frequency.setTargetAtTime(12000 - normalizedStrength * 8500, now, 0.06);
+		effect.filter.Q.value = Math.SQRT1_2;
+		effect.dryGain.gain.value = normalizedStrength === 0 ? 1 : 0;
+		effect.wetGain.gain.value = normalizedStrength === 0 ? 0 : 1;
+		effect.pitchUpWetGain.gain.value = 0;
+		effect.pitchDownWetGain.gain.value = 1;
+		effect.jumbo = true;
+		return;
+	}
+	if (effect.jumbo) effect.filter.frequency.cancelScheduledValues(effect.input.context.currentTime);
+	effect.jumbo = false;
 
 	configureVoiceEffectFilter(effect.filter, strength, formantScale);
 	effect.dryGain.gain.value = 1 - normalizedStrength * 0.95;

@@ -18,6 +18,8 @@ import IconButton from '@mui/material/IconButton';
 import Grid from '@mui/material/Grid';
 import { ModsType } from '../../common/Mods';
 import { PlayerColorContext } from '../state/contexts';
+import { findNosColorIndex, nosColorHex } from '../../common/NosSnapshot';
+import { useNosAvatar } from '../lib/nosAvatar';
 
 const useStyles = () => ({
 	canvas: {
@@ -64,6 +66,7 @@ export interface CanvasProps {
 	size: number;
 	borderColor: string;
 	color: number;
+	nosColor?: string;
 	overflow: boolean;
 	usingRadio: boolean | undefined;
 	onClick?: () => void;
@@ -195,7 +198,13 @@ const Avatar: React.FC<AvatarProps> = function ({
 	const normalizeSkinId = (skinId: string | undefined) => (skinId === 'skin_None' ? '' : skinId || '');
 	const normalizeVisorId = (visorId: string | undefined) => (visorId === 'visor_EmptyVisor' ? '' : visorId || '');
 	const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
-	const displayColor = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
+	const nosColor = mod === 'NoS' ? findNosColorIndex(player.nosPlayer, playerColors) : -1;
+	const displayColor =
+		nosColor >= 0
+			? nosColor
+			: hasDisplayOutfit && player.appearanceColorId >= 0
+				? player.appearanceColorId
+				: player.colorId;
 	const displayHat = normalizeHatId(hasDisplayOutfit ? player.appearanceHatId : player.hatId);
 	const displaySkin = normalizeSkinId(hasDisplayOutfit ? player.appearanceSkinId : player.skinId);
 	const displayVisor = normalizeVisorId(hasDisplayOutfit ? player.appearanceVisorId : player.visorId);
@@ -218,6 +227,7 @@ const Avatar: React.FC<AvatarProps> = function ({
 	) : (
 		<Canvas
 			color={displayColor}
+			nosColor={mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined}
 			hat={showHat === false ? '' : displayHat}
 			visor={showHat === false ? '' : displayVisor}
 			skin={displaySkin}
@@ -336,11 +346,13 @@ const Canvas = React.memo(function Canvas({
 	size,
 	borderColor,
 	color,
+	nosColor,
 	overflow,
 	usingRadio,
 	onClick,
 	mod,
 }: CanvasProps) {
+	const nosAvatar = useNosAvatar(isAlive, nosColor);
 	const hatsLoaded = useHatsLoaded();
 	const hatImg = useMemo(() => {
 		return {
@@ -408,7 +420,7 @@ const Canvas = React.memo(function Canvas({
 				>
 					<Box
 						component="img"
-						src={hatImg.base}
+						src={nosAvatar || hatImg.base}
 						sx={classes.base}
 						onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
 							e.currentTarget.onerror = null;

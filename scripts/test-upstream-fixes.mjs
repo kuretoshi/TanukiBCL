@@ -37,7 +37,7 @@ const lobby = { ...defaultLobbySettings };
 const settings = { voiceEffectStrength: 70, enableSpatialAudio: true, ghostVolumeAsImpostor: 40 };
 const me = { id: 1, clientId: 1, name: 'A', appearanceName: 'A', x: 0, y: 0, isLocal: true };
 const other = { id: 2, clientId: 2, name: 'B', appearanceName: 'A', x: 1, y: 0, sizeScale: 1, specialRole: 'UNKNOWN' };
-const state = { gameState: GameState.TASKS, map: MapType.SKELD, players: [me, other], currentCamera: CameraLocation.NONE, closedDoors: [] };
+const state = { gameState: GameState.TASKS, mod: 'SUPER_NEW_ROLES', map: MapType.SKELD, players: [me, other], currentCamera: CameraLocation.NONE, closedDoors: [] };
 const rule = (s = state, l = lobby, a = me, b = other, radio = -1) => selectVoiceEffect(s, settings, l, a, b, radio);
 assert.equal(rule().strength, 70);
 assert.equal(rule({ ...state, gameState: GameState.DISCUSSION }), null);
@@ -62,6 +62,79 @@ assert.equal(radio.muffle.type, 'highpass');
 assert.equal(spatial({ me: { ...me, inVent: true } }).muffle.type, 'lowpass');
 assert.equal(spatial().muffle, false);
 console.log('ok spatial audio: distance, Airship, third-party haunting, radio/vent filter restoration');
+
+const snr = (name, jumbo, metadata = {}) => ({ role: { value: 11, name }, modifier: { value: 16, name: 'JumboModifier' }, ghostRole: null, jumbo, ...metadata });
+const jumboLobby = { ...lobby, snrJumboVoice: true, voiceEffectEnabled: false };
+const jumboPlayer = { ...other, appearanceName: 'B', snrRole: snr('Jackal', { currentSize: 2, maxSize: 4 }) };
+assert.deepEqual(rule(state, jumboLobby, me, jumboPlayer), { strength: 50, direction: 'down', jumbo: true });
+for (const currentSize of [0, -1, NaN]) {
+  assert.equal(rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal', { currentSize, maxSize: 4 }) }), null);
+}
+assert.equal(rule(state, { ...jumboLobby, snrJumboVoice: false }, me, jumboPlayer), null);
+assert.equal(rule({ ...state, gameState: GameState.DISCUSSION }, jumboLobby, me, jumboPlayer), null);
+assert.equal(rule({ ...state, map: MapType.AIRSHIP, airshipMeetingByOutfit: true }, jumboLobby, me, jumboPlayer), null);
+assert.equal(rule(state, jumboLobby, me, { ...jumboPlayer, isDead: true }), null);
+assert.equal(rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal') }), null);
+for (const role of ['Jackal', 'WaveCannonJackal']) {
+  const jackal = { ...me, snrRole: snr(role, undefined, { isNeutral: true, canKill: true }) };
+  const ghostOther = { ...other, isDead: true };
+  assert.equal(spatial({ me: jackal, other: ghostOther }).gain, 0);
+  assert.equal(spatial({ me: jackal, other: ghostOther, activeLobbySettings: { ...lobby, jackalHaunting: true } }).gain, 0.4);
+  assert.equal(spatial({ me: jackal, other: ghostOther, activeLobbySettings: { ...lobby, jackalHaunting: true, meetingGhostOnly: true } }).gain, 0);
+  const ventMe = { ...jackal, inVent: true };
+  assert.equal(spatial({ me: ventMe }).gain, 0);
+  assert.equal(spatial({ me: ventMe, activeLobbySettings: { ...lobby, jackalHearOutsideVents: true } }).gain, 0.5);
+  assert.equal(spatial({ me: ventMe, other: { ...other, inVent: true, snrRole: snr('WaveCannonJackal') }, activeLobbySettings: { ...lobby, jackalTalkInVents: true } }).gain, 0.5);
+  assert.equal(spatial({ me: ventMe, other: { ...other, inVent: true }, activeLobbySettings: { ...lobby, jackalTalkInVents: true } }).gain, 0);
+  assert.equal(spatial({ me: ventMe, other: { ...other, x: 50 }, activeLobbySettings: { ...lobby, jackalHearOutsideVents: true } }).gain, 0);
+}
+for (const metadata of [
+  { isNeutral: true, canKill: true },
+  { isNeutral: true, canKill: false },
+  { isNeutral: false, canKill: true },
+]) {
+  const result = spatial({
+    me: { ...me, snrRole: snr('OtherNeutralRole', undefined, metadata) },
+    other: { ...other, isDead: true },
+    activeLobbySettings: { ...lobby, jackalHaunting: true },
+  });
+  assert.equal(result.gain, metadata.isNeutral && metadata.canKill ? 0.4 : 0);
+}
+assert.equal(spatial({ me: { ...me, snrRole: snr('Frankenstein') }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, jackalHaunting: true } }).gain, 0);
+for (const role of ['Sidekick', 'SidekickWaveCannon']) {
+  const sidekick = { ...me, snrRole: snr(role) };
+  assert.equal(spatial({ me: sidekick, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, jackalHaunting: true } }).gain, 0);
+  assert.equal(spatial({ me: sidekick, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, sidekickHaunting: true } }).gain, 0.4);
+  assert.equal(spatial({ me: { ...sidekick, inVent: true }, activeLobbySettings: { ...lobby, jackalHearOutsideVents: true } }).gain, 0);
+  assert.equal(spatial({ me: { ...sidekick, inVent: true }, activeLobbySettings: { ...lobby, sidekickHearOutsideVents: true } }).gain, 0.5);
+}
+const factionRoles = ['Jackal', 'WaveCannonJackal', 'Sidekick', 'SidekickWaveCannon', 'JackalFriends'];
+for (const a of factionRoles) for (const b of factionRoles) for (const jackalTalkInVents of [false, true]) for (const sidekickTalkInVents of [false, true]) {
+  const excluded = a === 'JackalFriends' || b === 'JackalFriends';
+  const sidekick = a.startsWith('Sidekick') || b.startsWith('Sidekick');
+  const allowed = !excluded && (sidekick ? sidekickTalkInVents : jackalTalkInVents);
+  assert.equal(spatial({ me: { ...me, inVent: true, snrRole: snr(a) }, other: { ...other, inVent: true, snrRole: snr(b) }, activeLobbySettings: { ...lobby, jackalTalkInVents, sidekickTalkInVents } }).gain, allowed ? .5 : 0, `${a} -> ${b}, J=${jackalTalkInVents}, S=${sidekickTalkInVents}`);
+}
+assert.equal(spatial({ me: { ...me, snrRole: snr('JackalFriends') }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, jackalHaunting: true, sidekickHaunting: true } }).gain, 0);
+for (const isNeutral of [false, true]) for (const isKiller of [false, true]) for (const isImpostor of [false, true]) {
+  const nosPlayer = { isNeutral, isKiller, isImpostor };
+  const result = spatial({ state: { ...state, mod: 'NoS' }, me: { ...me, nosPlayer }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, nosNeutralKillerHaunting: true } });
+  assert.equal(result.gain, isNeutral && isKiller && !isImpostor ? .4 : 0);
+}
+const nosKiller = { ...me, nosPlayer: { isNeutral: true, isKiller: true, isImpostor: false } };
+assert.equal(spatial({ state: { ...state, mod: 'NoS' }, me: nosKiller, other: { ...other, isDead: true } }).gain, 0);
+assert.equal(spatial({ me: nosKiller, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, nosNeutralKillerHaunting: true } }).gain, 0);
+assert.equal(spatial({ state: { ...state, mod: 'NoS', gameState: GameState.DISCUSSION }, me: nosKiller, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, nosNeutralKillerHaunting: true } }).gain, 0);
+console.log('ok SNR/NoS: independent Jackal/Sidekick settings, full vent matrix, Friends excluded, exact NoS three-flag predicate');
+const nosOther = { ...other, x: 99, nosPlayer: { speakerPositionX: 2.5, speakerPositionY: -1 } };
+const nosState = { ...state, mod: 'NoS', nosLocalMicPosition: { x: 1, y: -1 } };
+const nosPositionSettings = { ...lobby, nosVoicePositions: true };
+assert.deepEqual(spatial({ state: nosState, other: nosOther, activeLobbySettings: nosPositionSettings }).panPosition, [1.5, 0]);
+assert.equal(spatial({ state: nosState, other: nosOther }).gain, 0, 'NoS position override is off by default');
+assert.equal(spatial({ state: nosState, other: nosOther, activeLobbySettings: { ...nosPositionSettings, nosVoicePositions: false } }).gain, 0);
+assert.equal(spatial({ state: { ...nosState, mod: 'SUPER_NEW_ROLES' }, other: nosOther, activeLobbySettings: nosPositionSettings }).gain, 0);
+assert.deepEqual(spatial({ state: { ...state, mod: 'NoS' }, activeLobbySettings: nosPositionSettings }), spatial({ state: { ...state, mod: 'NoS' } }), 'Missing NoS positions use ordinary positions');
+console.log('ok NoS microphone/speaker positions remain separate from SNR');
 
 const disguised = { ...other, name: 'Original', nameHash: 123, playerConfigId: 456,
   colorId: 2, hatId: 'original-hat', skinId: 'original-skin', visorId: 'original-visor',
@@ -167,6 +240,9 @@ const checkProcess = vm.runInNewContext(ts.transpileModule(`({ ${checkProcessMet
 }).outputText, { modList, getProcesses: () => runningProcesses, targetProcessName: 'Among Us.exe', targetProcessId: 0, targetProcessIndex: 0,
   console: { log() {} }, IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } }).checkProcessOpen;
 const switchingReader = { pid: 42, amongUs: {}, loadedMod: modList.find(m => m.id === 'SUPER_NEW_ROLES'), loadedMods: ['old.dll'],
+  snrRoles: { reset() {} },
+  nosSnapshot: { reset() {} },
+  nosPalette: { reset() {} },
   nextModCheck: 0, gamePath: 'game/Among Us.exe', getInstalledMods: () => modList.find(m => m.id === 'NoS'), sendIPC() {} };
 await checkProcess.call(switchingReader);
 assert.equal(switchingReader.loadedMod.id, 'NoS');
@@ -186,6 +262,10 @@ findReconnectMethods(readerSource);
 const reconnectReader = vm.runInNewContext(ts.transpileModule(`({ ${reconnectMethods.join(',')} })`, {
   compilerOptions: { target: ts.ScriptTarget.ES2020 },
 }).outputText, { IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } });
+let snrResetCount = 0;
+reconnectReader.snrRoles = { reset() { snrResetCount++; } };
+reconnectReader.nosSnapshot = { reset() {} };
+reconnectReader.nosPalette = { reset() {} };
 const reconnectEvents = [];
 Object.assign(reconnectReader, { amongUs: {}, colorsInitialized: true, initializedWrite: true, checkProcessDelay: 30,
   sendIPC: (...args) => reconnectEvents.push(args),
@@ -197,6 +277,8 @@ await reconnectReader.loop();
 assert.equal(reconnectReader.amongUs, null);
 assert.equal(reconnectReader.colorsInitialized, false);
 assert.equal(reconnectReader.initializedWrite, false);
+assert.equal(snrResetCount, 1, 'reconnect invalidates the managed role layout');
+assert.equal(reconnectReader.snrInGame, false);
 assert.deepEqual(reconnectEvents, [['opened', false], ['checked']]);
 await reconnectReader.loop();
 assert.equal(reconnectEvents.length, 2, 'reconnect runs only once');

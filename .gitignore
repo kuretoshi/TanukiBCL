@@ -11,6 +11,7 @@ tools/
 !/tools/
 /tools/*
 !/tools/SnrRoleReader/
+!/tools/TbclSnapshotReader/
 $extract/
 thumbs.db
 .idea/
@@ -44,3 +45,9 @@ out/
 /vendor/node-keyboard-watcher/
 /tools/SnrRoleReader/bin/
 /tools/SnrRoleReader/obj/
+/tools/TbclSnapshotReader/bin/
+/tools/TbclSnapshotReader/obj/
+/scripts/fixtures/snr-reader/**/bin/
+/scripts/fixtures/snr-reader/**/obj/
+/scripts/fixtures/nos-reader/**/bin/
+/scripts/fixtures/nos-reader/**/obj/

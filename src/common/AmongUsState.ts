@@ -1,5 +1,7 @@
 import { CameraLocation, MapType } from './AmongusMap';
 import { ModsType } from './Mods';
+import type { SnrLiveRole } from './SnrRole';
+import type { NosPlayerData } from './NosSnapshot';
 
 export interface AmongUsState {
 	gameState: GameState;
@@ -22,6 +24,7 @@ export interface AmongUsState {
 	mod: ModsType;
 	oldMeetingHud: boolean;
 	airshipMeetingByOutfit: boolean;
+	nosLocalMicPosition?: { x: number; y: number };
 	debug?: {
 		rawGameState: number;
 		meetingHud: number;
@@ -44,6 +47,8 @@ export interface AmongUsState {
 		localRoleSnapshot: string;
 		colorDebug: string;
 		sizeDebug: string;
+		snrRoleStatus?: string;
+		nosSnapshotStatus?: string;
 	};
 }
 
@@ -73,6 +78,9 @@ export interface Player {
 	rolePtr: number;
 	roleTeam: number;
 	roleName: string;
+	snrRole?: SnrLiveRole;
+	nosPlayer?: NosPlayerData;
+	nosLobbyColor?: string;
 	sizeScale: number;
 	specialRole: 'JUMBO' | 'MINI' | 'UNKNOWN';
 	isImpostor: boolean;

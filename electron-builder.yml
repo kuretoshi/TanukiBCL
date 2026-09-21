@@ -11,6 +11,7 @@ files:
       - out
 asarUnpack:
   - "out/debug-reader/**"
+  - "out/nos-reader/**"
   - "**/*.node"
 npmRebuild: false
 extraFiles:

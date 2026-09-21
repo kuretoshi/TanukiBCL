@@ -3,7 +3,17 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 
-export async function readSnrRoles(pid: number): Promise<unknown> {
+const pending = new Map<number, Promise<unknown>>();
+
+export function readSnrRoles(pid: number): Promise<unknown> {
+	const existing = pending.get(pid);
+	if (existing) return existing;
+	const request = captureSnrRoles(pid).finally(() => pending.delete(pid));
+	pending.set(pid, request);
+	return request;
+}
+
+async function captureSnrRoles(pid: number): Promise<unknown> {
 	const root = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');
 	const executable = join(root, 'out', 'debug-reader', 'SnrRoleReader.exe');
 	if (!existsSync(executable))

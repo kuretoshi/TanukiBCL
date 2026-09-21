@@ -176,12 +176,16 @@ function DebugWindow(): React.JSX.Element {
 								{gameState.mixupSabotaged ? 'あり' : 'なし'}
 							</Typography>
 							<Typography variant="caption" color="text.secondary">
-								役職は現在取得できる判定値です。Mod固有の役職名をすべて識別するものではありません。
+								{gameState.mod === 'SUPER_NEW_ROLES'
+									? gameState.debug?.snrRoleStatus || 'SNR役職未取得'
+									: gameState.mod === 'NoS'
+										? gameState.debug?.nosSnapshotStatus || 'NoSスナップショット未取得'
+										: '役職は現在取得できる判定値です。Mod固有の役職名をすべて識別するものではありません。'}
 							</Typography>
 							<Table size="small" sx={{ mt: 1, '& th, & td': { whiteSpace: 'nowrap' } }}>
 								<TableHead>
 									<TableRow>
-										{['名前 / ID', '役職 / 陣営値', '状態', '変身 / 外見', 'サイズ', '座標'].map((label) => (
+										{['名前 / ID', '役職 / 本体陣営値', '状態', '変身 / 外見', 'サイズ', '座標'].map((label) => (
 											<TableCell key={label}>{label}</TableCell>
 										))}
 									</TableRow>
@@ -196,7 +200,19 @@ function DebugWindow(): React.JSX.Element {
 												ID: {player.id} / Client: {player.clientId}
 											</TableCell>
 											<TableCell>
-												{player.roleName || '不明'} / {player.roleTeam}
+												{player.roleName || '不明'}
+												<br />
+												本体陣営値: {player.roleTeam}
+												{gameState.mod === 'NoS' && player.nosPlayer && (
+													<>
+														<br />
+														IsNeutral={String(player.nosPlayer.isNeutral)}
+														<br />
+														IsKiller={String(player.nosPlayer.isKiller)}
+														<br />
+														IsImpostor={String(player.nosPlayer.isImpostor)}
+													</>
+												)}
 											</TableCell>
 											<TableCell>
 												{player.disconnected ? '切断' : player.isDead ? '死亡' : '生存'}
@@ -208,9 +224,29 @@ function DebugWindow(): React.JSX.Element {
 												Outfit: {player.currentOutfit} / 色: {player.colorId} → {player.appearanceColorId}
 												<br />
 												Skin: {player.appearanceSkinId || 'なし'}
+												{player.nosPlayer && (
+													<>
+														<br />
+														NoS: {player.nosPlayer.name} / RGB:{' '}
+														{[player.nosPlayer.colorR, player.nosPlayer.colorG, player.nosPlayer.colorB]
+															.map((value) => value.toFixed(3))
+															.join(', ')}
+													</>
+												)}
 											</TableCell>
 											<TableCell>
 												{player.sizeScale?.toFixed(3) ?? '不明'} / {player.specialRole}
+												{player.snrRole?.jumbo && (
+													<>
+														<br />
+														ジャンボ:{' '}
+														{Math.min(
+															100,
+															(player.snrRole.jumbo.currentSize / player.snrRole.jumbo.maxSize) * 100
+														).toFixed(0)}
+														%
+													</>
+												)}
 											</TableCell>
 											<TableCell>
 												{player.x?.toFixed(2)}, {player.y?.toFixed(2)}

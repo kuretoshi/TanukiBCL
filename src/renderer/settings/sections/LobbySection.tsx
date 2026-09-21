@@ -29,6 +29,7 @@ export interface LobbySectionProps {
 
 interface RowsProps {
 	t: TFunction;
+	mod: AmongUsState['mod'];
 	values: ILobbySettings;
 	disabled: boolean;
 	disabledReason?: string;
@@ -36,7 +37,7 @@ interface RowsProps {
 	confirm: ConfirmApi['confirm'];
 }
 
-const LobbySettingRows: React.FC<RowsProps> = function ({ t, values, disabled, disabledReason, update, confirm }) {
+const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabled, disabledReason, update, confirm }) {
 	const toggles: { key: keyof ILobbySettings; label: string }[] = [
 		{ key: 'wallsBlockAudio', label: t('settings.lobbysettings.wallsblockaudio') },
 		{ key: 'visionHearing', label: t('settings.lobbysettings.visiononly') },
@@ -48,6 +49,15 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, values, disabled, d
 		{ key: 'commsSabotage', label: t('settings.lobbysettings.comms_sabotage_audio') },
 		{ key: 'hearThroughCameras', label: t('settings.lobbysettings.hear_through_cameras') },
 		{ key: 'impostorRadioEnabled', label: t('settings.lobbysettings.impostor_radio') },
+	];
+	const modToggles: { key: keyof ILobbySettings; label: string }[] = [
+		{ key: 'snrJumboVoice', label: t('settings.lobbysettings.snr_jumbo_voice') },
+		{ key: 'jackalHaunting', label: t('settings.lobbysettings.jackal_haunting') },
+		{ key: 'jackalHearOutsideVents', label: t('settings.lobbysettings.jackal_hear_outside_vents') },
+		{ key: 'jackalTalkInVents', label: t('settings.lobbysettings.jackal_talk_in_vents') },
+		{ key: 'sidekickHaunting', label: t('settings.lobbysettings.sidekick_haunting') },
+		{ key: 'sidekickHearOutsideVents', label: t('settings.lobbysettings.sidekick_hear_outside_vents') },
+		{ key: 'sidekickTalkInVents', label: t('settings.lobbysettings.sidekick_talk_in_vents') },
 	];
 
 	return (
@@ -109,6 +119,39 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, values, disabled, d
 					}
 				/>
 			</SettingsSection>
+
+			{mod === 'SUPER_NEW_ROLES' && (
+				<SettingsSection title={t('settings.lobbysettings.snr_section')}>
+					{modToggles.map(({ key, label }) => (
+						<SwitchRow
+							key={key}
+							label={label}
+							disabled={disabled}
+							disabledReason={disabledReason}
+							checked={values[key] === true}
+							onChange={(checked) => update({ [key]: checked })}
+						/>
+					))}
+				</SettingsSection>
+			)}
+			{mod === 'NoS' && (
+				<SettingsSection title={t('settings.lobbysettings.nos_section')}>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_neutral_killer_haunting')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosNeutralKillerHaunting === true}
+						onChange={(checked) => update({ nosNeutralKillerHaunting: checked })}
+					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_voice_positions')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosVoicePositions === true}
+						onChange={(checked) => update({ nosVoicePositions: checked })}
+					/>
+				</SettingsSection>
+			)}
 
 			{!isLiteRuntime() && (
 				<SettingsSection title={t('buttons.public_lobby')}>
@@ -220,7 +263,14 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 								}
 							/>
 						</SettingsSection>
-						<LobbySettingRows t={t} values={activeLobbySettings} disabled update={noop} confirm={confirm} />
+						<LobbySettingRows
+							t={t}
+							mod={gameState?.mod}
+							values={activeLobbySettings}
+							disabled
+							update={noop}
+							confirm={confirm}
+						/>
 					</>
 				) : (
 					<Alert severity="info">{t('settings.lobbysettings.no_lobby')}</Alert>
@@ -233,6 +283,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 					</Alert>
 					<LobbySettingRows
 						t={t}
+						mod={gameState?.mod}
 						values={myLobbySettings ?? defaultLobbySettings}
 						disabled={!canEditMine}
 						disabledReason={editDisabledReason}

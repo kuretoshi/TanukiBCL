@@ -14,6 +14,7 @@ import liteVisorImage from '../../static/images/lite/visor.png';
 import { Player } from '../common/AmongUsState';
 import { SocketConfig } from '../common/ISettings';
 import { ModsType } from '../common/Mods';
+import { nosColorHex } from '../common/NosSnapshot';
 
 const defaultPlayerColors = [
 	['#C51111', '#7A0838'],
@@ -92,12 +93,17 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 	lookLeft = false,
 	onConfigChange,
 	colorPalette,
+	mod,
 }: LiteAvatarProps) {
 	const classes = useStyles();
 	let icon;
 	const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
 	const displayColor = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
-	const liteColor = colorPalette?.[0] || defaultPlayerColors[displayColor]?.[0] || '#6b7280';
+	const liteColor =
+		(mod === 'NoS' && (player.nosLobbyColor ?? nosColorHex(player.nosPlayer))) ||
+		colorPalette?.[0] ||
+		defaultPlayerColors[displayColor]?.[0] ||
+		'#6b7280';
 	const liteBorderColor = talking ? borderColor : showborder === true ? '#ccbdcc86' : 'transparent';
 	deafened = deafened === true || socketConfig?.isMuted === true || socketConfig?.volume === 0;
 

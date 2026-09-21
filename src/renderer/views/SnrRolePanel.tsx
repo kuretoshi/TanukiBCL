@@ -22,6 +22,7 @@ interface SnrResult {
 	capturedAt?: string;
 	version?: string;
 	players?: SnrRow[];
+	diagnostics?: unknown[];
 }
 const label = (value: EnumValue) => (value ? `${value.name || '不明'} (${value.value})` : '未取得');
 
@@ -47,6 +48,7 @@ export default function SnrRolePanel({ gameState }: { gameState: AmongUsState })
 			</Button>
 			<Typography variant="body2" sx={{ my: 1 }}>
 				取得ボタンを押した時点の管理メモリを読み取ります。音声の陣営判定には反映しません。
+				取得後は「リアルタイム」タブの役職表示も自動更新します。
 			</Typography>
 			<Typography variant="caption">
 				スナップショット作成時にゲームが一瞬停止する場合があります。試合中の連続取得は避けてください。
@@ -92,6 +94,14 @@ export default function SnrRolePanel({ gameState }: { gameState: AmongUsState })
 						{JSON.stringify(result.players, null, 2)}
 					</Box>
 				</>
+			)}
+			{!!result?.diagnostics?.length && (
+				<Box component="details" sx={{ mt: 2 }}>
+					<summary>取得診断</summary>
+					<Box component="pre" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+						{JSON.stringify(result.diagnostics, null, 2)}
+					</Box>
+				</Box>
 			)}
 		</Box>
 	);

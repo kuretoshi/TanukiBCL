@@ -739,6 +739,10 @@ if (!gotTheLock) {
 			const result = await readSnrRoles(pid);
 			if (!gameReader.amongUs || gameReader.pid !== pid)
 				return { status: 'error', message: '取得中にゲームが終了または切り替わりました。' };
+			console.log('[SNR roles]', JSON.stringify({ pid, result }));
+			gameReader.acceptSnrRoles(pid, result);
+			if ((result as { status?: string }).status === 'error')
+				console.warn('[SNR roles] 取得失敗', JSON.stringify({ pid, result }));
 			return result;
 		} finally {
 			readingSnrRoles = false;

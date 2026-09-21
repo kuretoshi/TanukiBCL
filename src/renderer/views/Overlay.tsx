@@ -8,6 +8,7 @@ import '../css/overlay.css';
 import Avatar from '../components/Avatar';
 import { ISettings } from '../../common/ISettings';
 import { DEFAULT_PLAYERCOLORS } from '../../common/playerColors';
+import { nosColorHex } from '../../common/NosSnapshot';
 
 interface UseStylesProps {
 	height: number;
@@ -253,7 +254,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 						lookLeft={!(positionParse === 'left' || positionParse === 'bottom_left')}
 						overflow={isOnSide && !showName}
 						showHat={true}
-						mod={voiceState.mod}
+						mod={gameState.mod}
 					/>
 				</div>
 				{showName && (
@@ -347,7 +348,10 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 	if (!players || gameState.gameState !== GameState.DISCUSSION) return null;
 
 	const overlays = players.map((player) => {
-		const color = playerColors[player.colorId] ? playerColors[player.colorId][0] : '#C51111';
+		// Keep tablet order fixed, but use the current publication for NoS RGB.
+		const livePlayer = gameState.players.find((current) => current.id === player.id);
+		const color =
+			(gameState.mod === 'NoS' && nosColorHex(livePlayer?.nosPlayer)) || playerColors[player.colorId]?.[0] || '#C51111';
 
 		return (
 			<Box

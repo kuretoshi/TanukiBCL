@@ -1,11 +1,14 @@
 import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import type { PitchShiftDirection } from '../voiceEffect';
+import { hasSnrJumbo } from '../../common/SnrRole';
+import { MapType } from '../../common/AmongusMap';
 
 export interface VoiceEffectSetting {
 	strength: number;
 	direction?: PitchShiftDirection;
 	formantScale?: number;
+	jumbo?: boolean;
 }
 
 export function selectVoiceEffect(
@@ -16,16 +19,32 @@ export function selectVoiceEffect(
 	other: Player,
 	radioClientId: number
 ): VoiceEffectSetting | null {
+	if (state.gameState !== GameState.TASKS || other.isDead || other.disconnected || other.bugged || other.isDummy)
+		return null;
 	if (
-		state.gameState !== GameState.TASKS ||
-		lobby.voiceEffectEnabled === false ||
-		me.isDead ||
-		other.isDead ||
-		other.disconnected ||
-		other.bugged ||
-		other.isDummy
+		state.map === MapType.AIRSHIP &&
+		(state.airshipMeetingByOutfit ||
+			state.debug?.airshipMeetingByOutfit ||
+			(state.debug &&
+				state.debug.meetingHudCachePtr !== 0 &&
+				state.debug.meetingHudState >= 0 &&
+				state.debug.meetingHudState < 4))
 	)
 		return null;
+	if (state.mod === 'SUPER_NEW_ROLES' && lobby.snrJumboVoice && hasSnrJumbo(other.snrRole)) {
+		const size = other.snrRole?.jumbo;
+		if (
+			size &&
+			Number.isFinite(size.currentSize) &&
+			Number.isFinite(size.maxSize) &&
+			size.maxSize > 0 &&
+			size.currentSize > 0
+		) {
+			return { strength: Math.min(100, (size.currentSize / size.maxSize) * 100), direction: 'down', jumbo: true };
+		}
+		return null;
+	}
+	if (lobby.voiceEffectEnabled === false || me.isDead) return null;
 	if (me.isImpostor && other.isImpostor && lobby.impostorRadioEnabled && other.clientId === radioClientId) return null;
 	const changed = (player: Player) => (player.appearanceName || player.name) !== player.name;
 	if (
@@ -35,15 +54,5 @@ export function selectVoiceEffect(
 	) {
 		return { strength: settings.voiceEffectStrength };
 	}
-	/* TODO: ミニ・ジャンボの判定が完成するまでサイズによるエフェクトを無効化。
-	if (!other.sizeScale || other.specialRole === 'UNKNOWN') return null;
-	const difference = Math.min(1, Math.abs(other.sizeScale - 1));
-	if (difference < 0.12) return null;
-	return {
-		strength: Math.max(20, Math.min(100, Math.round(difference * 85))),
-		direction: other.sizeScale > 1 ? 'down' : 'up',
-		formantScale: Math.max(0.65, Math.min(1.45, 1 / Math.sqrt(other.sizeScale))),
-	};
-	*/
 	return null;
 }

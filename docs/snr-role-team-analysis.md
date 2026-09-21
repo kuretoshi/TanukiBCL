@@ -103,3 +103,25 @@ npm.cmd run build
 - 起動中のSNRからCoreCLRとExPlayerControl型を確認できた。ただし現時点の取得結果は「Player array is not initialized」で、実ゲームの役職値は未検証。役職割り当て後の再取得と、実際の役職との照合が必要。
 
 この試作のインストーラーは未作成。テストプロセスでの成功と実ゲームでの成功は区別する。
+
+## 2026-09-18: 複数ロードされたSNRの選択を修正
+
+実プロセスで、`SuperNewRoles.dll`という名前の未初期化の管理モジュールと、`BepInEx/plugins/SuperNewRoles.dll`の初期化済みモジュールが共存していた。以前は`FirstOrDefault`で前者を選んでいたため、試合中でも「Player array is not initialized」になっていた。
+
+全SNRモジュールの静的`_exPlayerControlsArray`を確認し、初期化済みの256要素配列が1つだけ見つかった場合に読み取るよう変更した。複数候補ではエラーにし、ヒープ上に残った古い配列は取得元にしない。配列要素の型が選択したモジュールに属することと、PlayerIdが添字に一致することも検証する。列挙値名は選択したモジュールのDLLから読み取る。
+
+SNR 3.2.0.3の実プロセスで、Player ID 3の`RoleId.Jackal = 11`と`ModifierRoleId.JumboModifier = 16`を同時に取得できた。調査開始時にはPlayer ID 2の`RoleId.Frankenstein = 137`もメモリ上で確認し、修正後の取得時点では同プレイヤーのRoleが`Sidekick = 12`になっていた。これらの数値は固定せず、ロードされたDLLの列挙値を使用する。
+
+取得診断を画面に追加し、失敗の詳細を保存ログにも記録する。成功時の役職結果はデバッグログが有効な場合に記録する。音声の陣営判定への反映は行わない。
+
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-snr-reader.ps1`で、実際のx86管理プロセスに同名DLLを重複ロードする回帰テストを実行できる。未初期化コピーが先に列挙されるケース、単一コピー、初期化済みコピーが複数、全コピー未初期化、PlayerId不整合、空配列を検証する。Jackal・Frankenstein・JumboModifierと複数Modifierの名前復元を含む。
+
+## リアルタイムタブの役職表示
+
+デバッグ表示が有効でSNRの試合中に、初回だけスナップショットから静的配列の参照スロット・型のMethodTable・各フィールドの位置と列挙名を取得する。その後は既存の約200ms周期のゲーム読み取りで、現在の静的配列からRole・ModifierRole・GhostRoleを直接読み取る。ClrMDによる動作中プロセスの解析は使用しない。初回のスナップショットには短い停止があり得るが、定期更新ではスナップショットを作成しない。
+
+配列・各プレイヤーの管理オブジェクトアドレスは保持せず、毎回参照スロットからたどり直す。型・配列長・PlayerIdを検証し、参照や2回の読み取り結果が不一致の場合はその回の表示を未取得にする。GC移動後は次回に再取得する。初回取得に失敗した場合は同じ試合中に自動スナップショットを繰り返さず、手動ボタンで再確認できる。プロセス切替・再接続・デバッグ無効化でレイアウトを破棄する。
+
+表示は`Jackal + JumboModifier`のように通常役職とモディファイアを併記する。本体陣営値は別行に表示し、取得できないSNR役職をCrewmateと断定しない。`isImpostor`・`isThirdParty`・サイズや音声効果は変更しない。
+
+`scripts/test-snr-reader.ps1`でテスト用プロセスをビルドした後、`node scripts/test-snr-live.mjs`で役職変更、Modifier解除・複合値、未知ID、読取中の変更、PID切替、古い結果の破棄を検証できる。実際のx86管理プロセスで、1回のスナップショット取得後に役職変更・強制圧縮GC・配列差し替え・空配列リセットに追従することも検証する。SNR実プロセスでも、スナップショットを繰り返さずFrankenstein・Jackal・Sheriff・Camouflager + JumboModifierを連続取得できた。

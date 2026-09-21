@@ -13,7 +13,7 @@ export function normalizeMeetingState(state: AmongUsState): AmongUsState {
 		players: state.players.map((player) => ({
 			...player,
 			currentOutfit: 0,
-			appearanceName: player.name,
+			appearanceName: player.nosPlayer?.name ?? player.name,
 			appearanceColorId: player.colorId,
 			appearanceHatId: player.hatId,
 			appearanceSkinId: player.skinId,

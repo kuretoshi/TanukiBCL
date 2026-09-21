@@ -49,6 +49,15 @@ export interface ILobbySettings {
 	visionHearing: boolean;
 	haunting: boolean;
 	thirdPartyHaunting: boolean;
+	snrJumboVoice: boolean;
+	jackalHaunting: boolean;
+	jackalHearOutsideVents: boolean;
+	jackalTalkInVents: boolean;
+	sidekickHaunting: boolean;
+	sidekickHearOutsideVents: boolean;
+	sidekickTalkInVents: boolean;
+	nosNeutralKillerHaunting: boolean;
+	nosVoicePositions: boolean;
 	hearImpostorsInVents: boolean;
 	impostersHearImpostersInvent: boolean;
 	impostorRadioEnabled: boolean;
