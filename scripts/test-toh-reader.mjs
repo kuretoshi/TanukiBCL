@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { spawn, execFileSync } from 'node:child_process';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
+import memoryjs from 'memoryjs';
+const cache = resolve('.cache/toh-reader-tests'); await mkdir(cache, { recursive: true });
+async function bundle(file) {
+  const output = resolve(cache, file.split('/').at(-1).replace('.ts', '.mjs'));
+  const result = await build({ entryPoints: [file], bundle: true, platform: 'node', format: 'esm', write: false });
+  await writeFile(output, result.outputFiles[0].contents); return import(pathToFileURL(output));
+}
+const { isTohLayout, readTohRoles } = await bundle('src/main/tohLiveMemory.ts');
+const { TohLiveTracker } = await bundle('src/main/tohLiveTracker.ts');
+const { tohNeutralKiller } = await bundle('src/common/TohRole.ts');
+for (const name of ['Egoist', 'Jackal', 'Gizoku', 'Oniichan', 'DarkHide']) assert.equal(tohNeutralKiller(name), true);
+for (const name of ['Crewmate', 'Impostor', 'Arsonist', 'Sheriff']) assert.equal(tohNeutralKiller(name), false);
+assert.equal(tohNeutralKiller('Opportunist'), null); assert.equal(tohNeutralKiller(null), null);
+const fixture = resolve(cache, 'fixture');
+execFileSync('dotnet', ['publish', 'scripts/fixtures/toh-reader/Host/Host.csproj', '-c', 'Release', '-o', fixture], { windowsHide: true, stdio: 'pipe' });
+const child = spawn(resolve(fixture, 'Among Us.exe'), [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+const lines = createInterface({ input: child.stdout }); let handle;
+try {
+  await Promise.race([once(lines, 'line'), once(child, 'error').then(([e]) => { throw e; }), new Promise((_, reject) => setTimeout(() => reject(new Error('fixture timeout')), 15000).unref())]);
+  const response = JSON.parse(execFileSync(resolve('out/debug-reader/SnrRoleReader.exe'), [String(child.pid), '--toh'], { windowsHide: true, timeout: 45000, encoding: 'utf8' }));
+  const layout = response.layout; assert.ok(isTohLayout(layout, child.pid), JSON.stringify(response));
+  assert.equal(isTohLayout(layout, child.pid + 1), false); assert.equal(isTohLayout({ ...layout, stride: 0 }, child.pid), false);
+  handle = memoryjs.openProcess(child.pid); const read = (a, n) => memoryjs.readBuffer(handle.handle, a, n);
+  const live = () => readTohRoles(layout, read);
+  assert.equal(live().get(2).roleName, 'Jackal'); assert.equal(live().get(2).isNeutralKiller, true);
+  assert.equal(live().get(5).isNeutralKiller, false);
+  assert.ok(layout.killerLayout, 'Active role layout is available');
+  assert.equal(live().get(2).isKiller, true);
+  assert.equal(live().get(5).isKiller, true, 'IKiller is independent of Opportunist.CanKill');
+  assert.equal(readTohRoles({ ...layout, killerLayout: null }, read).get(2).isKiller, null);
+  const command = async value => { const reply = once(lines, 'line'); child.stdin.write(value + '\n'); await reply; };
+  const realNow = Date.now; let time = realNow(), discoveries = 0;
+  try {
+    Date.now = () => time;
+    const late = new TohLiveTracker(async () => ++discoveries === 1 ? { ...response, layout: { ...layout, opportunistCanKillSlot: 0 } } : response);
+    late.update(child.pid, 'round', read); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(late.update(child.pid, 'round', read).get(5).isNeutralKiller, null);
+    assert.equal(late.update(child.pid, 'round', read).get(2).isNeutralKiller, true);
+    assert.equal(discoveries, 1);
+    time += 30000;
+    late.update(child.pid, 'round', read); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(late.update(child.pid, 'round', read).get(5).isNeutralKiller, false);
+    assert.equal(discoveries, 2);
+  } finally { Date.now = realNow; }
+  await command('kill'); assert.equal(live().get(5).isNeutralKiller, true);
+  await command('change'); assert.equal(live().get(2).isNeutralKiller, false);
+  assert.equal(live().get(2).isKiller, false);
+  await command('sheriff'); assert.equal(live().get(2).isKiller, true);
+  assert.equal(live().get(2).isNeutralKiller, false, 'Crewmate IKiller is eligible');
+  await command('impostor'); assert.equal(live().get(2).isKiller, true, 'Inherited IImpostor -> IKiller');
+  await command('gc'); assert.equal(live().get(5).roleName, 'Opportunist');
+  await command('remove'); assert.equal(live().has(2), false);
+  await command('replace'); assert.deepEqual([...live().keys()], [7]); assert.equal(live().get(7).isNeutralKiller, true);
+  assert.equal(live().get(7).isKiller, true, 'Inherited base role IKiller');
+  await command('unknown'); assert.equal(live().get(7).isNeutralKiller, null);
+  assert.equal(live().get(7).isKiller, null);
+  const tracker = new TohLiveTracker(async () => response);
+  assert.equal(tracker.update(child.pid, 'round', read).size, 0);
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(tracker.update(child.pid, 'round', read).size, 1);
+  assert.equal(tracker.update(child.pid, 'round', () => { throw new Error('unavailable'); }).size, 0);
+  tracker.reset(); assert.equal(tracker.update(child.pid + 1, 'round', read).size, 0);
+  console.log('PASS TOH4E reader: actual x86 dictionary, enum IDs, changing roles/options, removed entries, GC, replacement, unknowns and PID guard');
+} finally { if (handle) memoryjs.closeProcess(handle.handle); child.kill(); lines.close(); }
+
+const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
+const { GameState } = await bundle('src/common/AmongUsState.ts');
+const { defaultLobbySettings: defaults } = await bundle('src/common/defaultLobbySettings.ts');
+const base = { state: { mod: 'TOH4E', gameState: GameState.TASKS, closedDoors: [], currentCamera: 0 }, settings: { ghostVolumeAsImpostor: 40, spatialAudio: true }, activeLobbySettings: { ...defaults, tohNeutralKillerHaunting: true }, me: { id: 1, x: 0, y: 0, tohRole: { isNeutralKiller: false, isKiller: true } }, other: { id: 2, x: 1, y: 0, isDead: true }, maxDistance: 5, impostorRadioClientId: -1 };
+assert.equal(calculateVoiceAudio(base).gain, .4);
+assert.equal(calculateVoiceAudio({ ...base, activeLobbySettings: { ...base.activeLobbySettings, tohNeutralKillerHaunting: false } }).gain, 0);
+for (const flag of [false, null, undefined]) assert.equal(calculateVoiceAudio({ ...base, me: { ...base.me, tohRole: { isNeutralKiller: true, isKiller: flag } } }).gain, 0);
+assert.equal(calculateVoiceAudio({ ...base, state: { ...base.state, mod: 'NoS' } }).gain, 0);
+assert.equal(calculateVoiceAudio({ ...base, state: { ...base.state, gameState: GameState.DISCUSSION } }).gain, 0);
+assert.equal(calculateVoiceAudio({ ...base, activeLobbySettings: { ...base.activeLobbySettings, meetingGhostOnly: true } }).gain, 0);
+console.log('PASS TOH4E audio: toggle, positive/negative/unknown, MOD isolation, meeting and host mute restrictions');

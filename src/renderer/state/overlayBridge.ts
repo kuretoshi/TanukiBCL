@@ -3,9 +3,11 @@ import { IpcMessages, IpcOverlayMessages } from '../../common/ipc-messages';
 import { ipcRenderer } from '../lib/electron-bridge';
 import SettingsStore from '../settings/SettingsStore';
 import { gameStore } from './gameStore';
+import { voiceController } from '../voice/useVoiceController';
 
 let started = false;
 let unsubscribeGameStore: (() => void) | undefined;
+let unsubscribeVoice: (() => void) | undefined;
 let lastSentSignature: string | undefined;
 let lastSentPlayerColors: unknown;
 
@@ -49,8 +51,9 @@ function overlaySignature(state: AmongUsState | undefined): string {
 
 function sendGameState(): void {
 	const { gameState } = gameStore.getSnapshot();
-	lastSentSignature = overlaySignature(gameState);
-	ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_GAME_STATE_CHANGED, gameState);
+	const effectiveState = voiceController.getEffectiveGameState(gameState);
+	lastSentSignature = overlaySignature(effectiveState);
+	ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_GAME_STATE_CHANGED, effectiveState);
 }
 
 function sendPlayerColors(): void {
@@ -72,7 +75,7 @@ function sendAll(): void {
 function onGameStoreChanged(): void {
 	if (!SettingsStore.store.enableOverlay) return;
 	const { gameState, playerColors } = gameStore.getSnapshot();
-	if (overlaySignature(gameState) !== lastSentSignature) sendGameState();
+	if (overlaySignature(voiceController.getEffectiveGameState(gameState)) !== lastSentSignature) sendGameState();
 	if (playerColors !== lastSentPlayerColors) sendPlayerColors();
 }
 
@@ -81,6 +84,7 @@ export function startOverlayBridge(): void {
 	started = true;
 
 	unsubscribeGameStore = gameStore.subscribe(onGameStoreChanged);
+	unsubscribeVoice = voiceController.subscribe(onGameStoreChanged);
 	SettingsStore.onDidAnyChange(sendSettings);
 	ipcRenderer.on(IpcOverlayMessages.REQUEST_INITVALUES, sendAll);
 	sendAll();
@@ -91,6 +95,8 @@ export function stopOverlayBridge(): void {
 	started = false;
 	unsubscribeGameStore?.();
 	unsubscribeGameStore = undefined;
+	unsubscribeVoice?.();
+	unsubscribeVoice = undefined;
 	SettingsStore.offDidAnyChange(sendSettings);
 	ipcRenderer.off(IpcOverlayMessages.REQUEST_INITVALUES, sendAll);
 }

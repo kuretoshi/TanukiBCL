@@ -102,9 +102,10 @@ function getOtherPlayerAvatarSize(playersPerRow: number): number {
 
 const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceProps) {
 	const classes = useStyles();
-	const gameState = useContext(GameStateContext);
+	const rawGameState = useContext(GameStateContext);
 	const [settings, setSetting] = useContext(SettingsContext);
 	const { voice, controller } = useVoiceEngine();
+	const gameState = controller.getEffectiveGameState(rawGameState);
 
 	const myPlayer = useMemo(() => gameState?.players?.find((player) => player.isLocal), [gameState?.players]);
 	const vadHidden = (myPlayer?.shiftedColor ?? -1) !== -1 && gameState?.gameState !== GameState.DISCUSSION;

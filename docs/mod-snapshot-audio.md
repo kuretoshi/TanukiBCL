@@ -29,6 +29,8 @@ Role/position snapshot sampling starts during a game, when the current NoS publi
 
 ## Validation
 
+2026-09-22 SNR ghost-audio correction: Jackal and WaveCannonJackal eligibility now comes from the current decoded role, even if discovery-time flags are absent or false. The installed WaveCannonJackal definition has `AssignedTeam=Neutral` and constructs `JackalAbility` with `canKill:true`; SNR's `IsKiller()` recognizes that ability. Snapshot flags are bound to the captured role ID and discarded after role changes rather than carried by PlayerId alone. The realtime debug table shows SNR flags and ghost-setting eligibility. Other roles still require valid acquired metadata; this change does not claim full external evaluation of arbitrary SNR `CanKill` delegates.
+
 ```powershell
 powershell -File scripts/test-snr-reader.ps1
 node scripts/test-snr-live.mjs

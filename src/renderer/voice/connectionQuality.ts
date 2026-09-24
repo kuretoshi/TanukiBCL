@@ -2,6 +2,8 @@ export interface ConnectionQuality {
 	rttMs: number | null;
 	jitterMs: number | null;
 	lossPercent: number | null;
+	direct: boolean;
+	serverPingMs?: number | null;
 }
 
 const valid = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -14,13 +16,19 @@ export class ConnectionQualitySampler {
 	read(report: RTCStatsReport): ConnectionQuality {
 		let rttMs: number | null = null;
 		let jitterMs: number | null = null;
+		let direct = false;
 		let received = 0;
 		let lost = 0;
 		const next = new Map<string, { received: number; lost: number }>();
 		report.forEach((stat) => {
 			if (stat.type === 'transport' && stat.selectedCandidatePairId) {
 				const pair = report.get(stat.selectedCandidatePairId);
-				if (pair && valid(pair.currentRoundTripTime)) rttMs = pair.currentRoundTripTime * 1000;
+				if (pair) {
+					if (valid(pair.currentRoundTripTime)) rttMs = pair.currentRoundTripTime * 1000;
+					const local = pair.localCandidateId ? report.get(pair.localCandidateId) : undefined;
+					const remote = pair.remoteCandidateId ? report.get(pair.remoteCandidateId) : undefined;
+					direct = local?.candidateType === 'host' && remote?.candidateType === 'host';
+				}
 			}
 			if (stat.type !== 'inbound-rtp' || (stat.kind ?? stat.mediaType) !== 'audio') return;
 			if (valid(stat.jitter)) jitterMs = Math.max(jitterMs ?? 0, stat.jitter * 1000);
@@ -34,15 +42,22 @@ export class ConnectionQualitySampler {
 			}
 		});
 		this.previous = next;
-		return { rttMs, jitterMs, lossPercent: received + lost > 0 ? (lost / (received + lost)) * 100 : null };
+		return {
+			rttMs,
+			jitterMs,
+			lossPercent: received + lost > 0 ? (lost / (received + lost)) * 100 : null,
+			direct,
+		};
 	}
 }
 
 export function qualityBars(quality?: ConnectionQuality): number {
 	if (quality?.rttMs == null) return 0;
-	const { rttMs, jitterMs, lossPercent } = quality;
+	const { rttMs, jitterMs } = quality;
+	const latencyMs = quality.serverPingMs ?? rttMs;
 	// UI heuristics, not a measurement of Wi-Fi signal strength.
-	if (rttMs >= 300 || (jitterMs ?? 0) >= 60 || (lossPercent ?? 0) >= 5) return 1;
-	if (rttMs >= 150 || (jitterMs ?? 0) >= 30 || (lossPercent ?? 0) >= 2) return 2;
+	if (latencyMs == null) return 0;
+	if (latencyMs >= 300 || (jitterMs ?? 0) >= 60) return 1;
+	if (latencyMs >= 150 || (jitterMs ?? 0) >= 30) return 2;
 	return 3;
 }

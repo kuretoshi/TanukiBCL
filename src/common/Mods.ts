@@ -7,6 +7,7 @@ export type ModsType =
 	| 'THE_OTHER_ROLES'
 	| 'LAS_MONJAS'
 	| 'NoS'
+	| 'TOH4E'
 	| 'OTHER';
 
 export interface AmongusMod {
@@ -21,6 +22,7 @@ export const modList: AmongusMod[] = [
 		id: 'NONE',
 		label: 'None',
 	},
+	{ id: 'TOH4E', label: 'TOH4E / TOH4E_EM', dllStartsWith: 'TownOfHost_ForE' },
 	{
 		id: 'SUPER_NEW_ROLES',
 		label: 'SuperNewRoles',
@@ -61,3 +63,14 @@ export const modList: AmongusMod[] = [
 		label: 'Other',
 	},
 ];
+
+export function isToh4eHostName(name: string | undefined): boolean {
+	return /town\s+of\s+host\s+for\s+e\b/i.test(
+		(name ?? '').replace(/<[^>]*>/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '')
+	);
+}
+
+export function displayHostName(name: string): string {
+	const marker = name.toLowerCase().indexOf('town of host for e');
+	return marker >= 0 ? name.slice(0, marker).trimEnd() : name;
+}

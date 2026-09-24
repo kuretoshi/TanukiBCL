@@ -11,7 +11,7 @@ export interface overlayPlayer {
 	inVent: boolean;
 	isDead: boolean;
 	name: string;
-	colorId: number;
+	colorId?: number;
 	hatId: string;
 	skinId: string;
 	visorId: string;
@@ -20,9 +20,9 @@ export interface overlayPlayer {
 	isLocal: boolean;
 	bugged: boolean;
 	connected: boolean;
-	realColor: string[];
+	realColor?: string[];
 	nosColor?: string;
-	shiftedColor: number;
+	shiftedColor?: number;
 }
 
 export interface ObsVoiceState {

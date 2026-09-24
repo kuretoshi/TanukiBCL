@@ -11,15 +11,15 @@ export default function ConnectionIndicator({
 }) {
 	const bars = connected ? qualityBars(quality) : 0;
 	const status = !connected ? '未接続' : bars === 0 ? '未計測' : ['', '不安定', '普通', '良好'][bars];
-	const ping = connected && quality?.rttMs != null ? `${Math.round(quality.rttMs)} ms` : '—';
-	const label = `音声接続：${status}／自分との往復遅延（ping）：${ping}`;
+	const ping = connected && (quality?.serverPingMs ?? quality?.rttMs) != null ? `${Math.round(quality?.serverPingMs ?? quality?.rttMs ?? 0)} ms` : '—';
+	const label = `音声接続：${status}／ボイスサーバーとのping：${ping}`;
 	return (
 		<Tooltip
 			arrow
 			title={
 				<Box>
 					<div>音声接続：{status}</div>
-					<div>自分との往復遅延（ping）：{ping}</div>
+					<div>ボイスサーバーとのping：{ping}</div>
 					{connected && quality?.jitterMs != null && <div>受信の揺らぎ：{Math.round(quality.jitterMs)} ms</div>}
 					{connected && quality?.lossPercent != null && <div>受信ロス：{quality.lossPercent.toFixed(1)}%</div>}
 				</Box>

@@ -11,11 +11,22 @@ let lastSentGameState: unknown;
 let lastSentPlayerColors: unknown;
 let lastSentActiveLobbySettings: ILobbySettings | null | undefined;
 let lastSentHostId: number | undefined;
+let lastSentTohLobby: boolean | undefined;
+let lastSentTohRole: unknown;
+let lastSentTohNames: unknown;
 
 function sendGameState(): void {
 	const { gameState } = gameStore.getSnapshot();
 	lastSentGameState = gameState;
-	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_GAME_STATE_CHANGED, gameState);
+	const voice = voiceController.getSnapshot();
+	lastSentTohLobby = voice.toh4eLobby;
+	lastSentTohRole = voice.tohRole;
+	lastSentTohNames = voice.tohGameStartNames;
+	ipcRenderer.send(
+		IpcMessages.SEND_TO_SETTINGS,
+		IpcSettingsMessages.NOTIFY_GAME_STATE_CHANGED,
+		voiceController.getEffectiveGameState(gameState)
+	);
 }
 
 function sendPlayerColors(): void {
@@ -52,6 +63,8 @@ function sendDebugVoice(): void {
 		playerSocketIds: voice.playerSocketIds,
 		audioConnected: voice.audioConnected,
 		impostorRadioClientId: voice.impostorRadioClientId,
+		toh4eLobby: voice.toh4eLobby,
+		tohRole: voice.tohRole,
 	});
 }
 function sendAll(): void {
@@ -71,6 +84,9 @@ function onGameStoreChanged(): void {
 function onVoiceChanged(): void {
 	sendDebugVoice();
 	const { activeLobbySettings, hostId } = voiceController.getSnapshot();
+	const { toh4eLobby, tohRole, tohGameStartNames } = voiceController.getSnapshot();
+	if (toh4eLobby !== lastSentTohLobby || tohRole !== lastSentTohRole || tohGameStartNames !== lastSentTohNames)
+		sendGameState();
 	if (activeLobbySettings !== lastSentActiveLobbySettings) sendActiveLobbySettings();
 	if (hostId !== lastSentHostId) sendHostId();
 }

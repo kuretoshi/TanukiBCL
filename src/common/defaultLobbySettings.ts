@@ -3,7 +3,6 @@ import { ILobbySettings } from './ISettings';
 export const defaultLobbySettings: ILobbySettings = {
 	maxDistance: 5.32,
 	haunting: false,
-	thirdPartyHaunting: false,
 	snrJumboVoice: false,
 	jackalHaunting: false,
 	jackalHearOutsideVents: false,
@@ -13,6 +12,7 @@ export const defaultLobbySettings: ILobbySettings = {
 	sidekickTalkInVents: false,
 	nosNeutralKillerHaunting: false,
 	nosVoicePositions: false,
+	tohNeutralKillerHaunting: false,
 	hearImpostorsInVents: false,
 	impostersHearImpostersInvent: false,
 	impostorRadioEnabled: false,

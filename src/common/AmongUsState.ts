@@ -2,6 +2,7 @@ import { CameraLocation, MapType } from './AmongusMap';
 import { ModsType } from './Mods';
 import type { SnrLiveRole } from './SnrRole';
 import type { NosPlayerData } from './NosSnapshot';
+import type { TohRole } from './TohRole';
 
 export interface AmongUsState {
 	gameState: GameState;
@@ -49,6 +50,7 @@ export interface AmongUsState {
 		sizeDebug: string;
 		snrRoleStatus?: string;
 		nosSnapshotStatus?: string;
+		tohRoleStatus?: string;
 	};
 }
 
@@ -80,6 +82,7 @@ export interface Player {
 	roleName: string;
 	snrRole?: SnrLiveRole;
 	nosPlayer?: NosPlayerData;
+	tohRole?: TohRole;
 	nosLobbyColor?: string;
 	sizeScale: number;
 	specialRole: 'JUMBO' | 'MINI' | 'UNKNOWN';

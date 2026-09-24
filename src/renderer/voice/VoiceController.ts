@@ -1,4 +1,4 @@
-import { AmongUsState, ClientBoolMap, GameState, Player } from '../../common/AmongUsState';
+import { AmongUsState, ClientBoolMap, GameState, numberStringMap, Player } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
 import { GameInfo } from '../../common/GameInfo';
 import { ILobbySettings, ISettings, playerConfigMap } from '../../common/ISettings';
@@ -7,6 +7,7 @@ import { IpcMessages, IpcOverlayMessages, IpcRendererMessages } from '../../comm
 import { ObsVoiceState } from '../../common/ObsOverlay';
 import { nosColorHex } from '../../common/NosSnapshot';
 import { VoiceState } from '../../common/AmongUsState';
+import { isTohRole, TohRole } from '../../common/TohRole';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { TypedEmitter } from '../lib/TypedEmitter';
 import SettingsStore from '../settings/SettingsStore';
@@ -14,6 +15,7 @@ import { gameStore } from '../state/gameStore';
 import { AudioController } from './AudioController';
 import { ConnectionController } from './ConnectionController';
 import { defaultLobbySettings, VoiceSnapshot } from './types';
+import { isToh4eHostName } from '../../common/Mods';
 // @ts-ignore
 import radioOnSound from '../../../static/sounds/radio_on.wav';
 
@@ -62,6 +64,9 @@ const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	impostorRadioClientId: -1,
 	activeLobbySettings: null,
 	hostId: 0,
+	toh4eLobby: false,
+	tohRole: null,
+	tohGameStartNames: {},
 };
 
 function emptyHost(): HostInfo {
@@ -102,6 +107,13 @@ function emptyPrev() {
 		gameOpen: false,
 		gameInfo: '',
 		obsPayload: '',
+		toh4eLobby: false,
+		tohRole: null,
+		tohRoleSentSignatures: {} as Record<number, string>,
+		tohLobbySentSignature: '',
+		tohSession: '',
+		tohRoleSentAt: {} as Record<number, number>,
+		tohRosterSentSignature: '',
 	};
 }
 
@@ -120,6 +132,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private localTalking = false;
 	private playerConfigs: playerConfigMap = {};
 	private impostorRadioPressed = false;
+	private tohRoleOverride: TohRole | null = null;
+	private tohRoleReceivedAt = 0;
+	private tohLobbyNames: numberStringMap = {};
 
 	private host: HostInfo = emptyHost();
 
@@ -130,6 +145,38 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	getSnapshot = (): VoiceSnapshot => this.snapshot;
+
+	/** The same host-derived MOD/role state is used by audio, settings and diagnostics. */
+	getEffectiveGameState(state: AmongUsState): AmongUsState {
+		if (!this.snapshot.toh4eLobby) return state;
+		return {
+			...state,
+			mod: 'TOH4E',
+			players: state.players?.map((player) => {
+				const fixedName = this.snapshot.tohGameStartNames[player.clientId];
+				const namedPlayer = fixedName ? { ...player, name: fixedName, appearanceName: fixedName } : player;
+				return player.isLocal && !this.host.isHost
+					? {
+							...namedPlayer,
+							tohRole: this.tohRoleOverride ?? undefined,
+							roleName: this.tohRoleOverride?.roleName
+								? `TOH4E: ${this.tohRoleOverride.roleName}`
+								: 'TOH4E役職未取得（ホストからの受信待ち）',
+						}
+					: namedPlayer;
+			}),
+			...(state.debug && !this.host.isHost
+				? {
+						debug: {
+							...state.debug,
+							tohRoleStatus: this.tohRoleOverride
+								? 'TOH4E役職取得済み／取得元: ホストのベタクル'
+								: 'TOH4E役職未取得（ホストからの受信待ち）',
+						},
+					}
+				: {}),
+		};
+	}
 
 	subscribe = (listener: () => void): (() => void) => this.on('change', listener);
 
@@ -203,6 +250,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		this.otherVAD = {};
 		this.localTalking = false;
+		this.tohRoleOverride = null;
+		this.tohRoleReceivedAt = 0;
+		this.tohLobbyNames = {};
 		this.impostorRadioPressed = false;
 		this.playerConfigs = {};
 		this.host = emptyHost();
@@ -291,7 +341,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		add(
 			this.connection.on('disconnected', () => {
 				this.prev.gameInfo = '';
-				this.patch({ connected: false });
+				this.tohRoleOverride = null;
+				this.patch({ connected: false, tohRole: null, tohGameStartNames: {} });
 			})
 		);
 
@@ -306,6 +357,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		add(
 			this.connection.on('socketClients', (clients) => {
 				this.patch({ socketClients: clients, playerSocketIds: this.connection.playerSocketIds });
+				const { gameState } = gameStore.getSnapshot();
+				const myPlayer = gameState?.players?.find((player) => player.isLocal);
+				if (myPlayer) {
+					this.publishToh4eLobby(gameState, true);
+					this.publishToh4eRoster(gameState, true);
+					this.publishToh4eRole(gameState);
+				}
 			})
 		);
 
@@ -322,9 +380,23 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 
 		add(this.connection.on('peerStream', (peerId, stream) => this.audio.addPeer(peerId, stream)));
+		add(
+			this.connection.on('peerReady', () => {
+				this.prev.tohRoleSentSignatures = {};
+				const { gameState } = gameStore.getSnapshot();
+				this.publishToh4eLobby(gameState, true);
+				this.publishToh4eRoster(gameState, true);
+				this.publishToh4eRole(gameState);
+			})
+		);
 
 		add(
 			this.connection.on('peerClosed', (peerId) => {
+				this.prev.tohRoleSentSignatures = {};
+				if (this.connection.getClient(peerId)?.clientId === this.host.parsedHostId) {
+					this.tohRoleOverride = null;
+					this.patch({ tohRole: null, tohGameStartNames: {} });
+				}
 				this.audio.removePeer(peerId);
 				const audioConnected = { ...this.snapshot.audioConnected };
 				delete audioConnected[peerId];
@@ -336,6 +408,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		add(
 			this.connection.on('lobbyReset', () => {
+				this.prev.tohLobbySentSignature = '';
+				this.prev.tohRoleSentSignatures = {};
 				this.otherVAD = {};
 				this.patch({ otherTalking: {} });
 			})
@@ -345,6 +419,52 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private onPeerData(peerId: string, data: Record<string, unknown>): void {
+		const state = gameStore.getSnapshot().gameState;
+		const senderClientId = this.connection.getClient(peerId)?.clientId;
+		const fromHost = senderClientId !== undefined && senderClientId === this.host.parsedHostId;
+		if (data.type === 'toh4e-lobby' || data.type === 'toh4e-roster' || data.type === 'toh4e-role') {
+			if (
+				!fromHost ||
+				this.host.isHost ||
+				data.lobbyCode !== state.lobbyCode ||
+				state.gameState === GameState.MENU ||
+				state.gameState === GameState.UNKNOWN
+			)
+				return;
+		}
+		if (data.type === 'toh4e-lobby' && typeof data.enabled === 'boolean') {
+			if (!data.enabled) {
+				this.tohRoleOverride = null;
+				this.patch({ tohRole: null, tohGameStartNames: {} });
+			}
+			this.patch({ toh4eLobby: data.enabled });
+			return;
+		}
+		if (data.type === 'toh4e-roster' && Array.isArray(data.players)) {
+			if (data.players.length > 20) return;
+			const names: numberStringMap = {};
+			for (const value of data.players) {
+				if (!value || typeof value !== 'object') return;
+				const player = value as { clientId?: unknown; name?: unknown };
+				if (!Number.isInteger(player.clientId) || typeof player.name !== 'string' || player.name.length > 100) return;
+				names[player.clientId as number] = player.name;
+			}
+			this.patch({ tohGameStartNames: names, toh4eLobby: true });
+			return;
+		}
+		if (
+			data.type === 'toh4e-role' &&
+			data.targetClientId === state.clientId &&
+			data.targetPlayerId === state.players?.find((player) => player.isLocal)?.id &&
+			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION)
+		) {
+			if (data.role !== null && !isTohRole(data.role)) return;
+			const role = isTohRole(data.role) ? data.role : null;
+			this.tohRoleOverride = role;
+			this.tohRoleReceivedAt = Date.now();
+			this.patch({ tohRole: role, toh4eLobby: true });
+			return;
+		}
 		if (Object.prototype.hasOwnProperty.call(data, 'impostorRadio')) {
 			const clientId = this.connection.getClient(peerId)?.clientId;
 			const current = this.snapshot.impostorRadioClientId;
@@ -430,6 +550,23 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private onGameState(state: AmongUsState): void {
 		if (!state) return;
 		const myPlayer = state.players?.find((player) => player.isLocal);
+		const resolvedHostId = state.hostId > 0 ? state.hostId : this.host.serverHostId;
+		const session = `${state.lobbyCode}|${resolvedHostId}|${state.clientId}|${myPlayer?.id}`;
+		const inactive = state.gameState === GameState.MENU || state.gameState === GameState.UNKNOWN;
+		if (session !== this.prev.tohSession || inactive) {
+			this.prev.tohSession = session;
+			this.prev.tohLobbySentSignature = '';
+			this.prev.tohRoleSentSignatures = {};
+			this.prev.tohRoleSentAt = {};
+			this.prev.tohRosterSentSignature = '';
+			this.tohRoleOverride = null;
+			this.tohLobbyNames = {};
+			this.patch({ toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
+		}
+		if (state.gameState === GameState.LOBBY || Date.now() - this.tohRoleReceivedAt > 5000) {
+			this.tohRoleOverride = null;
+			this.patch({ tohRole: null });
+		}
 
 		if (state.players && myPlayer) {
 			this.host = {
@@ -442,6 +579,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				serverHostId: this.host.serverHostId,
 			};
 			this.patch({ hostId: this.host.parsedHostId });
+			const hostPlayer = state.players.find((player) => player.clientId === this.host.parsedHostId);
+			const toh4eDetected =
+				!inactive &&
+				((this.host.isHost && state.mod === 'TOH4E') ||
+					isToh4eHostName(hostPlayer?.name) ||
+					isToh4eHostName(hostPlayer?.appearanceName));
+			if (toh4eDetected && !this.snapshot.toh4eLobby) this.patch({ toh4eLobby: true });
 			this.claimLobbySettingsOwnership(state);
 
 			const activeLobbySettings = this.activeLobbySettings;
@@ -465,11 +609,77 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.handleHostChange(state);
 		this.handleGameStateTransition(state, myPlayer);
 		this.handleLobbyConnection(state, myPlayer);
+		this.publishToh4eLobby(state);
+		this.publishToh4eRoster(state);
+		this.publishToh4eRole(state);
 		this.handlePlayerIdentity(state, myPlayer);
 		this.handlePublicLobby(state, myPlayer);
 		this.cleanupImpostorRadio(state, myPlayer);
 		this.updatePeerAudio(state, myPlayer);
 		this.publishMobileAndObs(state, myPlayer);
+	}
+
+	private publishToh4eRoster(state: AmongUsState, force = false): void {
+		if (
+			!this.host.isHost ||
+			state.mod !== 'TOH4E' ||
+			!Object.keys(this.snapshot.tohGameStartNames).length ||
+			(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION)
+		)
+			return;
+		const players = Object.entries(this.snapshot.tohGameStartNames).map(([clientId, name]) => ({
+			clientId: Number(clientId),
+			name,
+		}));
+		const signature = `${state.lobbyCode}|${JSON.stringify(players)}|${Math.floor(Date.now() / 1000)}`;
+		if (!force && signature === this.prev.tohRosterSentSignature) return;
+		this.prev.tohRosterSentSignature = signature;
+		this.connection.broadcast(JSON.stringify({ type: 'toh4e-roster', lobbyCode: state.lobbyCode, players }));
+	}
+
+	private publishToh4eLobby(state: AmongUsState, force = false): void {
+		if (!this.host.isHost || state.gameState === GameState.MENU || state.gameState === GameState.UNKNOWN) return;
+		const enabled = state.mod === 'TOH4E' || this.snapshot.toh4eLobby;
+		const signature = `${state.lobbyCode}|${enabled ? 1 : 0}|${Math.floor(Date.now() / 1000)}`;
+		if (!force && signature === this.prev.tohLobbySentSignature) return;
+		this.prev.tohLobbySentSignature = signature;
+		this.connection.broadcast(JSON.stringify({ type: 'toh4e-lobby', lobbyCode: state.lobbyCode, enabled }));
+	}
+
+	private publishToh4eRole(state: AmongUsState): void {
+		if (
+			!this.host.isHost ||
+			state.mod !== 'TOH4E' ||
+			(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION)
+		)
+			return;
+		const players = state.players ?? [];
+		for (const player of players) {
+			if (player.isLocal || player.disconnected) continue;
+			const peerId = this.connection.playerSocketIds[player.clientId];
+			if (!peerId) continue;
+			const role = player.tohRole ?? null;
+			const signature = `${state.lobbyCode}|${peerId}|${player.id}|${JSON.stringify(role)}`;
+			if (
+				signature === this.prev.tohRoleSentSignatures[player.clientId] &&
+				Date.now() - this.prev.tohRoleSentAt[player.clientId] < 1000
+			)
+				continue;
+			const sent = this.connection.sendToPeers(
+				[peerId],
+				JSON.stringify({
+					type: 'toh4e-role',
+					lobbyCode: state.lobbyCode,
+					targetClientId: player.clientId,
+					targetPlayerId: player.id,
+					role,
+				})
+			);
+			if (sent > 0) {
+				this.prev.tohRoleSentSignatures[player.clientId] = signature;
+				this.prev.tohRoleSentAt[player.clientId] = Date.now();
+			}
+		}
 	}
 
 	private claimLobbySettingsOwnership(state: AmongUsState): void {
@@ -496,7 +706,14 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (gameOpen !== this.prev.gameOpen) {
 			this.prev.gameOpen = gameOpen;
 			if (gameOpen) void this.publishGameInfo();
+			else {
+				this.tohRoleOverride = null;
+				this.prev.tohSession = '';
+				this.tohLobbyNames = {};
+				this.patch({ toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
+			}
 		}
+		if (!gameOpen) return;
 		this.onGameState(gameState);
 	}
 
@@ -533,7 +750,27 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.prev.gameState = state.gameState;
 
 		if (state.gameState === GameState.LOBBY) {
-			this.patch({ otherDead: {} });
+			this.prev.tohRoleSentSignatures = {};
+			this.prev.tohRosterSentSignature = '';
+			this.tohLobbyNames = Object.fromEntries(
+				(state.players ?? []).filter((player) => !player.disconnected).map((player) => [player.clientId, player.name])
+			);
+			this.patch({ otherDead: {}, tohGameStartNames: {} });
+		} else if (
+			state.gameState === GameState.TASKS &&
+			previous === GameState.LOBBY &&
+			this.host.isHost &&
+			state.mod === 'TOH4E'
+		) {
+			const names = Object.keys(this.tohLobbyNames).length
+				? this.tohLobbyNames
+				: Object.fromEntries(
+						(state.players ?? [])
+							.filter((player) => !player.disconnected)
+							.map((player) => [player.clientId, player.name])
+					);
+			this.prev.tohRosterSentSignature = '';
+			this.patch({ tohGameStartNames: { ...names } });
 		} else if (state.gameState !== GameState.TASKS && state.players) {
 			const otherDead = { ...this.snapshot.otherDead };
 			for (const player of state.players) {
@@ -558,10 +795,14 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				myPlayer.playerUid,
 				myPlayer.playerIdentifier
 			);
+			this.tohRoleOverride = null;
+			this.patch({ tohRole: null });
 		} else if (previous !== GameState.UNKNOWN && previous !== GameState.MENU && state.gameState === GameState.MENU) {
 			this.connection.setMobileRunning(false);
 			this.connection.leaveLobby();
-			this.patch({ otherDead: {} });
+			this.tohRoleOverride = null;
+			this.tohLobbyNames = {};
+			this.patch({ otherDead: {}, toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
 		}
 	}
 
@@ -719,6 +960,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		const settings = SettingsStore.store;
 		const activeLobbySettings = this.activeLobbySettings;
+		const audioState = this.getEffectiveGameState(state);
+		const audioMe = audioState.players.find((player) => player.isLocal) ?? myPlayer;
 		const playerSocketIds = this.connection.playerSocketIds;
 		const handledPeerIds: string[] = [];
 		const otherTalking = { ...this.snapshot.otherTalking };
@@ -732,10 +975,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			handledPeerIds.push(peerId);
 			let gain = this.audio.applyVoiceAudio(
 				peerId,
-				state,
+				audioState,
 				settings,
 				activeLobbySettings,
-				myPlayer,
+				audioMe,
 				player,
 				this.snapshot.impostorRadioClientId
 			);
@@ -774,6 +1017,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private publishMobileAndObs(state: AmongUsState, myPlayer: Player | undefined): void {
+		state = this.getEffectiveGameState(state);
+		myPlayer = state.players?.find((player) => player.isLocal) ?? myPlayer;
 		const settings = SettingsStore.store;
 		if (!state.players) return;
 		if (!this.connection.isMobileRunning && !settings.obsOverlay) return;
@@ -809,17 +1054,20 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					inVent: player.inVent,
 					isDead: player.isDead,
 					name: player.name,
-					colorId: player.colorId,
 					hatId: player.hatId,
 					petId: player.petId,
 					skinId: player.skinId,
 					visorId: player.visorId,
 					disconnected: player.disconnected,
 					isLocal: player.isLocal,
-					shiftedColor: player.shiftedColor,
 					bugged: player.bugged,
-					realColor: playerColors[player.colorId],
-					nosColor: state.mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined,
+					...(state.mod === 'NoS'
+						? { nosColor: player.nosLobbyColor ?? nosColorHex(player.nosPlayer) }
+						: {
+								colorId: player.colorId,
+								shiftedColor: player.shiftedColor,
+								realColor: playerColors[player.colorId],
+							}),
 					usingRadio: player.clientId === this.snapshot.impostorRadioClientId && myPlayer?.isImpostor,
 					connected:
 						(playerSocketIds[player.clientId] &&

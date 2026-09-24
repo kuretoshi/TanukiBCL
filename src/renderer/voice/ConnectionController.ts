@@ -43,6 +43,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	socketClients: [SocketClientMap];
 	peerStream: [peerId: string, stream: MediaStream];
 	peerClosed: [peerId: string];
+	peerReady: [peerId: string];
 	peerQuality: [peerId: string, quality: ConnectionQuality | undefined];
 	peerData: [peerId: string, data: Record<string, unknown>];
 	vad: [clientId: number, activity: boolean];
@@ -68,6 +69,17 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 	private clients: SocketClientMap = {};
 	private mobileBeaconTimer?: ReturnType<typeof setTimeout>;
 	private mobileRunning = false;
+	private serverPingMs: number | null = null;
+	private serverPingStartedAt = 0;
+	private serverPingEngine?: Socket['io']['engine'];
+	private readonly onServerPing = (): void => {
+		this.serverPingStartedAt = performance.now();
+	};
+	private readonly onServerPong = (): void => {
+		if (!this.serverPingStartedAt) return;
+		this.serverPingMs = Math.max(0, performance.now() - this.serverPingStartedAt);
+		this.serverPingStartedAt = 0;
+	};
 
 	private context: ConnectionContext = {
 		isHost: false,
@@ -115,9 +127,15 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 			this.currentLobby = 'MENU';
 		});
 
-		socket.on('connect', () => this.emit('connected'));
+		socket.on('connect', () => {
+			this.serverPingEngine = socket.io.engine;
+			this.serverPingEngine.on('ping', this.onServerPing);
+			this.serverPingEngine.on('pong', this.onServerPong);
+			this.emit('connected');
+		});
 
 		socket.on('disconnect', () => {
+			this.detachServerPing();
 			this.currentLobby = 'MENU';
 			this.destroyAllPeers();
 			this.setClients({});
@@ -222,6 +240,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 			this.mobileBeaconTimer = undefined;
 		}
 		this.mobileRunning = false;
+		this.detachServerPing();
 
 		this.socket?.emit('leave');
 		this.destroyAllPeers();
@@ -231,6 +250,14 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		this.clients = {};
 		this.currentLobby = '';
 		this.removeAllListeners();
+	}
+
+	private detachServerPing(): void {
+		this.serverPingEngine?.off('ping', this.onServerPing);
+		this.serverPingEngine?.off('pong', this.onServerPong);
+		this.serverPingEngine = undefined;
+		this.serverPingStartedAt = 0;
+		this.serverPingMs = null;
 	}
 
 	private scheduleMobileBeacon(): void {
@@ -327,11 +354,19 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		}
 	}
 
-	sendToPeers(peerIds: string[], payload: string): void {
+	sendToPeers(peerIds: string[], payload: string): number {
+		let sent = 0;
 		for (const peerId of peerIds) {
 			const peer = this.peers.get(peerId);
-			if (peer?.writable) peer.send(payload);
+			if (!peer?.writable) continue;
+			try {
+				peer.send(payload);
+				sent++;
+			} catch (error) {
+				console.warn('Failed to send to peer:', error);
+			}
 		}
+		return sent;
 	}
 
 	getClient(peerId: string): Client | undefined {
@@ -439,7 +474,9 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		const sampleQuality = async (): Promise<void> => {
 			let quality: ConnectionQuality | undefined;
 			try {
-				if (connection.connectionState === 'connected') quality = sampler.read(await connection.getStats());
+				if (connection.connectionState === 'connected') {
+					quality = { ...sampler.read(await connection.getStats()), serverPingMs: this.serverPingMs };
+				}
 			} catch {
 				// Closing a peer while getStats is pending is expected.
 			}
@@ -459,6 +496,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 
 		connection.on('connect', () => {
 			if (this.peers.get(peer) !== connection) return;
+			this.emit('peerReady', peer);
 			this.clearPeerTimer(this.peerConnectTimers, peer);
 			this.clearPeerTimer(this.iceDisconnectTimers, peer);
 			this.peerRetryAttempts.delete(peer);

@@ -56,7 +56,7 @@ assert.equal(spatial({ state: { ...state, map: MapType.AIRSHIP, airshipMeetingBy
 assert.equal(spatial({ state: { ...state, map: MapType.AIRSHIP }, airshipSpawnFallback: true, other: { ...other, x: 50 } }).gain, 1);
 assert.equal(spatial({ other: { ...other, isDead: true } }).gain, 0);
 const ghost = spatial({ me: { ...me, isThirdParty: true }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, thirdPartyHaunting: true } });
-assert.equal(ghost.gain, 0.4); assert.equal(ghost.reverb, true);
+assert.equal(ghost.gain, 0, 'Removed generic third-party setting must not enable ghost audio, including old saved settings');
 const radio = spatial({ me: { ...me, isImpostor: true }, other: { ...other, isImpostor: true }, activeLobbySettings: { ...lobby, impostorRadioEnabled: true }, impostorRadioClientId: 2 });
 assert.equal(radio.muffle.type, 'highpass');
 assert.equal(spatial({ me: { ...me, inVent: true } }).muffle.type, 'lowpass');
@@ -76,6 +76,10 @@ assert.equal(rule({ ...state, map: MapType.AIRSHIP, airshipMeetingByOutfit: true
 assert.equal(rule(state, jumboLobby, me, { ...jumboPlayer, isDead: true }), null);
 assert.equal(rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal') }), null);
 for (const role of ['Jackal', 'WaveCannonJackal']) {
+  for (const metadata of [{}, { isNeutral: false, canKill: false }]) {
+    assert.equal(spatial({ me: { ...me, snrRole: snr(role, undefined, metadata) }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, jackalHaunting: true } }).gain, .4, `${role}: live role overrides missing/stale snapshot flags`);
+    assert.equal(spatial({ me: { ...me, snrRole: snr(role, undefined, metadata) }, other: { ...other, isDead: true } }).gain, 0);
+  }
   const jackal = { ...me, snrRole: snr(role, undefined, { isNeutral: true, canKill: true }) };
   const ghostOther = { ...other, isDead: true };
   assert.equal(spatial({ me: jackal, other: ghostOther }).gain, 0);
@@ -100,6 +104,19 @@ for (const metadata of [
   });
   assert.equal(result.gain, metadata.isNeutral && metadata.canKill ? 0.4 : 0);
 }
+const distantSNRKiller = {
+  ...me,
+  snrRole: snr('OtherNeutralRole', undefined, { isNeutral: true, canKill: true }),
+};
+assert.equal(
+  spatial({
+    me: distantSNRKiller,
+    other: { ...other, isDead: true, x: 50 },
+    activeLobbySettings: { ...lobby, jackalHaunting: true },
+  }).gain,
+  0,
+  'SNR neutral killer ghost hearing still observes distance',
+);
 assert.equal(spatial({ me: { ...me, snrRole: snr('Frankenstein') }, other: { ...other, isDead: true }, activeLobbySettings: { ...lobby, jackalHaunting: true } }).gain, 0);
 for (const role of ['Sidekick', 'SidekickWaveCannon']) {
   const sidekick = { ...me, snrRole: snr(role) };
@@ -202,12 +219,14 @@ let loadedModuleName = 'SuperNewRoles.dll';
 const detectMod = vm.runInNewContext(ts.transpileModule(`({ ${detectModMethod.getText(readerSource)} })`, {
   compilerOptions: { target: ts.ScriptTarget.ES2020 },
 }).outputText, { modList, path: { basename: value => value.split(/[\\/]/).pop() }, findModule: (name, pid) => {
-  assert.ok(['SuperNewRoles.dll', 'Nebula.dll'].includes(name)); assert.equal(pid, 42);
+  assert.ok(['SuperNewRoles.dll', 'Nebula.dll', 'TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll'].includes(name)); assert.equal(pid, 42);
   if (!loadedModule || name !== loadedModuleName) throw new Error('module not found');
   return loadedModule;
 } }).getInstalledMods;
 const modReader = { pid: 42, readPluginFiles: () => [] };
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
+assert.equal(detectMod.call(modReader, 'game/TOH4E_EM/Among Us.exe').id, 'TOH4E');
+assert.equal(detectMod.call(modReader, 'game/TOH4E-EM/Among Us.exe').id, 'TOH4E');
 loadedModule = { th32ProcessID: 42, szModule: 'SuperNewRoles.dll', modBaseAddr: 100, modBaseSize: 200, szExePath: 'launcher/BepInEx/plugins/SuperNewRoles.dll' };
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'SUPER_NEW_ROLES');
 assert.ok(modReader.loadedMods.includes(loadedModule.szExePath));
@@ -227,7 +246,21 @@ modReader.readPluginFiles = () => ['TheOtherRoles.dll'];
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'THE_OTHER_ROLES');
 modReader.readPluginFiles = () => ['SuperNewRoles.dll'];
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'SUPER_NEW_ROLES');
+for (const dll of ['TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll']) {
+  loadedModule = undefined;
+  loadedModuleName = dll;
+  modReader.readPluginFiles = () => [dll];
+  assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E');
+  modReader.readPluginFiles = () => [];
+  loadedModule = { modBaseAddr: 0x10000, modBaseSize: 4096, th32ProcessID: 42, szModule: dll, szExePath: `game/${dll}` };
+  assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E');
+}
+loadedModule = undefined;
 console.log('ok MOD detection: launcher module, Vanilla, late loading and existing folder fallback');
+const modsSource = await readFile('src/common/Mods.ts', 'utf8');
+assert.match(modsSource, /isToh4eHostName/);
+assert.match(modsSource, /displayHostName/);
+console.log('ok TOH4E host marker: remote host detection and display trimming helpers present');
 let checkProcessMethod;
 function findProcessChecker(node) {
   if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'checkProcessOpen') checkProcessMethod = node;
@@ -241,6 +274,7 @@ const checkProcess = vm.runInNewContext(ts.transpileModule(`({ ${checkProcessMet
   console: { log() {} }, IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } }).checkProcessOpen;
 const switchingReader = { pid: 42, amongUs: {}, loadedMod: modList.find(m => m.id === 'SUPER_NEW_ROLES'), loadedMods: ['old.dll'],
   snrRoles: { reset() {} },
+  tohRoles: { reset() {} },
   nosSnapshot: { reset() {} },
   nosPalette: { reset() {} },
   nextModCheck: 0, gamePath: 'game/Among Us.exe', getInstalledMods: () => modList.find(m => m.id === 'NoS'), sendIPC() {} };
@@ -266,6 +300,7 @@ let snrResetCount = 0;
 reconnectReader.snrRoles = { reset() { snrResetCount++; } };
 reconnectReader.nosSnapshot = { reset() {} };
 reconnectReader.nosPalette = { reset() {} };
+reconnectReader.tohRoles = { reset() {} };
 const reconnectEvents = [];
 Object.assign(reconnectReader, { amongUs: {}, colorsInitialized: true, initializedWrite: true, checkProcessDelay: 30,
   sendIPC: (...args) => reconnectEvents.push(args),
@@ -363,25 +398,31 @@ try {
 
 const { ConnectionQualitySampler, qualityBars } = await bundle('src/renderer/voice/connectionQuality.ts');
 const qualitySampler = new ConnectionQualitySampler();
-const stats = (received, lost, jitter = 0.01, rtt = 0.08, id = 'audio') => new Map([
+const stats = (received, lost, jitter = 0.01, rtt = 0.08, id = 'audio', candidateType = 'srflx') => new Map([
   ['transport', { type: 'transport', selectedCandidatePairId: 'selected' }],
-  ['selected', { type: 'candidate-pair', currentRoundTripTime: rtt }],
+  ['selected', { type: 'candidate-pair', currentRoundTripTime: rtt, localCandidateId: 'local', remoteCandidateId: 'remote' }],
+  ['local', { type: 'local-candidate', candidateType }],
+  ['remote', { type: 'remote-candidate', candidateType }],
   ['unused', { type: 'candidate-pair', currentRoundTripTime: 5 }],
   [id, { id, type: 'inbound-rtp', kind: 'audio', packetsReceived: received, packetsLost: lost, jitter }],
 ]);
-assert.deepEqual(qualitySampler.read(stats(100, 10)), { rttMs: 80, jitterMs: 10, lossPercent: null });
+assert.deepEqual(qualitySampler.read(stats(100, 10)), { rttMs: 80, jitterMs: 10, lossPercent: null, direct: false });
 assert.equal(qualitySampler.read(stats(198, 12)).lossPercent, 2);
 assert.equal(qualitySampler.read(stats(198, 12)).lossPercent, null);
 assert.equal(qualitySampler.read(stats(298, 11)).lossPercent, 0);
 assert.equal(qualitySampler.read(stats(1, 0)).lossPercent, null);
 assert.equal(qualitySampler.read(stats(100, 0, 0.01, 0.08, 'new-stream')).lossPercent, null);
-assert.deepEqual(qualitySampler.read(new Map()), { rttMs: null, jitterMs: null, lossPercent: null });
+assert.deepEqual(qualitySampler.read(new Map()), { rttMs: null, jitterMs: null, lossPercent: null, direct: false });
 assert.equal(qualityBars(), 0);
 assert.equal(qualityBars({ rttMs: null, jitterMs: 0, lossPercent: 0 }), 0);
 assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 0 }), 3);
 assert.equal(qualityBars({ rttMs: 150, jitterMs: 10, lossPercent: 0 }), 2);
 assert.equal(qualityBars({ rttMs: 80, jitterMs: 30, lossPercent: 0 }), 2);
-assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 5 }), 1);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 50 }), 3);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 0, serverPingMs: 400 }), 1);
+assert.equal(qualityBars({ rttMs: 400, jitterMs: 100, lossPercent: 50, serverPingMs: 80 }), 3);
+assert.equal(qualityBars({ rttMs: 80, jitterMs: 10, lossPercent: 5, direct: true }), 3);
+assert.equal(qualityBars({ rttMs: 400, jitterMs: 100, lossPercent: 50, direct: true }), 3);
 console.log('ok connection quality: selected route, interval loss, idle/reset streams and quality thresholds');
 
 // Exercise the actual main-process overlay lifecycle without native game hooks.

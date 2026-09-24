@@ -268,10 +268,6 @@ export const settingsStore = new Store<ISettings>({
 					type: 'boolean',
 					default: false,
 				},
-				thirdPartyHaunting: {
-					type: 'boolean',
-					default: false,
-				},
 				snrJumboVoice: { type: 'boolean', default: false },
 				jackalHaunting: { type: 'boolean', default: false },
 				jackalHearOutsideVents: { type: 'boolean', default: false },
@@ -281,6 +277,7 @@ export const settingsStore = new Store<ISettings>({
 				sidekickTalkInVents: { type: 'boolean', default: false },
 				nosNeutralKillerHaunting: { type: 'boolean', default: false },
 				nosVoicePositions: { type: 'boolean', default: false },
+				tohNeutralKillerHaunting: { type: 'boolean', default: false },
 				commsSabotage: {
 					type: 'boolean',
 					default: false,
@@ -341,7 +338,6 @@ export const settingsStore = new Store<ISettings>({
 			default: {
 				maxDistance: 5.32,
 				haunting: false,
-				thirdPartyHaunting: false,
 				snrJumboVoice: false,
 				jackalHaunting: false,
 				jackalHearOutsideVents: false,
@@ -351,6 +347,7 @@ export const settingsStore = new Store<ISettings>({
 				sidekickTalkInVents: false,
 				nosNeutralKillerHaunting: false,
 				nosVoicePositions: false,
+				tohNeutralKillerHaunting: false,
 				commsSabotage: false,
 				voiceEffectEnabled: true,
 				hearImpostorsInVents: false,

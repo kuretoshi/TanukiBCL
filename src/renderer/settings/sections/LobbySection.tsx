@@ -12,6 +12,7 @@ import languages from '../../language/languages';
 import { defaultLobbySettings } from '../../voice/types';
 import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SliderRow, SwitchRow } from '../SettingsControls';
 import { isLiteRuntime } from '../../../common/appVariant';
+import { displayHostName, isToh4eHostName } from '../../../common/Mods';
 
 type LobbyTab = 'current' | 'mine';
 
@@ -42,7 +43,6 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 		{ key: 'wallsBlockAudio', label: t('settings.lobbysettings.wallsblockaudio') },
 		{ key: 'visionHearing', label: t('settings.lobbysettings.visiononly') },
 		{ key: 'voiceEffectEnabled', label: t('settings.lobbysettings.voice_effect_enabled') },
-		{ key: 'thirdPartyHaunting', label: t('settings.lobbysettings.thirdpartyhearsghost') },
 		{ key: 'haunting', label: t('settings.lobbysettings.impostorshearsghost') },
 		{ key: 'hearImpostorsInVents', label: t('settings.lobbysettings.hear_imposters_invents') },
 		{ key: 'impostersHearImpostersInvent', label: t('settings.lobbysettings.private_talk_invents') },
@@ -134,6 +134,17 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 					))}
 				</SettingsSection>
 			)}
+			{mod === 'TOH4E' && (
+				<SettingsSection title={t('settings.lobbysettings.toh_section')}>
+					<SwitchRow
+						label={t('settings.lobbysettings.toh_neutral_killer_haunting')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.tohNeutralKillerHaunting === true}
+						onChange={(checked) => update({ tohNeutralKillerHaunting: checked })}
+					/>
+				</SettingsSection>
+			)}
 			{mod === 'NoS' && (
 				<SettingsSection title={t('settings.lobbysettings.nos_section')}>
 					<SwitchRow
@@ -223,10 +234,14 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 	const tab = lite ? 'current' : selectedTab;
 
 	const resolvedHostId = hostId || gameState?.hostId || 0;
-	const hostName = iAmHost
+	const rawHostName = iAmHost
 		? t('settings.lobbysettings.host_you')
 		: (gameState?.players?.find((player) => player.clientId === resolvedHostId)?.name ??
 			t('settings.lobbysettings.host_unknown'));
+	const hostPlayer = gameState?.players?.find((player) => player.clientId === resolvedHostId);
+	const hostIsToh4e =
+		gameState?.mod === 'TOH4E' || isToh4eHostName(hostPlayer?.name) || isToh4eHostName(hostPlayer?.appearanceName);
+	const hostName = iAmHost ? rawHostName : displayHostName(rawHostName);
 
 	return (
 		<>
@@ -265,7 +280,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 						</SettingsSection>
 						<LobbySettingRows
 							t={t}
-							mod={gameState?.mod}
+							mod={hostIsToh4e ? 'TOH4E' : gameState?.mod}
 							values={activeLobbySettings}
 							disabled
 							update={noop}

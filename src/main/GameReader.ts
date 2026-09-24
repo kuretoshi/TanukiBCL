@@ -39,6 +39,8 @@ import { formatNosTeam } from '../common/NosSnapshot';
 import { NosSnapshotTracker } from './nosSnapshotTracker';
 import { resolveNosSnapshot } from './nosSnapshotReader';
 import { NosPaletteTracker } from './nosPalette';
+import { TohLiveTracker } from './tohLiveTracker';
+import { readTohLayout } from './tohRoleReader';
 
 const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
 void settingsStore;
@@ -132,6 +134,7 @@ export default class GameReader {
 	nativeReadFailureCount = 0;
 	private snrRoles = new SnrLiveTracker(readSnrRoles);
 	private nosSnapshot = new NosSnapshotTracker(resolveNosSnapshot);
+	private tohRoles = new TohLiveTracker(readTohLayout);
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette'));
 	private snrRound = 0;
 	private snrInGame = false;
@@ -154,6 +157,7 @@ export default class GameReader {
 		const reset = this.amongUs && processesOpen.filter((o) => o.th32ProcessID === this.pid).length === 0;
 		if (!this.amongUs || reset) {
 			this.snrRoles.reset();
+			this.tohRoles.reset();
 			this.nosSnapshot.reset();
 			this.nosPalette.reset();
 		}
@@ -184,6 +188,7 @@ export default class GameReader {
 			}
 		} else if (this.amongUs && (processesOpen.length === 0 || reset)) {
 			this.snrRoles.reset();
+			this.tohRoles.reset();
 			this.nosSnapshot.reset();
 			this.nosPalette.reset();
 			this.amongUs = null;
@@ -209,12 +214,17 @@ export default class GameReader {
 
 	getInstalledMods(filePath: string): AmongusMod {
 		this.loadedMods = this.readPluginFiles(filePath);
+		if (/(^|[\\/])[^\\/]*TOH4E(?:[_-]EM)?[^\\/]*([\\/]|$)/i.test(filePath)) {
+			return modList.find((mod) => mod.id === 'TOH4E')!;
+		}
 		// SNRランチャーやNebulaは通常のpluginsフォルダ外からMODを読み込む。
 		// 接続対象のPIDに実際にロードされたDLLを優先する。
 		if (this.pid > 0) {
 			for (const [dll, id] of [
 				['SuperNewRoles.dll', 'SUPER_NEW_ROLES'],
 				['Nebula.dll', 'NoS'],
+				['TownOfHost_ForE_EM.dll', 'TOH4E'],
+				['TownOfHost_ForE.dll', 'TOH4E'],
 			] as const) {
 				try {
 					const module = findModule(dll, this.pid);
@@ -567,6 +577,15 @@ export default class GameReader {
 						player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
 					}
 				} else this.snrRoles.reset();
+				if (this.loadedMod.id === 'TOH4E' && !this.is_linux && (state === GameState.LOBBY || snrActive)) {
+					const roles = this.tohRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
+						readBuffer(this.amongUs!.handle, address, size)
+					);
+					for (const player of players) {
+						player.tohRole = player.disconnected ? undefined : roles.get(player.id);
+						player.roleName = player.tohRole?.roleName ? `TOH4E: ${player.tohRole.roleName}` : 'TOH4E役職未取得';
+					}
+				} else this.tohRoles.reset();
 				const nos =
 					this.loadedMod.id === 'NoS' && !this.is_linux && snrActive
 						? this.nosSnapshot.update(
@@ -652,6 +671,7 @@ export default class GameReader {
 									colorDebug: this.formatColorDebug(players, localPlayer),
 									sizeDebug: this.formatSizeDebug(players),
 									nosSnapshotStatus: this.loadedMod.id === 'NoS' ? this.nosSnapshot.message : undefined,
+									tohRoleStatus: this.loadedMod.id === 'TOH4E' ? this.tohRoles.message : undefined,
 									snrRoleStatus:
 										this.loadedMod.id === 'SUPER_NEW_ROLES'
 											? snrActive
@@ -690,6 +710,7 @@ export default class GameReader {
 
 	private resetAmongUsProcess(): void {
 		this.snrRoles.reset();
+		this.tohRoles.reset();
 		this.nosSnapshot.reset();
 		this.nosPalette.reset();
 		this.snrInGame = false;

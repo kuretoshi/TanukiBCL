@@ -2,7 +2,7 @@ import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import { AmongUsMaps, CameraLocation, MapType } from '../../common/AmongusMap';
 import { poseCollide } from '../../common/ColliderMap';
-import { isSnrJackal, isSnrSidekick } from '../../common/SnrRole';
+import { isSnrJackal, isSnrSidekick, isSnrNeutralKiller } from '../../common/SnrRole';
 
 export interface MuffleSetting {
 	type: BiquadFilterType;
@@ -73,10 +73,7 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		otherJackalTeam &&
 		(meSidekick || otherSidekick ? activeLobbySettings.sidekickTalkInVents : activeLobbySettings.jackalTalkInVents);
 	const snrNeutralKillerGhosts =
-		state.mod === 'SUPER_NEW_ROLES' &&
-		activeLobbySettings.jackalHaunting &&
-		me.snrRole?.isNeutral === true &&
-		me.snrRole.canKill === true;
+		state.mod === 'SUPER_NEW_ROLES' && activeLobbySettings.jackalHaunting && isSnrNeutralKiller(me.snrRole);
 	const nosKillerGhosts =
 		state.mod === 'NoS' &&
 		activeLobbySettings.nosNeutralKillerHaunting &&
@@ -87,10 +84,12 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		? snrNeutralKillerGhosts
 		: meSidekick
 			? activeLobbySettings.sidekickHaunting
-			: nosKillerGhosts ||
+			: (state.mod === 'TOH4E' &&
+					activeLobbySettings.tohNeutralKillerHaunting === true &&
+					me.tohRole?.isKiller === true) ||
+				nosKillerGhosts ||
 				snrNeutralKillerGhosts ||
-				(me.isImpostor && activeLobbySettings.haunting) ||
-				(me.isThirdParty && activeLobbySettings.thirdPartyHaunting);
+				(me.isImpostor && activeLobbySettings.haunting);
 	const meetingFallback =
 		state.map === MapType.AIRSHIP &&
 		state.gameState === GameState.TASKS &&

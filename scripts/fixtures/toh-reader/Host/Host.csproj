@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><AssemblyName>Among Us</AssemblyName><RuntimeIdentifier>win-x86</RuntimeIdentifier><SelfContained>true</SelfContained><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><ProjectReference Include="../Plugin/Plugin.csproj" /></ItemGroup></Project>

@@ -19,6 +19,10 @@ export function isSnrJackal(role?: SnrLiveRole): boolean {
 	return !!role?.role.name && jackalRoles.has(role.role.name);
 }
 
+export function isSnrNeutralKiller(role?: SnrLiveRole): boolean {
+	return isSnrJackal(role) || (role?.isNeutral === true && role.canKill === true);
+}
+
 export function isSnrSidekick(role?: SnrLiveRole): boolean {
 	return !!role?.role.name && sidekickRoles.has(role.role.name);
 }

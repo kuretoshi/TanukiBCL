@@ -2,6 +2,7 @@ import type { ConnectionQuality } from './connectionQuality';
 import { AudioConnected, ClientBoolMap, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
 import { ILobbySettings } from '../../common/ISettings';
 import type { VoiceDisguiseEffect } from '../voiceEffect';
+import type { TohRole } from '../../common/TohRole';
 
 export interface ExtendedAudioElement extends HTMLAudioElement {
 	setSinkId: (sinkId: string) => Promise<void>;
@@ -63,4 +64,7 @@ export interface VoiceSnapshot {
 	impostorRadioClientId: number;
 	activeLobbySettings: ILobbySettings | null;
 	hostId: number;
+	toh4eLobby: boolean;
+	tohRole: TohRole | null;
+	tohGameStartNames: numberStringMap;
 }

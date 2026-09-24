@@ -27,7 +27,7 @@ const field = (offset, names = null) => ({ offset, size: 2, signed: true, names 
 const layout = { pid: 123, pointerSize: 4, arraySlot: slot, arrayType: 0x30000, playerType: 0x40000,
   arrayLengthOffset: 4, arrayDataOffset: 8, fields: {
     playerId: { offset: 10, size: 1, signed: false, names: null },
-    role: field(4, { 11: 'Jackal', 137: 'Frankenstein' }),
+    role: field(4, { 11: 'Jackal', 137: 'Frankenstein', 222: 'WaveCannonJackal' }),
     modifier: field(6, { 0: 'None', 8: 'Lovers', 16: 'JumboModifier' }), ghostRole: field(8, { 0: 'None' })
   } };
 const setRole = (role, modifier) => { memory.writeInt16LE(role, player - base + 4); memory.writeInt16LE(modifier, player - base + 6); };
@@ -78,6 +78,36 @@ assert.equal(tracker.update(123, 'round1', read).size, 0, 'Never retain stale ro
 write(player, layout.playerType);
 assert.equal(tracker.update(123, 'round1', read).get(3).role.name, 'Jackal');
 console.log('PASS live roles: changes, modifier removal/flags, unknown IDs, inconsistent reads, empty array, PID switch, discovery throttling, stale clearing');
+const eligibilityTracker = new SnrLiveTracker(async () => { throw new Error('Unexpected discovery'); });
+eligibilityTracker.accept(123, { status: 'ok', pid: 123, liveLayout: layout, players: [{ playerId: 3, role: { value: 137 }, isNeutral: false, canKill: false }] });
+setRole(222, 0);
+assert.equal(eligibilityTracker.update(123, 'round', read).get(3).canKill, true);
+assert.equal(eligibilityTracker.update(123, 'round', read).get(3).isNeutral, true);
+setRole(137, 0);
+assert.equal(eligibilityTracker.update(123, 'round', read).get(3).isNeutral, undefined, 'Do not restore pre-role-change metadata');
+eligibilityTracker.accept(123, { status: 'ok', pid: 123, liveLayout: layout, players: [{ playerId: 3, role: { value: 222 }, isNeutral: true, canKill: true }] });
+assert.equal(eligibilityTracker.update(123, 'round', read).get(3).canKill, undefined, 'Snapshot flags belong to the captured role, not only player ID');
+setRole(11, 16);
+console.log('PASS SNR ghost eligibility: current Jackal roles override absent/stale metadata, role changes discard old flags');
+
+let automaticMetadataResolve;
+let automaticMetadataCalls = 0;
+const automaticMetadataTracker = new SnrLiveTracker(() => {
+  automaticMetadataCalls++;
+  return Promise.resolve(automaticMetadataResolve);
+});
+automaticMetadataResolve = { status: 'ok', pid: 123, liveLayout: layout, players: [] };
+automaticMetadataTracker.update(123, 'auto-round', read);
+await new Promise((resolve) => setTimeout(resolve, 1100));
+automaticMetadataResolve = {
+  status: 'ok', pid: 123, liveLayout: layout,
+  players: [{ playerId: 3, role: { value: 137 }, isNeutral: true, canKill: true }],
+};
+automaticMetadataTracker.update(123, 'auto-round', read);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(automaticMetadataCalls, 2, 'Retry role metadata automatically after game start');
+assert.equal(automaticMetadataTracker.update(123, 'auto-round', read).get(3).canKill, true);
+console.log('PASS SNR ghost eligibility: metadata retries automatically');
 
 if (process.argv.includes('--real-game')) {
   const sample = JSON.parse(await readFile('.cache/live-sample.json', 'utf8'));

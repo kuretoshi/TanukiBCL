@@ -22,6 +22,7 @@ import { ipcRenderer } from '../lib/electron-bridge';
 import { remoteGameStore, startRemoteGameStore, stopRemoteGameStore } from '../state/remoteGameStore';
 import { IpcSettingsMessages } from '../../common/ipc-messages';
 import { GameState } from '../../common/AmongUsState';
+import { isSnrNeutralKiller } from '../../common/SnrRole';
 import { modList } from '../../common/Mods';
 import '../css/index.css';
 import SnrRolePanel from './SnrRolePanel';
@@ -180,7 +181,9 @@ function DebugWindow(): React.JSX.Element {
 									? gameState.debug?.snrRoleStatus || 'SNR役職未取得'
 									: gameState.mod === 'NoS'
 										? gameState.debug?.nosSnapshotStatus || 'NoSスナップショット未取得'
-										: '役職は現在取得できる判定値です。Mod固有の役職名をすべて識別するものではありません。'}
+										: gameState.mod === 'TOH4E'
+											? gameState.debug?.tohRoleStatus || 'TOH4E役職未取得'
+											: '役職は現在取得できる判定値です。Mod固有の役職名をすべて識別するものではありません。'}
 							</Typography>
 							<Table size="small" sx={{ mt: 1, '& th, & td': { whiteSpace: 'nowrap' } }}>
 								<TableHead>
@@ -203,6 +206,34 @@ function DebugWindow(): React.JSX.Element {
 												{player.roleName || '不明'}
 												<br />
 												本体陣営値: {player.roleTeam}
+												{gameState.mod === 'SUPER_NEW_ROLES' && player.snrRole && (
+													<>
+														<br />
+														SNR IsNeutral:{' '}
+														{player.snrRole.isNeutral == null ? '未取得' : String(player.snrRole.isNeutral)}
+														<br />
+														SNR CanKill: {player.snrRole.canKill == null ? '未取得' : String(player.snrRole.canKill)}
+														<br />
+														第三陣営キル役職の対象: {isSnrNeutralKiller(player.snrRole) ? 'はい' : 'いいえ／未取得'}
+													</>
+												)}
+												{gameState.mod === 'TOH4E' && (
+													<>
+														<br />
+														RoleId: {player.tohRole?.roleId ?? '未取得'}
+														<br />
+														IKiller: {player.tohRole?.isKiller == null ? '未取得' : String(player.tohRole.isKiller)}
+														{player.tohRole?.roleName === 'Opportunist' && (
+															<>
+																<br />
+																Opportunist.CanKill:{' '}
+																{player.tohRole.opportunistCanKill == null
+																	? '未取得'
+																	: String(player.tohRole.opportunistCanKill)}
+															</>
+														)}
+													</>
+												)}
 												{gameState.mod === 'NoS' && player.nosPlayer && (
 													<>
 														<br />
@@ -211,6 +242,8 @@ function DebugWindow(): React.JSX.Element {
 														IsKiller={String(player.nosPlayer.isKiller)}
 														<br />
 														IsImpostor={String(player.nosPlayer.isImpostor)}
+														<br />
+														IsCrewmate={String(player.nosPlayer.isCrewmate)}
 													</>
 												)}
 											</TableCell>

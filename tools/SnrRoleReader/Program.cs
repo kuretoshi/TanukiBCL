@@ -15,6 +15,13 @@ try
     using var target = DataTarget.CreateSnapshotAndAttach(pid);
     var info = target.ClrVersions.FirstOrDefault() ?? throw new InvalidOperationException("CoreCLR not found");
     using var runtime = info.CreateRuntime();
+    if (args.Length > 1 && args[1] == "--toh") {
+        var layout = TohRoleLayout.Resolve(runtime, pid, target.DataReader.PointerSize, ReadEnums);
+        using var liveProcess = Process.GetProcessById(pid);
+        if (liveProcess.StartTime.ToUniversalTime().Ticks != started) throw new InvalidOperationException("Process changed");
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, layout }));
+        return;
+    }
     var source = SnrPlayerSource.Resolve(runtime, diagnostics);
     var module = source.Module;
     var array = source.Array.AsArray();
