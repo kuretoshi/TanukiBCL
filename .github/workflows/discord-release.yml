@@ -1,0 +1,86 @@
+name: Notify Discord of Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to notify (leave empty for the latest release)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Load release information
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            jq '.release' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/release.json"
+          elif [ -n "$RELEASE_TAG" ]; then
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+              > "$RUNNER_TEMP/release.json"
+          else
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" \
+              > "$RUNNER_TEMP/release.json"
+          fi
+
+      - name: Send release to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL is not configured." >&2
+            exit 1
+          fi
+
+          jq -n \
+            --slurpfile release "$RUNNER_TEMP/release.json" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            '{
+              username: "TanukiBCL Release",
+              allowed_mentions: { parse: [] },
+              embeds: [{
+                title: (($release[0].name // $release[0].tag_name) | tostring)[0:256],
+                url: $release[0].html_url,
+                description: (($release[0].body // "更新内容はGitHub Releaseをご覧ください。") | tostring)[0:3500],
+                color: 10181046,
+                fields: [
+                  {
+                    name: "バージョン",
+                    value: (($release[0].tag_name // "-") | tostring)[0:1024],
+                    inline: true
+                  },
+                  {
+                    name: "配布ファイル",
+                    value: ((
+                      $release[0].assets
+                      | if length == 0 then "GitHub Releaseからダウンロードできます。"
+                        else map("[\(.name)](\(.browser_download_url))") | join("\n")
+                        end
+                    ) | tostring)[0:1024],
+                    inline: false
+                  }
+                ],
+                footer: { text: $repository },
+                timestamp: $release[0].published_at
+              }]
+            }' > "$RUNNER_TEMP/discord-payload.json"
+
+          curl --fail-with-body --silent --show-error \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/discord-payload.json" \
+            "$DISCORD_WEBHOOK_URL"
