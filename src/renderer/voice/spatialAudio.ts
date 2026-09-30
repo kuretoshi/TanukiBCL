@@ -195,30 +195,25 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			if (meetingFallback && !me.isDead && other.isDead) endGain = 0;
 			break;
 
-		case GameState.DISCUSSION:
+		case GameState.DISCUSSION: {
 			panPos = [0, 0];
 			endGain = 1;
 			if (!me.isDead && other.isDead) {
 				endGain = 0;
 			}
-			if (
+			const canHearMeetingRadio =
 				(receivingImpostorRadio && radioEnabled) ||
 				ghostReceivingImpostorRadio ||
 				receivingJackalRadio ||
-				receivingNosJackalRadio
-			) {
+				receivingNosJackalRadio;
+			if (otherUsingRadio) endGain = canHearMeetingRadio ? 1 : 0;
+			if (otherUsingRadio && canHearMeetingRadio) {
 				muffleEnabled = true;
 				result.radioEcho = true;
 				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
 			}
-			if (radioOnlyMode && otherUsingRadio) {
-				endGain = receivingImpostorRadio || ghostReceivingImpostorRadio ? 1 : 0;
-				if (receivingImpostorRadio || ghostReceivingImpostorRadio) {
-					muffleEnabled = true;
-					result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
-				}
-			}
 			break;
+		}
 
 		case GameState.UNKNOWN:
 		default:

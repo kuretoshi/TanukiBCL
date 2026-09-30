@@ -523,7 +523,6 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (Object.prototype.hasOwnProperty.call(data, 'impostorRadio')) {
 			const clientId = this.connection.getClient(peerId)?.clientId;
 			const sender = state.players?.find((player) => player.clientId === clientId);
-			const local = state.players?.find((player) => player.isLocal);
 			if (
 				clientId !== undefined &&
 				typeof data.impostorRadio === 'boolean' &&
@@ -533,9 +532,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					: this.radioStatusVersions[clientId] === undefined) &&
 				(!data.impostorRadio ||
 					(sender &&
-						local &&
-						(this.areRadioPartners(state, local, sender) ||
-							(local.isDead && !sender.isDead && sender.isImpostor && this.canUseRadio(state, sender)))))
+						(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+						!sender.isDead &&
+						this.canUseRadio(state, sender)))
 			) {
 				if (typeof data.impostorRadioVersion === 'number')
 					this.radioStatusVersions[clientId] = data.impostorRadioVersion;
@@ -878,6 +877,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (state.gameState === this.prev.gameState) return;
 		const previous = this.prev.gameState;
 		this.prev.gameState = state.gameState;
+		if (this.impostorRadioPressed && state.gameState === GameState.DISCUSSION) this.sendRadioStatus(state);
 
 		if (state.gameState === GameState.LOBBY) {
 			this.prev.tohRoleSentSignatures = {};
@@ -1068,8 +1068,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				(player) =>
 					!player.isLocal &&
 					!player.bugged &&
-					(this.areRadioTeammates(state, myPlayer, player) ||
-						(player.isDead && myPlayer.isImpostor && !this.isJackalRadioPlayer(state, myPlayer)))
+					!player.disconnected
 			)
 			.map((player) => playerSocketIds[player.clientId])
 			.filter(Boolean);
@@ -1098,8 +1097,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			const player = state.players?.find((candidate) => candidate.clientId === clientId);
 			return (
 				!!player &&
-				(this.areRadioPartners(state, myPlayer, player) ||
-					(myPlayer.isDead && !player.isDead && player.isImpostor && this.canUseRadio(state, player))) &&
+				this.canUseRadio(state, player) &&
 				!player.isDead &&
 				!player.disconnected &&
 				!player.bugged
@@ -1165,6 +1163,15 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			return this.canNosJackalRadioReach(state, first, second);
 		if (this.isJackalRadioPlayer(state, first)) return this.isJackalRadioPlayer(state, second);
 		return first.isImpostor && second.isImpostor && !this.isJackalRadioPlayer(state, second);
+	}
+
+	getVisibleRadioClientIds(state: AmongUsState): number[] {
+		const local = state.players?.find((player) => player.isLocal);
+		if (!local || !this.canUseRadio(state, local)) return [];
+		return this.snapshot.impostorRadioClientIds.filter((clientId) => {
+			const sender = state.players?.find((player) => player.clientId === clientId);
+			return !!sender && (sender.isLocal || this.areRadioPartners(state, local, sender));
+		});
 	}
 
 	private updatePeerAudio(state: AmongUsState, myPlayer: Player | undefined): void {
@@ -1258,6 +1265,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		const { playerColors } = gameStore.getSnapshot();
 		const { socketClients, playerSocketIds, otherTalking, otherDead, talking } = this.snapshot;
+		const visibleRadioClientIds = myPlayer ? this.getVisibleRadioClientIds(state) : [];
 
 		const obsVoiceState: ObsVoiceState = {
 			overlayState: {
@@ -1283,9 +1291,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 								realColor: playerColors[player.colorId],
 							}),
 					usingRadio:
-						this.snapshot.impostorRadioClientIds.includes(player.clientId) &&
-						!!myPlayer &&
-						this.canUseRadio(state, myPlayer),
+						visibleRadioClientIds.includes(player.clientId),
 					connected:
 						(playerSocketIds[player.clientId] &&
 							socketClients[playerSocketIds[player.clientId]]?.clientId === player.clientId) ||
@@ -1314,6 +1320,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const myPlayer = state.players?.find((player) => player.isLocal);
 		const { otherTalking, playerSocketIds, otherDead, socketClients, audioConnected, talking, muted, deafened } =
 			this.snapshot;
+		const visibleRadioClientIds = this.getVisibleRadioClientIds(state);
 
 		ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_VOICE_STATE_CHANGED, {
 			otherTalking,
@@ -1323,9 +1330,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			audioConnected,
 			localTalking: talking,
 			localIsAlive: !myPlayer?.isDead,
-			impostorRadioClientId: !myPlayer || !this.canUseRadio(state, myPlayer) ? -1 : this.snapshot.impostorRadioClientId,
-			impostorRadioClientIds:
-				!myPlayer || !this.canUseRadio(state, myPlayer) ? [] : this.snapshot.impostorRadioClientIds,
+			impostorRadioClientId: visibleRadioClientIds[0] ?? -1,
+			impostorRadioClientIds: visibleRadioClientIds,
 			muted,
 			deafened,
 			mod: state.mod,

@@ -22,8 +22,6 @@ import { modList } from '../../common/Mods';
 import { IpcHandlerMessages } from '../../common/ipc-messages';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { useVoiceEngine } from '../voice/useVoiceController';
-import { isSnrJackalTeam } from '../../common/SnrRole';
-import { NOS_JACKAL_RADIO_KIND } from '../../common/NosSnapshot';
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -130,13 +128,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 
 	const myPlayer = useMemo(() => gameState?.players?.find((player) => player.isLocal), [gameState?.players]);
 	const vadHidden = (myPlayer?.shiftedColor ?? -1) !== -1 && gameState?.gameState !== GameState.DISCUSSION;
-	const localCanUseRadio =
-		!!myPlayer &&
-		(myPlayer.isImpostor ||
-			(gameState.mod === 'SUPER_NEW_ROLES' && isSnrJackalTeam(myPlayer.snrRole)) ||
-			(gameState.mod === 'NoS' &&
-				voice.activeLobbySettings?.jackalRadioEnabled === true &&
-				gameState.nosRadios?.some((radio) => radio.kind === NOS_JACKAL_RADIO_KIND)));
+	const visibleRadioClientIds = controller.getVisibleRadioClientIds(gameState);
 
 	const otherPlayers = useMemo(() => {
 		if (!gameState?.players || !myPlayer) return [];
@@ -185,7 +177,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 									player={myPlayer}
 									borderColor={vadHidden ? 'gray' : '#2ecc71'}
 									connectionState={voice.connected ? 'connected' : 'disconnected'}
-									isUsingRadio={localCanUseRadio && voice.impostorRadioClientIds.includes(myPlayer.clientId)}
+									isUsingRadio={visibleRadioClientIds.includes(myPlayer.clientId)}
 									talking={voice.talking}
 									isAlive={!myPlayer.isDead}
 									size={100}
@@ -269,9 +261,8 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 											borderColor="#2ecc71"
 											isAlive={!voice.otherDead[player.clientId]}
 											isUsingRadio={
-												localCanUseRadio &&
 												!(player.disconnected || player.bugged) &&
-												voice.impostorRadioClientIds.includes(player.clientId)
+												visibleRadioClientIds.includes(player.clientId)
 											}
 											size={otherPlayerAvatarSize}
 											socketConfig={playerConfig}
