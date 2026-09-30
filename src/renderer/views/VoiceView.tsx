@@ -18,9 +18,12 @@ import SupportLink from '../components/SupportLink';
 import { GameStateContext, SettingsContext } from '../state/contexts';
 import { GameState } from '../../common/AmongUsState';
 import { SocketConfig } from '../../common/ISettings';
+import { modList } from '../../common/Mods';
 import { IpcHandlerMessages } from '../../common/ipc-messages';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { useVoiceEngine } from '../voice/useVoiceController';
+import { isSnrJackalTeam } from '../../common/SnrRole';
+import { NOS_JACKAL_RADIO_KIND } from '../../common/NosSnapshot';
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -68,6 +71,7 @@ const useStyles = () => {
 		avatarWrapper: {
 			width: 80,
 			padding: theme.spacing(1),
+			position: 'relative',
 		},
 		muteButtons: {
 			paddingLeft: '5px',
@@ -76,6 +80,23 @@ const useStyles = () => {
 			display: 'grid',
 		},
 		left: { float: 'left' },
+		detectedMod: {
+			position: 'fixed',
+			right: 6,
+			bottom: 58,
+			zIndex: 2,
+			maxWidth: 'calc(100% - 12px)',
+			padding: '2px 5px',
+			borderRadius: '4px',
+			backgroundColor: 'rgba(0, 0, 0, 0.35)',
+			color: 'rgba(255, 255, 255, 0.72)',
+			fontSize: 10,
+			lineHeight: 1.2,
+			whiteSpace: 'nowrap',
+			overflow: 'hidden',
+			textOverflow: 'ellipsis',
+			pointerEvents: 'none',
+		},
 	};
 };
 
@@ -109,6 +130,13 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 
 	const myPlayer = useMemo(() => gameState?.players?.find((player) => player.isLocal), [gameState?.players]);
 	const vadHidden = (myPlayer?.shiftedColor ?? -1) !== -1 && gameState?.gameState !== GameState.DISCUSSION;
+	const localCanUseRadio =
+		!!myPlayer &&
+		(myPlayer.isImpostor ||
+			(gameState.mod === 'SUPER_NEW_ROLES' && isSnrJackalTeam(myPlayer.snrRole)) ||
+			(gameState.mod === 'NoS' &&
+				voice.activeLobbySettings?.jackalRadioEnabled === true &&
+				gameState.nosRadios?.some((radio) => radio.kind === NOS_JACKAL_RADIO_KIND)));
 
 	const otherPlayers = useMemo(() => {
 		if (!gameState?.players || !myPlayer) return [];
@@ -117,15 +145,23 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 
 	const playerConfigs = settings.playerConfigMap;
 
-	let displayedLobbyCode = gameState.lobbyCode;
+	const lobbyDetected =
+		!!gameState?.lobbyCode &&
+		gameState.lobbyCode !== 'MENU' &&
+		gameState.gameState !== GameState.MENU &&
+		gameState.gameState !== GameState.UNKNOWN;
+	let displayedLobbyCode = lobbyDetected ? gameState.lobbyCode : 'MENU';
 	if (displayedLobbyCode !== 'MENU' && settings.hideCode) displayedLobbyCode = 'LOBBY';
 
 	const otherPlayersPerRow = getPlayersPerRow(otherPlayers.length);
 	const otherPlayerAvatarSize = getOtherPlayerAvatarSize(otherPlayersPerRow);
 	const error = voice.error || initialError;
+	const detectedMod =
+		gameState.mod === 'NONE' ? undefined : (modList.find(({ id }) => id === gameState.mod)?.label ?? gameState.mod);
 
 	return (
 		<Box sx={classes.root}>
+			{detectedMod && <Box sx={classes.detectedMod}>MOD: {detectedMod}</Box>}
 			{error && (
 				<Box sx={classes.error}>
 					<Typography align="center" variant="h6" color="error">
@@ -140,27 +176,28 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 			{!error && (
 				<>
 					<Box sx={classes.top}>
-						{myPlayer && gameState.lobbyCode !== 'MENU' && (
+						{myPlayer && lobbyDetected && (
 							<Box sx={classes.avatarWrapper}>
 								<Avatar
-									hideWhenAppearanceChanged
+									hideWhenAppearanceChanged={gameState.gameState === GameState.TASKS}
 									deafened={voice.deafened}
 									muted={voice.muted}
 									player={myPlayer}
 									borderColor={vadHidden ? 'gray' : '#2ecc71'}
 									connectionState={voice.connected ? 'connected' : 'disconnected'}
-									isUsingRadio={myPlayer.isImpostor && voice.impostorRadioClientId === myPlayer.clientId}
+									isUsingRadio={localCanUseRadio && voice.impostorRadioClientIds.includes(myPlayer.clientId)}
 									talking={voice.talking}
 									isAlive={!myPlayer.isDead}
 									size={100}
 									mod={gameState.mod}
 								/>
+								<ConnectionIndicator connected={voice.connected} quality={voice.serverQuality} edgeInset={6} />
 							</Box>
 						)}
 						<Box sx={classes.right}>
 							<div>
 								<Box sx={classes.left}>
-									{myPlayer && gameState?.gameState !== GameState.MENU && (
+									{myPlayer && lobbyDetected && (
 										<Box component="span" sx={classes.username}>
 											{myPlayer.appearanceName || myPlayer.name}
 										</Box>
@@ -169,13 +206,13 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 										component="span"
 										sx={classes.code}
 										style={{
-											background: gameState.lobbyCode === 'MENU' ? 'transparent' : '#3e4346',
+											background: lobbyDetected ? '#3e4346' : 'transparent',
 										}}
 									>
 										{displayedLobbyCode === 'MENU' ? t('game.menu') : displayedLobbyCode}
 									</Box>
 								</Box>
-								{gameState.lobbyCode !== 'MENU' && (
+								{lobbyDetected && (
 									<Box sx={classes.muteButtons}>
 										<IconButton onClick={controller.toggleMute} size="small">
 											{voice.muted || voice.deafened ? <MicOff /> : <Mic />}
@@ -198,7 +235,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 							<small style={{ padding: 0 }}>{t('settings.lobbysettings.meetings_only_warning2')}</small>
 						</Box>
 					)}
-					{gameState.lobbyCode && <Divider />}
+					<Divider />
 					{!isLiteRuntime() && displayedLobbyCode === 'MENU' && (
 						<Box sx={classes.top}>
 							<Button
@@ -211,7 +248,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 							</Button>
 						</Box>
 					)}
-					{myPlayer && gameState.lobbyCode !== 'MENU' && (
+					{myPlayer && lobbyDetected && (
 						<OtherPlayersGrid sx={{ gridTemplateColumns: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize}px)` }}>
 							{otherPlayers.map((player) => {
 								const peer = voice.playerSocketIds[player.clientId];
@@ -223,7 +260,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 								return (
 									<Box key={player.id} sx={{ width: otherPlayerAvatarSize, position: 'relative' }}>
 										<Avatar
-											hideWhenAppearanceChanged
+											hideWhenAppearanceChanged={gameState.gameState === GameState.TASKS}
 											connectionState={
 												!connected ? 'disconnected' : voice.audioConnected[peer] ? 'connected' : 'novoice'
 											}
@@ -232,9 +269,9 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 											borderColor="#2ecc71"
 											isAlive={!voice.otherDead[player.clientId]}
 											isUsingRadio={
-												myPlayer.isImpostor &&
+												localCanUseRadio &&
 												!(player.disconnected || player.bugged) &&
-												voice.impostorRadioClientId === player.clientId
+												voice.impostorRadioClientIds.includes(player.clientId)
 											}
 											size={otherPlayerAvatarSize}
 											socketConfig={playerConfig}

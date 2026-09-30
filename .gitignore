@@ -18,6 +18,7 @@ thumbs.db
 yarn-error.log
 .vscode/
 debug.log
+/.debug-runs/
 
 out/
 

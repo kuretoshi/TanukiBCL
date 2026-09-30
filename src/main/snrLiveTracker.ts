@@ -10,7 +10,11 @@ export class SnrLiveTracker {
 	private needsJumboLayout = false;
 	private needsRoleMetadata = false;
 	private roleMetadataRetryAt = 0;
-	private roleMetadata = new Map<number, { roleId: number; isNeutral: boolean; canKill: boolean }>();
+	private cosmeticRefreshAt = 0;
+	private roleMetadata = new Map<
+		number,
+		{ roleId: number; isNeutral: boolean; canKill: boolean; hat2Id?: string; visor2Id?: string }
+	>();
 	message = 'SNR役職未取得';
 
 	constructor(private discover: (pid: number) => Promise<unknown>) {}
@@ -24,6 +28,7 @@ export class SnrLiveTracker {
 		this.needsJumboLayout = false;
 		this.needsRoleMetadata = false;
 		this.roleMetadataRetryAt = 0;
+		this.cosmeticRefreshAt = 0;
 		this.roleMetadata.clear();
 		this.message = 'SNR役職未取得';
 	}
@@ -34,7 +39,14 @@ export class SnrLiveTracker {
 			status?: string;
 			pid?: number;
 			liveLayout?: unknown;
-			players?: Array<{ playerId?: number; role?: { value?: number }; isNeutral?: boolean; canKill?: boolean }>;
+			players?: Array<{
+				playerId?: number;
+				role?: { value?: number };
+				isNeutral?: boolean;
+				canKill?: boolean;
+				hat2Id?: string;
+				visor2Id?: string;
+			}>;
 		};
 		if (response.status !== 'ok' || response.pid !== pid || !isSnrLiveLayout(response.liveLayout, pid)) return false;
 		this.pid = pid;
@@ -47,12 +59,20 @@ export class SnrLiveTracker {
 				typeof player.canKill === 'boolean'
 		);
 		this.roleMetadataRetryAt = this.needsRoleMetadata ? Date.now() + 1000 : 0;
+		this.cosmeticRefreshAt = Date.now() + 5000;
+		const previousMetadata = this.roleMetadata;
 		this.roleMetadata = new Map(
 			(response.players ?? [])
 				.filter((player) => Number.isInteger(player.playerId) && Number.isInteger(player.role?.value))
 				.map((player) => [
 					player.playerId!,
-					{ roleId: player.role!.value!, isNeutral: player.isNeutral === true, canKill: player.canKill === true },
+					{
+						roleId: player.role!.value!,
+						isNeutral: player.isNeutral === true,
+						canKill: player.canKill === true,
+						hat2Id: player.hat2Id || previousMetadata.get(player.playerId!)?.hat2Id,
+						visor2Id: player.visor2Id || previousMetadata.get(player.playerId!)?.visor2Id,
+					},
 				])
 		);
 		return true;
@@ -63,12 +83,19 @@ export class SnrLiveTracker {
 			this.reset();
 			this.pid = pid;
 		}
+		const refreshCosmetics = !!this.layout && Date.now() >= this.cosmeticRefreshAt;
 		const discoverySession = this.layout
-			? `${session}:${this.needsRoleMetadata ? 'metadata' : 'jumbo'}`
+			? `${session}:${
+					this.needsRoleMetadata
+						? 'metadata'
+						: this.needsJumboLayout
+							? 'jumbo'
+							: `cosmetics-${Math.floor(Date.now() / 5000)}`
+				}`
 			: session;
 		const retryReady = !this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt;
 		if (
-			(!this.layout || this.needsJumboLayout || this.needsRoleMetadata) &&
+			(!this.layout || this.needsJumboLayout || this.needsRoleMetadata || refreshCosmetics) &&
 			retryReady &&
 			!this.pending &&
 			this.attemptedSession !== discoverySession
@@ -97,9 +124,21 @@ export class SnrLiveTracker {
 				if (metadata && metadata.roleId !== role.role.value) this.roleMetadata.delete(playerId);
 				if (isSnrJackal(role)) {
 					// Both role definitions assign Neutral and attach JackalAbility with canKill:true.
-					roles.set(playerId, { ...role, isNeutral: true, canKill: true });
+					roles.set(playerId, {
+						...role,
+						isNeutral: true,
+						canKill: true,
+						hat2Id: metadata?.hat2Id,
+						visor2Id: metadata?.visor2Id,
+					});
 				} else if (metadata?.roleId === role.role.value) {
-					roles.set(playerId, { ...role, isNeutral: metadata.isNeutral, canKill: metadata.canKill });
+					roles.set(playerId, {
+						...role,
+						isNeutral: metadata.isNeutral,
+						canKill: metadata.canKill,
+						hat2Id: metadata.hat2Id,
+						visor2Id: metadata.visor2Id,
+					});
 				}
 			}
 			this.needsRoleMetadata = [...roles].some(

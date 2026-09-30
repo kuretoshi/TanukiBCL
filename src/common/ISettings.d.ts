@@ -32,6 +32,7 @@ export interface ISettings {
 	hardware_acceleration: boolean;
 	echoCancellation: boolean;
 	noiseSuppression: boolean;
+	autoGainControl: boolean;
 	oldSampleDebug: boolean;
 
 	enableSpatialAudio: boolean;
@@ -52,15 +53,19 @@ export interface ILobbySettings {
 	jackalHaunting: boolean;
 	jackalHearOutsideVents: boolean;
 	jackalTalkInVents: boolean;
+	jackalRadioEnabled: boolean;
 	sidekickHaunting: boolean;
 	sidekickHearOutsideVents: boolean;
 	sidekickTalkInVents: boolean;
 	nosNeutralKillerHaunting: boolean;
 	nosVoicePositions: boolean;
+	nosSizeVoiceEffect: boolean;
+	nosFixerJammingVoiceBlock: boolean;
 	tohNeutralKillerHaunting: boolean;
 	hearImpostorsInVents: boolean;
 	impostersHearImpostersInvent: boolean;
 	impostorRadioEnabled: boolean;
+	impostorRadioOnlyMode: boolean;
 	commsSabotage: boolean;
 	voiceEffectEnabled: boolean;
 	deadOnly: boolean;

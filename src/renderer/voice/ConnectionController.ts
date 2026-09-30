@@ -45,6 +45,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	peerClosed: [peerId: string];
 	peerReady: [peerId: string];
 	peerQuality: [peerId: string, quality: ConnectionQuality | undefined];
+	serverQuality: [quality: ConnectionQuality | undefined];
 	peerData: [peerId: string, data: Record<string, unknown>];
 	vad: [clientId: number, activity: boolean];
 	mobileDetected: [];
@@ -79,6 +80,13 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		if (!this.serverPingStartedAt) return;
 		this.serverPingMs = Math.max(0, performance.now() - this.serverPingStartedAt);
 		this.serverPingStartedAt = 0;
+		this.emit('serverQuality', {
+			rttMs: null,
+			jitterMs: null,
+			lossPercent: null,
+			direct: false,
+			serverPingMs: this.serverPingMs,
+		});
 	};
 
 	private context: ConnectionContext = {
@@ -136,6 +144,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 
 		socket.on('disconnect', () => {
 			this.detachServerPing();
+			this.emit('serverQuality', undefined);
 			this.currentLobby = 'MENU';
 			this.destroyAllPeers();
 			this.setClients({});
@@ -188,6 +197,22 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		});
 
 		socket.on('signal', ({ data, from, client }: { data: SignalData; from: string; client: Client }) => {
+			if (
+				(data as { type?: string }).type === 'bcl-control' &&
+				typeof (data as { payload?: unknown }).payload === 'string' &&
+				this.clients[from]
+			) {
+				try {
+					this.emit(
+						'peerData',
+						from,
+						JSON.parse((data as unknown as { payload: string }).payload) as Record<string, unknown>
+					);
+				} catch (error) {
+					console.warn('Failed to parse relayed peer data', error);
+				}
+				return;
+			}
 			if (Object.prototype.hasOwnProperty.call(data, 'mobilePlayerInfo')) {
 				const mobileData = data as unknown as MobilePlayerInfo;
 				if (mobileData.mobilePlayerInfo.code === this.context.lobbyCode && this.context.gameState !== GameState.MENU) {
@@ -364,6 +389,17 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 				sent++;
 			} catch (error) {
 				console.warn('Failed to send to peer:', error);
+			}
+		}
+		return sent;
+	}
+
+	sendControlToPeers(peerIds: string[], payload: string): number {
+		const sent = this.sendToPeers(peerIds, payload);
+		if (this.socket?.connected) {
+			for (const peerId of peerIds) {
+				if (!this.clients[peerId]) continue;
+				this.socket.emit('signal', { to: peerId, data: { type: 'bcl-control', payload } });
 			}
 		}
 		return sent;

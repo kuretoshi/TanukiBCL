@@ -138,6 +138,7 @@ export default class GameReader {
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette'));
 	private snrRound = 0;
 	private snrInGame = false;
+	private snrCosmeticAppearances = new Map<string, { hat: string; skin: string; visor: string }>();
 
 	acceptSnrRoles(pid: number, result: unknown): void {
 		if (this.amongUs && this.pid === pid) this.snrRoles.accept(pid, result);
@@ -160,6 +161,7 @@ export default class GameReader {
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
 			this.nosPalette.reset();
+			this.snrCosmeticAppearances.clear();
 		}
 		if ((!this.amongUs || reset) && processesOpen.length > 0) {
 			for (const processOpen of processesOpen.slice(targetProcessIndex, targetProcessIndex + 1)) {
@@ -399,6 +401,7 @@ export default class GameReader {
 						if (!player || state === GameState.MENU) {
 							continue;
 						}
+						this.applySnrCosmeticAppearance(player, state);
 
 						if (this.isLocalGame && player.clientId == hostId) {
 							this.gameCode = (player.nameHash % 99999).toString();
@@ -574,6 +577,8 @@ export default class GameReader {
 						: new Map();
 					for (const player of players) {
 						player.snrRole = player.disconnected ? undefined : roles.get(player.id);
+						player.snrHat2Id = player.snrRole?.hat2Id;
+						player.snrVisor2Id = player.snrRole?.visor2Id;
 						player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
 					}
 				} else this.snrRoles.reset();
@@ -616,6 +621,7 @@ export default class GameReader {
 				}
 				const newState: AmongUsState = normalizeMeetingState({
 					nosLocalMicPosition: nos?.localMicPosition,
+					nosRadios: nos?.radios,
 					lobbyCode: lobbyCode,
 					lobbyCodeInt,
 					players,
@@ -683,7 +689,7 @@ export default class GameReader {
 						: {}),
 				});
 				//	const stateHasChanged = !equal(this.lastState, newState);
-				if (state !== GameState.MENU || this.oldGameState !== GameState.MENU) {
+				if (state !== GameState.MENU || this.oldGameState !== GameState.MENU || this.lastState.mod !== newState.mod) {
 					try {
 						this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
 					} catch {
@@ -1633,17 +1639,17 @@ export default class GameReader {
 					const namePtr = this.readMemory<number>('pointer', val, this.offsets!.player.outfit.playerName); // 0x40
 					data.color = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
 					name = this.readString(namePtr, 1000).split(/<.*?>/).join('');
-					data.hat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId));
-					data.skin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
-					data.visor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId));
+					data.hat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId), 500);
+					data.skin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId), 500);
+					data.visor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId), 500);
 					if (currentOutfit == 0 || currentOutfit > 10) return;
 				} else if (key === currentOutfit) {
 					const currentNamePtr = this.readMemory<number>('pointer', val, this.offsets!.player.outfit.playerName); // 0x40
 					currentName = this.readString(currentNamePtr, 1000).split(/<.*?>/).join('');
 					currentColor = this.readMemory<number>('uint32', val, this.offsets!.player.outfit.colorId); // 0x14
-					currentHat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId));
-					currentSkin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId));
-					currentVisor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId));
+					currentHat = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.hatId), 500);
+					currentSkin = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.skinId), 500);
+					currentVisor = this.readString(this.readMemory<number>('ptr', val, this.offsets!.player.outfit.visorId), 500);
 					shiftedColor = currentColor;
 					hasCurrentOutfit = true;
 				}
@@ -1731,5 +1737,28 @@ export default class GameReader {
 			x: x_round || x || 999,
 			y: y_round || y || 999,
 		};
+	}
+
+	private applySnrCosmeticAppearance(player: Player, state: GameState): void {
+		if (this.loadedMod.id !== 'SUPER_NEW_ROLES') return;
+		const key = player.playerIdentifier || String(player.clientId);
+		if (state === GameState.LOBBY && player.currentOutfit > 0 && player.currentOutfit <= 10) {
+			const cached = this.snrCosmeticAppearances.get(key) ?? { hat: '', skin: '', visor: '' };
+			if (player.appearanceHatId.startsWith('Modded_') && cached.hat !== player.appearanceHatId) {
+				cached.hat = player.appearanceHatId;
+				console.log('[SNR cosmetics] Hat:', player.appearanceHatId);
+			}
+			if (player.appearanceSkinId.startsWith('Modded_')) cached.skin = player.appearanceSkinId;
+			if (player.appearanceVisorId.startsWith('Modded_')) cached.visor = player.appearanceVisorId;
+			this.snrCosmeticAppearances.set(key, cached);
+		}
+
+		if (player.currentOutfit !== 0) return;
+		const cached = this.snrCosmeticAppearances.get(key);
+		if (!cached) return;
+		if (cached.hat) player.appearanceHatId = cached.hat;
+		if (cached.skin) player.appearanceSkinId = cached.skin;
+		if (cached.visor) player.appearanceVisorId = cached.visor;
+		player.appearanceId = `${player.appearanceColorId}|${player.appearanceHatId}|${player.appearanceSkinId}|${player.appearanceVisorId}`;
 	}
 }

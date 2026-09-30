@@ -22,6 +22,7 @@ import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
+import { findSnrCosmeticFile, SnrCosmeticPart } from './snrCosmetics';
 import {
 	initializeDebugLogging,
 	registerWindowLogging,
@@ -87,6 +88,10 @@ declare global {
 }
 
 protocol.registerSchemesAsPrivileged([
+	{
+		scheme: 'snr-cosmetic',
+		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+	},
 	{
 		scheme: 'static',
 		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
@@ -652,6 +657,24 @@ if (!gotTheLock) {
 
 	// create main BrowserWindow when electron is ready
 	app.whenReady().then(async () => {
+		protocol.handle('snr-cosmetic', async (request) => {
+			const url = new URL(request.url);
+			const part = url.host as SnrCosmeticPart;
+			if (!['hat-front', 'hat-back', 'visor', 'skin'].includes(part)) return new Response(null, { status: 404 });
+			const productId = decodeURIComponent(url.pathname.slice(1));
+			const filePath = findSnrCosmeticFile(gameReader.gamePath, productId, part);
+			if (!filePath) return new Response(null, { status: 404 });
+			if (url.searchParams.get('adaptive') === '1') {
+				const generatedPath = await GenerateHat(
+					new URL(pathToFileURL(filePath).toString()),
+					gameReader.playercolors,
+					Number(url.searchParams.get('color'))
+				);
+				return generatedPath ? net.fetch(pathToFileURL(generatedPath).toString()) : new Response(null, { status: 500 });
+			}
+			return net.fetch(pathToFileURL(filePath).toString());
+		});
+
 		protocol.handle('static', (request) => {
 			const url = new URL(request.url);
 			const filePath = app.getPath('userData') + '/static/' + decodeURIComponent(url.host + url.pathname);

@@ -25,6 +25,7 @@ export interface LobbySectionProps {
 	canEditMine: boolean;
 	editDisabledReason: string;
 	update: (partial: Partial<ILobbySettings>) => void;
+	onRadioOnlyModeChange: (checked: boolean) => void;
 	confirm: ConfirmApi['confirm'];
 }
 
@@ -35,10 +36,25 @@ interface RowsProps {
 	disabled: boolean;
 	disabledReason?: string;
 	update: (partial: Partial<ILobbySettings>) => void;
+	onRadioOnlyModeChange: (checked: boolean) => void;
 	confirm: ConfirmApi['confirm'];
 }
 
-const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabled, disabledReason, update, confirm }) {
+const LobbySettingRows: React.FC<RowsProps> = function ({
+	t,
+	mod,
+	values,
+	disabled,
+	disabledReason,
+	update,
+	onRadioOnlyModeChange,
+	confirm,
+}) {
+	const radioOnlyMode = values.impostorRadioOnlyMode === true;
+	const voiceSettingDisabled = disabled || radioOnlyMode;
+	const voiceSettingDisabledReason = radioOnlyMode
+		? t('settings.lobbysettings.impostor_radio_only_locked')
+		: disabledReason;
 	const toggles: { key: keyof ILobbySettings; label: string }[] = [
 		{ key: 'wallsBlockAudio', label: t('settings.lobbysettings.wallsblockaudio') },
 		{ key: 'visionHearing', label: t('settings.lobbysettings.visiononly') },
@@ -50,9 +66,11 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 		{ key: 'hearThroughCameras', label: t('settings.lobbysettings.hear_through_cameras') },
 		{ key: 'impostorRadioEnabled', label: t('settings.lobbysettings.impostor_radio') },
 	];
+	const ghostHearingKeys: (keyof ILobbySettings)[] = ['haunting'];
 	const modToggles: { key: keyof ILobbySettings; label: string }[] = [
 		{ key: 'snrJumboVoice', label: t('settings.lobbysettings.snr_jumbo_voice') },
 		{ key: 'jackalHaunting', label: t('settings.lobbysettings.jackal_haunting') },
+		{ key: 'jackalRadioEnabled', label: t('settings.lobbysettings.jackal_radio') },
 		{ key: 'jackalHearOutsideVents', label: t('settings.lobbysettings.jackal_hear_outside_vents') },
 		{ key: 'jackalTalkInVents', label: t('settings.lobbysettings.jackal_talk_in_vents') },
 		{ key: 'sidekickHaunting', label: t('settings.lobbysettings.sidekick_haunting') },
@@ -63,14 +81,22 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 	return (
 		<>
 			<SettingsSection title={t('settings.lobbysettings.title')}>
+				<SwitchRow
+					label={t('settings.lobbysettings.impostor_radio_only')}
+					description={t('settings.lobbysettings.impostor_radio_only_description')}
+					disabled={disabled}
+					disabledReason={disabledReason}
+					checked={radioOnlyMode}
+					onChange={onRadioOnlyModeChange}
+				/>
 				<SliderRow
 					label={
 						values.visionHearing
 							? t('settings.lobbysettings.voicedistance_impostor')
 							: t('settings.lobbysettings.voicedistance')
 					}
-					disabled={disabled}
-					disabledReason={disabledReason}
+					disabled={voiceSettingDisabled}
+					disabledReason={voiceSettingDisabledReason}
 					value={values.maxDistance}
 					min={1}
 					max={10}
@@ -78,21 +104,24 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 					format={(value) => value.toFixed(1)}
 					onChange={(maxDistance) => update({ maxDistance })}
 				/>
-				{toggles.map(({ key, label }) => (
-					<SwitchRow
-						key={key}
-						label={label}
-						disabled={disabled}
-						disabledReason={disabledReason}
-						checked={values[key] as boolean}
-						onChange={(checked) => update({ [key]: checked } as Partial<ILobbySettings>)}
-					/>
-				))}
+				{toggles.map(({ key, label }) => {
+					const remainsAvailable = ghostHearingKeys.includes(key);
+					return (
+						<SwitchRow
+							key={key}
+							label={label}
+							disabled={disabled || (radioOnlyMode && !remainsAvailable)}
+							disabledReason={radioOnlyMode && !remainsAvailable ? voiceSettingDisabledReason : disabledReason}
+							checked={values[key] as boolean}
+							onChange={(checked) => update({ [key]: checked } as Partial<ILobbySettings>)}
+						/>
+					);
+				})}
 				<SwitchRow
 					label={t('settings.lobbysettings.ghost_only')}
 					description={t('settings.lobbysettings.ghost_only_warning')}
-					disabled={disabled}
-					disabledReason={disabledReason}
+					disabled={voiceSettingDisabled}
+					disabledReason={voiceSettingDisabledReason}
 					checked={values.deadOnly}
 					onChange={(checked) =>
 						confirm(
@@ -106,8 +135,8 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 				<SwitchRow
 					label={t('settings.lobbysettings.meetings_only')}
 					description={t('settings.lobbysettings.meetings_only_warning')}
-					disabled={disabled}
-					disabledReason={disabledReason}
+					disabled={voiceSettingDisabled}
+					disabledReason={voiceSettingDisabledReason}
 					checked={values.meetingGhostOnly}
 					onChange={(checked) =>
 						confirm(
@@ -122,16 +151,19 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 
 			{mod === 'SUPER_NEW_ROLES' && (
 				<SettingsSection title={t('settings.lobbysettings.snr_section')}>
-					{modToggles.map(({ key, label }) => (
-						<SwitchRow
-							key={key}
-							label={label}
-							disabled={disabled}
-							disabledReason={disabledReason}
-							checked={values[key] === true}
-							onChange={(checked) => update({ [key]: checked })}
-						/>
-					))}
+					{modToggles.map(({ key, label }) => {
+						const remainsAvailable = key === 'jackalHaunting' || key === 'sidekickHaunting';
+						return (
+							<SwitchRow
+								key={key}
+								label={label}
+								disabled={disabled || (radioOnlyMode && !remainsAvailable)}
+								disabledReason={radioOnlyMode && !remainsAvailable ? voiceSettingDisabledReason : disabledReason}
+								checked={values[key] === true}
+								onChange={(checked) => update({ [key]: checked })}
+							/>
+						);
+					})}
 				</SettingsSection>
 			)}
 			{mod === 'TOH4E' && (
@@ -148,6 +180,13 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 			{mod === 'NoS' && (
 				<SettingsSection title={t('settings.lobbysettings.nos_section')}>
 					<SwitchRow
+						label={t('settings.lobbysettings.jackal_radio')}
+						disabled={voiceSettingDisabled}
+						disabledReason={voiceSettingDisabledReason}
+						checked={values.jackalRadioEnabled === true}
+						onChange={(checked) => update({ jackalRadioEnabled: checked })}
+					/>
+					<SwitchRow
 						label={t('settings.lobbysettings.nos_neutral_killer_haunting')}
 						disabled={disabled}
 						disabledReason={disabledReason}
@@ -156,10 +195,24 @@ const LobbySettingRows: React.FC<RowsProps> = function ({ t, mod, values, disabl
 					/>
 					<SwitchRow
 						label={t('settings.lobbysettings.nos_voice_positions')}
-						disabled={disabled}
-						disabledReason={disabledReason}
+						disabled={voiceSettingDisabled}
+						disabledReason={voiceSettingDisabledReason}
 						checked={values.nosVoicePositions === true}
 						onChange={(checked) => update({ nosVoicePositions: checked })}
+					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_size_voice_effect')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosSizeVoiceEffect !== false}
+						onChange={(checked) => update({ nosSizeVoiceEffect: checked })}
+					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_fixer_jamming_voice_block')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosFixerJammingVoiceBlock !== false}
+						onChange={(checked) => update({ nosFixerJammingVoiceBlock: checked })}
 					/>
 				</SettingsSection>
 			)}
@@ -224,6 +277,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 	canEditMine,
 	editDisabledReason,
 	update,
+	onRadioOnlyModeChange,
 	confirm,
 }) {
 	const lobbyCode = gameState?.lobbyCode;
@@ -284,6 +338,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 							values={activeLobbySettings}
 							disabled
 							update={noop}
+							onRadioOnlyModeChange={noop}
 							confirm={confirm}
 						/>
 					</>
@@ -303,6 +358,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 						disabled={!canEditMine}
 						disabledReason={editDisabledReason}
 						update={update}
+						onRadioOnlyModeChange={onRadioOnlyModeChange}
 						confirm={confirm}
 					/>
 				</>

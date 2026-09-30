@@ -5,13 +5,18 @@ import { ConnectionQuality, qualityBars } from '../voice/connectionQuality';
 export default function ConnectionIndicator({
 	quality,
 	connected,
+	edgeInset = -2,
 }: {
 	quality?: ConnectionQuality;
 	connected: boolean;
+	edgeInset?: number;
 }) {
 	const bars = connected ? qualityBars(quality) : 0;
 	const status = !connected ? '未接続' : bars === 0 ? '未計測' : ['', '不安定', '普通', '良好'][bars];
-	const ping = connected && (quality?.serverPingMs ?? quality?.rttMs) != null ? `${Math.round(quality?.serverPingMs ?? quality?.rttMs ?? 0)} ms` : '—';
+	const ping =
+		connected && (quality?.serverPingMs ?? quality?.rttMs) != null
+			? `${Math.round(quality?.serverPingMs ?? quality?.rttMs ?? 0)} ms`
+			: '—';
 	const label = `音声接続：${status}／ボイスサーバーとのping：${ping}`;
 	return (
 		<Tooltip
@@ -32,8 +37,8 @@ export default function ConnectionIndicator({
 				aria-label={label}
 				sx={{
 					position: 'absolute',
-					right: -2,
-					bottom: -2,
+					right: edgeInset,
+					bottom: edgeInset,
 					zIndex: 11,
 					display: 'flex',
 					alignItems: 'flex-end',

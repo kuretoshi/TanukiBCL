@@ -154,6 +154,12 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 					onChange={(checked) => setSettings('echoCancellation', checked)}
 				/>
 				<SwitchRow
+					label={t('settings.beta.autoGainControl')}
+					description={t('settings.beta.autoGainControl_warning')}
+					checked={settings.autoGainControl}
+					onChange={(checked) => setSettings('autoGainControl', checked)}
+				/>
+				<SwitchRow
 					label={t('settings.beta.spatial_audio')}
 					checked={settings.enableSpatialAudio}
 					onChange={(checked) => setSettings('enableSpatialAudio', checked)}

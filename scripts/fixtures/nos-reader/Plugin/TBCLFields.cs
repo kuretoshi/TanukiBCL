@@ -7,23 +7,42 @@ public static unsafe class TBCLFields
     public static bool RequireUpdate;
     public static Snapshot* Latest;
     static TBCLFields() { RequireUpdate = false; Latest = null; }
-    public struct Snapshot { public float LocalMicPositionX, LocalMicPositionY; public int PlayersLength; public PlayerData* Players; }
+    public struct Snapshot {
+        public float LocalMicPositionX, LocalMicPositionY;
+        public int PlayersLength;
+        public PlayerData* Players;
+        public int RadiosLength;
+        public RadioData* Radios;
+    }
     public struct PlayerData {
         public byte PlayerId;
-        public bool IsKiller, IsImpostor, IsCrewmate, IsNeutral, IsImpostorlike;
+        public bool IsKiller, IsImpostor, IsCrewmate, IsNeutral, IsImpostorlike, IsJammed;
         public float SpeakerPositionX, SpeakerPositionY;
+        public float BodyRateX, BodyRateY;
         public byte NameLength;
         public fixed char Name[32];
         public float ColorR, ColorG, ColorB;
     }
-    public static void Initialize() { _ = typeof(Snapshot).TypeHandle; _ = typeof(PlayerData).TypeHandle; }
+    public enum RadioKind { Unknown, Impostor, Jackal }
+    public struct RadioData {
+        public RadioKind Kind;
+        public int HearableMask;
+        public byte NameLength;
+        public fixed char Name[32];
+    }
+    public static void Initialize() { _ = typeof(Snapshot).TypeHandle; _ = typeof(PlayerData).TypeHandle; _ = typeof(RadioData).TypeHandle; }
     public static void Publish(bool neutral = true, bool empty = false) {
         var player = (PlayerData*)Marshal.AllocHGlobal(sizeof(PlayerData));
-        *player = new PlayerData { PlayerId = 3, IsNeutral = neutral, IsImpostor = !neutral, IsKiller = true,
-            SpeakerPositionX = 2.5f, SpeakerPositionY = -1.25f, ColorR = .25f, ColorG = .5f, ColorB = .75f, NameLength = 3 };
+        *player = new PlayerData { PlayerId = 3, IsNeutral = neutral, IsImpostor = !neutral, IsKiller = true, IsJammed = neutral,
+            SpeakerPositionX = 2.5f, SpeakerPositionY = -1.25f, BodyRateX = 1.25f, BodyRateY = .75f,
+            ColorR = .25f, ColorG = .5f, ColorB = .75f, NameLength = 3 };
         var name = "テスト"; for (int i = 0; i < name.Length; i++) player->Name[i] = name[i];
         var snapshot = (Snapshot*)Marshal.AllocHGlobal(sizeof(Snapshot));
-        *snapshot = new Snapshot { LocalMicPositionX = 1f, LocalMicPositionY = -1f, PlayersLength = empty ? 0 : 1, Players = player };
+        var radio = (RadioData*)Marshal.AllocHGlobal(sizeof(RadioData));
+        *radio = new RadioData { Kind = RadioKind.Jackal, HearableMask = 0xB, NameLength = 6 };
+        var radioName = "Jackal"; for (int i = 0; i < radioName.Length; i++) radio->Name[i] = radioName[i];
+        *snapshot = new Snapshot { LocalMicPositionX = 1f, LocalMicPositionY = -1f,
+            PlayersLength = empty ? 0 : 1, Players = player, RadiosLength = 1, Radios = radio };
         Latest = snapshot;
     }
 }

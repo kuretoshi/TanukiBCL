@@ -6,10 +6,13 @@ export interface VoiceEffectNodes {
 
 export interface VoiceDisguiseEffect {
 	jumbo?: boolean;
+	squashing?: boolean;
+	directPitch?: boolean;
 	input: GainNode;
 	output: GainNode;
 	dryGain: GainNode;
 	filter: BiquadFilterNode;
+	toneFilter: BiquadFilterNode;
 	pitchDelayA: DelayNode;
 	pitchDelayB: DelayNode;
 	pitchDownDelayA: DelayNode;
@@ -96,6 +99,10 @@ export function createVoiceDisguiseEffect(
 	const output = context.createGain();
 	const dryGain = context.createGain();
 	const filter = context.createBiquadFilter();
+	const toneFilter = context.createBiquadFilter();
+	toneFilter.type = 'lowshelf';
+	toneFilter.frequency.value = 400;
+	toneFilter.gain.value = 0;
 	const pitchDelayA = context.createDelay(0.12);
 	const pitchDelayB = context.createDelay(0.12);
 	const pitchDownDelayA = context.createDelay(0.12);
@@ -135,7 +142,7 @@ export function createVoiceDisguiseEffect(
 	fadeDownModB.connect(pitchDownGainB.gain);
 
 	input.connect(dryGain);
-	dryGain.connect(output);
+	dryGain.connect(toneFilter);
 	input.connect(filter);
 	filter.connect(pitchDelayA);
 	filter.connect(pitchDelayB);
@@ -157,16 +164,18 @@ export function createVoiceDisguiseEffect(
 		reverb = context.createConvolver();
 		reverb.buffer = reverbBuffer;
 		wetGain.connect(reverb);
-		reverb.connect(output);
+		reverb.connect(toneFilter);
 	} else {
-		wetGain.connect(output);
+		wetGain.connect(toneFilter);
 	}
+	toneFilter.connect(output);
 
 	const effect = {
 		input,
 		output,
 		dryGain,
 		filter,
+		toneFilter,
 		pitchDelayA,
 		pitchDelayB,
 		pitchDownDelayA,
@@ -197,9 +206,53 @@ export function updateVoiceDisguiseEffect(
 	strength: number,
 	direction: PitchShiftDirection = 'up',
 	formantScale = 1,
-	jumbo = false
+	jumbo = false,
+	squash = 0,
+	toneRate = 1,
+	directPitch = false
 ) {
 	const normalizedStrength = clampStrength(strength) / 100;
+	const safeToneRate = Number.isFinite(toneRate) && toneRate > 0 ? toneRate : 1;
+	effect.toneFilter.gain.value = Math.min(6, Math.max(-6, (Math.log(safeToneRate) / Math.log(5)) * 6));
+	if (squash > 0) {
+		const progress = Math.min(1, Math.max(0, squash));
+		const now = effect.input.context.currentTime;
+		effect.jumbo = false;
+		effect.squashing = true;
+		if (effect.directPitch) {
+			for (const source of [effect.delayModA, effect.delayModB, effect.fadeModA, effect.fadeModB]) {
+				source.playbackRate.cancelScheduledValues(now);
+				source.playbackRate.value = 1;
+			}
+		}
+		effect.directPitch = false;
+		for (const param of [effect.filter.frequency, effect.dryGain.gain, effect.wetGain.gain, effect.output.gain])
+			param.cancelScheduledValues(now);
+		effect.filter.type = 'lowpass';
+		effect.filter.frequency.setTargetAtTime(6000 - progress * 5200, now, 0.04);
+		effect.filter.Q.value = Math.SQRT1_2;
+		effect.dryGain.gain.setTargetAtTime(1 - progress, now, 0.04);
+		effect.wetGain.gain.setTargetAtTime(progress * 0.45, now, 0.04);
+		effect.pitchUpWetGain.gain.value = 1;
+		effect.pitchDownWetGain.gain.value = 0;
+		effect.output.gain.setTargetAtTime(1 - progress * 0.75, now, 0.04);
+		return;
+	}
+	if (effect.squashing) {
+		const now = effect.input.context.currentTime;
+		for (const param of [effect.filter.frequency, effect.dryGain.gain, effect.wetGain.gain, effect.output.gain])
+			param.cancelScheduledValues(now);
+	}
+	effect.squashing = false;
+	effect.output.gain.value = 1;
+	if (effect.directPitch && !directPitch) {
+		const now = effect.input.context.currentTime;
+		for (const source of [effect.delayModA, effect.delayModB, effect.fadeModA, effect.fadeModB]) {
+			source.playbackRate.cancelScheduledValues(now);
+			source.playbackRate.value = 1;
+		}
+	}
+	effect.directPitch = directPitch;
 	if (jumbo) {
 		// Delay slope sets pitch: 1.0 at zero growth, down to 0.4 at maximum size.
 		// Keep both windows phase locked while smoothing changes in the growth value.
@@ -223,6 +276,21 @@ export function updateVoiceDisguiseEffect(
 	}
 	if (effect.jumbo) effect.filter.frequency.cancelScheduledValues(effect.input.context.currentTime);
 	effect.jumbo = false;
+	if (directPitch) {
+		const now = effect.input.context.currentTime;
+		for (const source of [effect.delayModA, effect.delayModB, effect.fadeModA, effect.fadeModB]) {
+			source.playbackRate.cancelScheduledValues(now);
+			source.playbackRate.value = normalizedStrength;
+		}
+		effect.filter.type = 'lowpass';
+		effect.filter.frequency.value = 12000;
+		effect.filter.Q.value = Math.SQRT1_2;
+		effect.dryGain.gain.value = normalizedStrength === 0 ? 1 : 0;
+		effect.wetGain.gain.value = normalizedStrength === 0 ? 0 : 1;
+		effect.pitchUpWetGain.gain.value = 1;
+		effect.pitchDownWetGain.gain.value = 0;
+		return;
+	}
 
 	configureVoiceEffectFilter(effect.filter, strength, formantScale);
 	effect.dryGain.gain.value = 1 - normalizedStrength * 0.95;
@@ -251,6 +319,7 @@ export function disconnectVoiceDisguiseEffect(effect: VoiceDisguiseEffect) {
 	effect.input.disconnect();
 	effect.dryGain.disconnect();
 	effect.filter.disconnect();
+	effect.toneFilter.disconnect();
 	effect.pitchDelayA.disconnect();
 	effect.pitchDelayB.disconnect();
 	effect.pitchDownDelayA.disconnect();

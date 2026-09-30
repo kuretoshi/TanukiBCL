@@ -1,4 +1,4 @@
-import { AmongUsState } from '../../common/AmongUsState';
+import { AmongUsState, GameState } from '../../common/AmongUsState';
 import {
 	IpcHandlerMessages,
 	IpcOverlayMessages,
@@ -41,7 +41,26 @@ function update(partial: Partial<GameStoreSnapshot>): void {
 }
 
 function onGameOpened(_: unknown, isOpen: boolean): void {
-	update({ gameOpen: isOpen });
+	if (isOpen) {
+		update({ gameOpen: true });
+		return;
+	}
+
+	update({
+		gameOpen: false,
+		gameState: {
+			...snapshot.gameState,
+			gameState: GameState.MENU,
+			oldGameState: GameState.UNKNOWN,
+			lobbyCode: 'MENU',
+			lobbyCodeInt: -1,
+			players: [],
+			isHost: false,
+			clientId: 0,
+			hostId: 0,
+			mod: 'NONE',
+		},
+	});
 }
 
 function onGameStateChanged(_: unknown, newState: AmongUsState): void {

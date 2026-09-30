@@ -81,7 +81,7 @@ const AudioSection: React.FC<AudioSectionProps> = function ({
 								onChange={(value) => setSettings('microphone', value)}
 								onOpen={refreshDevices}
 							/>
-							<MicrophoneSoundBar microphone={settings.microphone} />
+							<MicrophoneSoundBar microphone={settings.microphone} autoGainControl={settings.autoGainControl} />
 						</Stack>
 					}
 				/>

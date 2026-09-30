@@ -11,8 +11,10 @@ internal static class Program
     const string TbclTypeName = "Nebula.Collab.TBCLFields";
     const string SnapshotTypeName = "Nebula.Collab.TBCLFields+Snapshot";
     const string PlayerDataTypeName = "Nebula.Collab.TBCLFields+PlayerData";
+    const string RadioDataTypeName = "Nebula.Collab.TBCLFields+RadioData";
     const int ExpectedSchemaVersion = 20260918;
     const int PlayersCapacity = 24;
+    const int RadiosCapacity = 8;
     const int NameCapacity = 32;
 
     static readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions
@@ -183,13 +185,21 @@ internal static class Program
 
         ClrType snapshot = ResolveNestedType(module, SnapshotTypeName, "Snapshot");
         ClrType playerData = ResolveNestedType(module, PlayerDataTypeName, "PlayerData");
+        ClrType? radioData = TryResolveNestedType(module, RadioDataTypeName);
+
+        ClrInstanceField? radiosLength = snapshot.GetFieldByName("RadiosLength");
+        ClrInstanceField? radios = snapshot.GetFieldByName("Radios");
+        if ((radiosLength is null) != (radios is null) || (radiosLength is not null && radioData is null))
+            throw new InvalidOperationException("Incomplete NoS radio snapshot layout");
 
         var snapshotLayout = new SnapshotLayout
         {
             LocalMicPositionX = RequiredField(snapshot, "LocalMicPositionX").Offset,
             LocalMicPositionY = RequiredField(snapshot, "LocalMicPositionY").Offset,
             PlayersLength = RequiredField(snapshot, "PlayersLength").Offset,
-            Players = RequiredField(snapshot, "Players").Offset
+            Players = RequiredField(snapshot, "Players").Offset,
+            RadiosLength = radiosLength?.Offset,
+            Radios = radios?.Offset
         };
 
         var playerLayout = new PlayerDataLayout
@@ -202,18 +212,47 @@ internal static class Program
             IsImpostorlike = RequiredField(playerData, "IsImpostorlike").Offset,
             SpeakerPositionX = RequiredField(playerData, "SpeakerPositionX").Offset,
             SpeakerPositionY = RequiredField(playerData, "SpeakerPositionY").Offset,
+            BodyRateX = playerData.GetFieldByName("BodyRateX")?.Offset,
+            BodyRateY = playerData.GetFieldByName("BodyRateY")?.Offset,
+            IsJammed = playerData.GetFieldByName("IsJammed")?.Offset,
             NameLength = RequiredField(playerData, "NameLength").Offset,
             Name = RequiredField(playerData, "Name").Offset,
             ColorR = RequiredField(playerData, "ColorR").Offset,
             ColorG = RequiredField(playerData, "ColorG").Offset,
             ColorB = RequiredField(playerData, "ColorB").Offset
         };
+		if ((playerLayout.BodyRateX is null) != (playerLayout.BodyRateY is null))
+			throw new InvalidOperationException("Incomplete NoS BodyRate layout");
 
-        // ColorB is the last field and is a float.  The current PlayerData ABI has max alignment 4.
-        // Deriving size from the resolved last-field offset keeps read mode independent from ClrMD.
-        playerLayout.Size = AlignUp(checked(playerLayout.ColorB + sizeof(float)), 4);
+		playerLayout.Size = AlignUp(new[]
+		{
+			playerLayout.Name + NameCapacity * sizeof(char),
+			playerLayout.ColorB + sizeof(float),
+			(playerLayout.BodyRateX ?? 0) + sizeof(float),
+			(playerLayout.BodyRateY ?? 0) + sizeof(float),
+			(playerLayout.IsJammed ?? 0) + sizeof(byte)
+		}.Max(), 4);
 
-        ValidateLayout(snapshotLayout, playerLayout, target.DataReader.PointerSize);
+		RadioDataLayout? radioLayout = null;
+		if (radioData is not null)
+		{
+			radioLayout = new RadioDataLayout
+			{
+				Kind = RequiredField(radioData, "Kind").Offset,
+				HearableMask = RequiredField(radioData, "HearableMask").Offset,
+				NameLength = RequiredField(radioData, "NameLength").Offset,
+				Name = RequiredField(radioData, "Name").Offset
+			};
+			radioLayout.Size = AlignUp(new[]
+			{
+				radioLayout.Kind + sizeof(int),
+				radioLayout.HearableMask + sizeof(int),
+				radioLayout.NameLength + sizeof(byte),
+				radioLayout.Name + NameCapacity * sizeof(char)
+			}.Max(), 4);
+		}
+
+        ValidateLayout(snapshotLayout, playerLayout, radioLayout, target.DataReader.PointerSize);
         ValidateProcessUnchanged(pid, started);
 
         return new ResolvedMetadata
@@ -225,7 +264,8 @@ internal static class Program
             RequireUpdateAddress = requireUpdateAddress,
             LatestSlotAddress = latestSlotAddress,
             Snapshot = snapshotLayout,
-            PlayerData = playerLayout
+            PlayerData = playerLayout,
+            RadioData = radioLayout
         };
     }
 
@@ -234,6 +274,23 @@ internal static class Program
         using Process process = ValidateProcess(pid);
         long started = process.StartTime.ToUniversalTime().Ticks;
         ValidateMetadata(pid, started, metadata);
+
+        using SafeProcessHandle readHandle = Native.OpenProcess(
+            Native.ProcessAccess.QueryInformation |
+            Native.ProcessAccess.VmRead,
+            false,
+            pid);
+
+        if (readHandle.IsInvalid)
+            throw new InvalidOperationException($"OpenProcess for update check failed: Win32 error {Marshal.GetLastWin32Error()}");
+
+        // A different client may already have enabled publication. Read before requesting
+        // write access so a running NoS session can be observed without modifying it.
+        if (ReadBytes(readHandle, metadata.RequireUpdateAddress, 1)[0] != 0)
+        {
+            ValidateProcessUnchanged(pid, started);
+            return;
+        }
 
         using SafeProcessHandle handle = Native.OpenProcess(
             Native.ProcessAccess.QueryInformation |
@@ -246,7 +303,6 @@ internal static class Program
             throw new InvalidOperationException($"OpenProcess for update enable failed: Win32 error {Marshal.GetLastWin32Error()}");
 
         // TBCLFields treats RequireUpdate as a persistent enable flag.
-        // Set it once for this Among Us process lifetime; read mode never touches it.
         WriteByte(handle, metadata.RequireUpdateAddress, 1);
         ValidateProcessUnchanged(pid, started);
     }
@@ -292,6 +348,31 @@ internal static class Program
             ? Array.Empty<byte>()
             : ReadBytes(handle, playersAddress, byteCount);
 
+		int radioLength = metadata.Snapshot.RadiosLength is int radioLengthOffset
+			? ReadInt32(handle, checked(snapshotAddress + (ulong)radioLengthOffset))
+			: 0;
+		ulong radiosAddress = metadata.Snapshot.Radios is int radiosOffset
+			? ReadPointer(handle, checked(snapshotAddress + (ulong)radiosOffset), metadata.PointerSize)
+			: 0;
+		if (radioLength < 0 || radioLength > RadiosCapacity || (radioLength > 0 && radiosAddress == 0))
+			throw new InvalidOperationException($"Unexpected RadiosLength or Radios pointer: {radioLength}");
+		var radios = new List<object>(radioLength);
+		if (radioLength > 0 && metadata.RadioData is RadioDataLayout radioLayout)
+		{
+			byte[] radioPayload = ReadBytes(handle, radiosAddress, checked(radioLength * radioLayout.Size));
+			for (int i = 0; i < radioLength; i++)
+			{
+				int start = i * radioLayout.Size;
+				int nameLength = Math.Min((int)radioPayload[start + radioLayout.NameLength], NameCapacity);
+				radios.Add(new
+				{
+					kind = BitConverter.ToInt32(radioPayload, start + radioLayout.Kind),
+					hearableMask = BitConverter.ToInt32(radioPayload, start + radioLayout.HearableMask),
+					name = Encoding.Unicode.GetString(radioPayload, start + radioLayout.Name, nameLength * sizeof(char))
+				});
+			}
+		}
+
         var players = new List<object>(length);
         for (int i = 0; i < length; i++)
             players.Add(ParsePlayer(payload, i * metadata.PlayerData.Size, metadata.PlayerData));
@@ -307,7 +388,8 @@ internal static class Program
             snapshotAddress = Hex(snapshotAddress),
             playersAddress = Hex(playersAddress),
             localMicPosition = new { x = localX, y = localY },
-            players
+            players,
+			radios
         };
     }
 
@@ -335,6 +417,7 @@ internal static class Program
             isCrewmate = Bool(layout.IsCrewmate),
             isNeutral = Bool(layout.IsNeutral),
             isImpostorlike = Bool(layout.IsImpostorlike),
+			isJammed = layout.IsJammed is int offset ? Bool(offset) : (bool?)null,
             speakerPositionX = F32(layout.SpeakerPositionX),
             speakerPositionY = F32(layout.SpeakerPositionY),
             name,
@@ -355,10 +438,10 @@ internal static class Program
         if (metadata.SchemaVersion != ExpectedSchemaVersion)
             throw new InvalidOperationException($"Unsupported TBCL schema version {metadata.SchemaVersion}");
 
-        ValidateLayout(metadata.Snapshot, metadata.PlayerData, metadata.PointerSize);
+        ValidateLayout(metadata.Snapshot, metadata.PlayerData, metadata.RadioData, metadata.PointerSize);
     }
 
-    static void ValidateLayout(SnapshotLayout snapshot, PlayerDataLayout player, int pointerSize)
+    static void ValidateLayout(SnapshotLayout snapshot, PlayerDataLayout player, RadioDataLayout? radio, int pointerSize)
     {
         int[] snapshotOffsets =
         [
@@ -384,6 +467,12 @@ internal static class Program
             throw new InvalidOperationException("Resolved Name[32] does not fit inside PlayerData");
         if (snapshot.Players % pointerSize != 0)
             throw new InvalidOperationException("Snapshot.Players is unexpectedly unaligned");
+		if ((snapshot.RadiosLength is null) != (snapshot.Radios is null) || (snapshot.Radios is not null) != (radio is not null))
+			throw new InvalidOperationException("Invalid RadioData layout metadata");
+		if (snapshot.Radios is not null && snapshot.Radios.Value % pointerSize != 0)
+			throw new InvalidOperationException("Snapshot.Radios is unexpectedly unaligned");
+		if (radio is not null && (radio.Size <= 0 || radio.Name + NameCapacity * sizeof(char) > radio.Size))
+			throw new InvalidOperationException("Resolved RadioData does not fit its element size");
     }
 
     static ClrType ResolveNestedType(ClrModule module, string fullName, string shortName)
@@ -400,6 +489,9 @@ internal static class Program
 
         throw new InvalidOperationException($"Could not resolve nested TBCL type {shortName}");
     }
+
+	static ClrType? TryResolveNestedType(ClrModule module, string fullName) =>
+		module.GetTypeByName(fullName) ?? module.GetTypeByName(fullName.Replace('+', '.'));
 
     static Process ValidateProcess(int pid)
     {
@@ -482,6 +574,7 @@ internal static class Program
         public ulong LatestSlotAddress { get; set; }
         public SnapshotLayout Snapshot { get; set; } = new();
         public PlayerDataLayout PlayerData { get; set; } = new();
+		public RadioDataLayout? RadioData { get; set; }
     }
 
     sealed class SnapshotLayout
@@ -490,6 +583,8 @@ internal static class Program
         public int LocalMicPositionY { get; set; }
         public int PlayersLength { get; set; }
         public int Players { get; set; }
+		public int? RadiosLength { get; set; }
+		public int? Radios { get; set; }
     }
 
     sealed class PlayerDataLayout
@@ -503,12 +598,24 @@ internal static class Program
         public int IsImpostorlike { get; set; }
         public int SpeakerPositionX { get; set; }
         public int SpeakerPositionY { get; set; }
+		public int? BodyRateX { get; set; }
+		public int? BodyRateY { get; set; }
+        public int? IsJammed { get; set; }
         public int NameLength { get; set; }
         public int Name { get; set; }
         public int ColorR { get; set; }
         public int ColorG { get; set; }
         public int ColorB { get; set; }
     }
+
+	sealed class RadioDataLayout
+	{
+		public int Size { get; set; }
+		public int Kind { get; set; }
+		public int HearableMask { get; set; }
+		public int NameLength { get; set; }
+		public int Name { get; set; }
+	}
 
     static class Native
     {

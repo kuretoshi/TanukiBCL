@@ -6,6 +6,7 @@ import { useTheme } from '@mui/material/styles';
 
 interface TestMicProps {
 	microphone: string;
+	autoGainControl: boolean;
 }
 
 // Legacy Chrome-only getUserMedia constraints, not part of the standard MediaTrackConstraints lib types.
@@ -37,7 +38,7 @@ const useStyles = () => {
 	};
 };
 
-const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone }: TestMicProps) {
+const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, autoGainControl }: TestMicProps) {
 	const classes = useStyles();
 	const [error, setError] = useState<boolean>(false);
 	const [rms, setRms] = useState<number>(0);
@@ -70,11 +71,12 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone }: T
 
 		const audio_options: LegacyAudioConstraints = {
 			deviceId: microphone ?? 'default',
-			autoGainControl: false,
+			autoGainControl,
+			channelCount: 1,
 			echoCancellation: false,
 			noiseSuppression: false,
 			googEchoCancellation: false,
-			googAutoGainControl2: false,
+			googAutoGainControl2: autoGainControl,
 			googNoiseSuppression: false,
 			googHighpassFilter: false,
 			googTypingNoiseDetection: false,
@@ -104,7 +106,7 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone }: T
 			stream?.getTracks().forEach((track) => track.stop());
 			ctx.close();
 		};
-	}, [microphone]);
+	}, [microphone, autoGainControl]);
 
 	if (error) {
 		return <Typography color="error">Could not connect to microphone</Typography>;

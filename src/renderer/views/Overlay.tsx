@@ -9,6 +9,7 @@ import Avatar from '../components/Avatar';
 import { ISettings } from '../../common/ISettings';
 import { DEFAULT_PLAYERCOLORS } from '../../common/playerColors';
 import { nosColorHex } from '../../common/NosSnapshot';
+import { modList } from '../../common/Mods';
 
 interface UseStylesProps {
 	height: number;
@@ -140,6 +141,16 @@ const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 	mod,
 }: OverlayWatermarkProps) => {
 	const isNoS = mod === 'NoS';
+	const modName =
+		mod === 'NONE'
+			? ''
+			: mod === 'SUPER_NEW_ROLES'
+				? 'SuperNewRoles'
+				: mod === 'TOH4E'
+					? 'TOH4E'
+					: mod === 'NoS'
+						? 'NoS'
+						: (modList.find((candidate) => candidate.id === mod)?.label ?? mod);
 
 	return (
 		<div
@@ -147,7 +158,10 @@ const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 				inGame ? ' tanuki-overlay-watermark_game' : ''
 			}${isNoS ? ' tanuki-overlay-watermark_nos' : ''}`}
 		>
-			<div>TanukiBCL v{overlayVersion}</div>
+			<div>
+				TanukiBCL v{overlayVersion}
+				{modName && ` [${modName}]`}
+			</div>
 			<div>{serverURL}</div>
 		</div>
 	);
@@ -248,7 +262,10 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 						connectionState={'connected'}
 						talking={talking}
 						borderColor={player.isLocal && vadHidden ? 'gray' : '#2ecc71'}
-						isUsingRadio={voiceState.impostorRadioClientId == player.clientId}
+						isUsingRadio={
+							voiceState.impostorRadioClientIds?.includes(player.clientId) ??
+							voiceState.impostorRadioClientId == player.clientId
+						}
 						isAlive={!voiceState.otherDead[player.clientId] || (player.isLocal && !player.isDead)}
 						size={100}
 						lookLeft={!(positionParse === 'left' || positionParse === 'bottom_left')}

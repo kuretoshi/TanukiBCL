@@ -59,8 +59,10 @@ const useStyles = () => ({
 
 export interface CanvasProps {
 	hat: string;
+	hat2: string;
 	skin: string;
 	visor: string;
+	visor2: string;
 	isAlive: boolean;
 	lookLeft: boolean;
 	size: number;
@@ -205,9 +207,17 @@ const Avatar: React.FC<AvatarProps> = function ({
 			: hasDisplayOutfit && player.appearanceColorId >= 0
 				? player.appearanceColorId
 				: player.colorId;
-	const displayHat = normalizeHatId(hasDisplayOutfit ? player.appearanceHatId : player.hatId);
-	const displaySkin = normalizeSkinId(hasDisplayOutfit ? player.appearanceSkinId : player.skinId);
-	const displayVisor = normalizeVisorId(hasDisplayOutfit ? player.appearanceVisorId : player.visorId);
+	const displayHat = normalizeHatId(
+		hasDisplayOutfit || player.appearanceHatId.startsWith('Modded_') ? player.appearanceHatId : player.hatId
+	);
+	const displaySkin = normalizeSkinId(
+		hasDisplayOutfit || player.appearanceSkinId.startsWith('Modded_') ? player.appearanceSkinId : player.skinId
+	);
+	const displayVisor = normalizeVisorId(
+		hasDisplayOutfit || player.appearanceVisorId.startsWith('Modded_') ? player.appearanceVisorId : player.visorId
+	);
+	const displayHat2 = normalizeHatId(player.snrHat2Id);
+	const displayVisor2 = normalizeVisorId(player.snrVisor2Id);
 	const displayName = player.appearanceName || player.name;
 	const simpleAvatar = isLiteRuntime();
 	const hideAvatar = hideWhenAppearanceChanged === true && hasVisibleAppearanceChanged(player);
@@ -230,6 +240,8 @@ const Avatar: React.FC<AvatarProps> = function ({
 			nosColor={mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined}
 			hat={showHat === false ? '' : displayHat}
 			visor={showHat === false ? '' : displayVisor}
+			hat2={showHat === false ? '' : displayHat2}
+			visor2={showHat === false ? '' : displayVisor2}
 			skin={displaySkin}
 			isAlive={isAlive}
 			lookLeft={lookLeft === true}
@@ -269,7 +281,11 @@ interface UseCanvasStylesParams {
 	isAlive: boolean;
 	dementions: {
 		hat: HatDementions;
+		hatBack: HatDementions;
+		hat2: HatDementions;
+		hat2Back: HatDementions;
 		visor: HatDementions;
+		visor2: HatDementions;
 		skin: HatDementions;
 	};
 	lookLeft: boolean;
@@ -283,7 +299,7 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 		position: 'absolute',
 		top: '22%',
 		left: props.paddingLeft,
-		zIndex: 2,
+		zIndex: 6,
 	},
 	hat: {
 		pointerEvents: 'none',
@@ -291,7 +307,34 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 		position: 'absolute',
 		top: `calc(22% + ${props.dementions.hat.top})`,
 		left: `calc(${props.dementions.hat.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
+		zIndex: 30,
+		display: props.isAlive ? 'block' : 'none',
+	},
+	hat2: {
+		pointerEvents: 'none',
+		width: props.dementions.hat2.width,
+		position: 'absolute',
+		top: `calc(22% + ${props.dementions.hat2.top})`,
+		left: `calc(${props.dementions.hat2.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
+		zIndex: 10,
+		display: props.isAlive ? 'block' : 'none',
+	},
+	hatBack: {
+		pointerEvents: 'none',
+		width: props.dementions.hatBack.width,
+		position: 'absolute',
+		top: `calc(22% + ${props.dementions.hatBack.top})`,
+		left: `calc(${props.dementions.hatBack.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
 		zIndex: 4,
+		display: props.isAlive ? 'block' : 'none',
+	},
+	hat2Back: {
+		pointerEvents: 'none',
+		width: props.dementions.hat2Back.width,
+		position: 'absolute',
+		top: `calc(22% + ${props.dementions.hat2Back.top})`,
+		left: `calc(${props.dementions.hat2Back.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
+		zIndex: 5,
 		display: props.isAlive ? 'block' : 'none',
 	},
 	skin: {
@@ -300,7 +343,7 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 		position: 'absolute',
 		top: `calc(22% + ${props.dementions.skin.top})`,
 		left: `calc(${props.dementions.skin.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
-		zIndex: 3,
+		zIndex: 7,
 		display: props.isAlive ? 'block' : 'none',
 	},
 	visor: {
@@ -309,7 +352,16 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 		position: 'absolute',
 		top: `calc(22% + ${props.dementions.visor.top})`,
 		left: `calc(${props.dementions.visor.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
-		zIndex: 3,
+		zIndex: 40,
+		display: props.isAlive ? 'block' : 'none',
+	},
+	visor2: {
+		pointerEvents: 'none',
+		width: props.dementions.visor2.width,
+		position: 'absolute',
+		top: `calc(22% + ${props.dementions.visor2.top})`,
+		left: `calc(${props.dementions.visor2.left} + ${Math.max(2, props.size / 40) / 2 + props.paddingLeft}px)`,
+		zIndex: 20,
 		display: props.isAlive ? 'block' : 'none',
 	},
 	avatar: {
@@ -339,8 +391,10 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 
 const Canvas = React.memo(function Canvas({
 	hat,
+	hat2,
 	skin,
 	visor,
+	visor2,
 	isAlive,
 	lookLeft,
 	size,
@@ -359,15 +413,22 @@ const Canvas = React.memo(function Canvas({
 			base: getCosmetic(color, isAlive, cosmeticType.base),
 			hat_front: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod),
 			hat_back: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod),
-			skin: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, skin, mod),
-			visor: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, visor, mod),
+			skin: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod),
+			visor: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod),
+			hat2_front: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat2, mod),
+			hat2_back: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat2, mod),
+			visor2: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor2, mod),
 			dementions: {
-				hat: getHatDementions(hat, mod),
-				visor: getHatDementions(visor, mod),
-				skin: getHatDementions(skin, mod),
+				hat: getHatDementions(hat, mod, cosmeticType.hat),
+				hatBack: getHatDementions(hat, mod, cosmeticType.hat_back),
+				hat2: getHatDementions(hat2, mod, cosmeticType.hat),
+				hat2Back: getHatDementions(hat2, mod, cosmeticType.hat_back),
+				visor: getHatDementions(visor, mod, cosmeticType.visor),
+				visor2: getHatDementions(visor2, mod, cosmeticType.visor),
+				skin: getHatDementions(skin, mod, cosmeticType.skin),
 			},
 		};
-	}, [color, hat, skin, visor, hatsLoaded, isAlive, mod]);
+	}, [color, hat, hat2, skin, visor, visor2, hatsLoaded, isAlive, mod]);
 
 	const classes = useCanvasStyles({
 		isAlive,
@@ -387,17 +448,62 @@ const Canvas = React.memo(function Canvas({
 
 	const hatElement = (
 		<>
-			{hatImg.hat_front && (
-				<Box component="img" src={hatImg.hat_front} sx={classes.hat} onError={onerror} onLoad={onload} />
+			{hatImg.hat2_back && (
+				<Box
+					component="img"
+					src={hatImg.hat2_back}
+					sx={classes.hat2Back}
+					style={{ zIndex: 5 }}
+					onError={onerror}
+					onLoad={onload}
+				/>
 			)}
-			{hatImg.visor && <Box component="img" src={hatImg.visor} sx={classes.visor} onError={onerror} onLoad={onload} />}
-
 			{hatImg.hat_back && (
 				<Box
 					component="img"
 					src={hatImg.hat_back}
+					sx={classes.hatBack}
+					style={{ zIndex: 4 }}
+					onError={onerror}
+					onLoad={onload}
+				/>
+			)}
+			{hatImg.hat2_front && (
+				<Box
+					component="img"
+					src={hatImg.hat2_front}
+					sx={classes.hat2}
+					style={{ zIndex: 10 }}
+					onError={onerror}
+					onLoad={onload}
+				/>
+			)}
+			{hatImg.visor2 && (
+				<Box
+					component="img"
+					src={hatImg.visor2}
+					sx={classes.visor2}
+					style={{ zIndex: 20 }}
+					onError={onerror}
+					onLoad={onload}
+				/>
+			)}
+			{hatImg.hat_front && (
+				<Box
+					component="img"
+					src={hatImg.hat_front}
 					sx={classes.hat}
-					style={{ zIndex: 1 }}
+					style={{ zIndex: 30 }}
+					onError={onerror}
+					onLoad={onload}
+				/>
+			)}
+			{hatImg.visor && (
+				<Box
+					component="img"
+					src={hatImg.visor}
+					sx={classes.visor}
+					style={{ zIndex: 40 }}
 					onError={onerror}
 					onLoad={onload}
 				/>

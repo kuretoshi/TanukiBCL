@@ -8,7 +8,7 @@ import { TypedEmitter } from '../lib/TypedEmitter';
 import VAD, { VADOptions } from '../lib/vad';
 import SettingsStore from '../settings/SettingsStore';
 import { calculateVoiceAudio } from './spatialAudio';
-import { ExtendedAudioElement, PeerAudioNodes } from './types';
+import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { selectVoiceEffect } from './voiceEffectRules';
 import { createVoiceDisguiseEffect, updateVoiceDisguiseEffect, disconnectVoiceDisguiseEffect } from '../voiceEffect';
 
@@ -51,6 +51,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private pushToTalkMode: number = pushToTalkOptions.VOICE;
 	private mutedState = false;
 	private deafenedState = false;
+	private jammedState = false;
 	private maxDistance = 2;
 	private lastGameState?: AmongUsState;
 	private airshipSpawnUntil = 0;
@@ -134,13 +135,14 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const constraints = {
 			deviceId: undefined as unknown as string,
-			autoGainControl: false,
-			channelCount: 2,
+			autoGainControl: settings.autoGainControl,
+			channelCount: 1,
 			echoCancellation: settings.echoCancellation,
 			latency: 0,
 			noiseSuppression: settings.noiseSuppression, // @ts-ignore-line
 			googNoiseSuppression: settings.noiseSuppression, // @ts-ignore-line
 			googEchoCancellation: settings.echoCancellation, // @ts-ignore-line
+			googAutoGainControl: settings.autoGainControl, // @ts-ignore-line
 			googTypingNoiseDetection: settings.noiseSuppression, // @ts-ignore-line
 			sampleRate: settings.oldSampleDebug ? 48000 : undefined,
 		};
@@ -239,6 +241,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		this.mutedState = false;
 		this.deafenedState = false;
+		this.jammedState = false;
 		this.removeAllListeners();
 	}
 
@@ -325,7 +328,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		add(IpcRendererMessages.TOGGLE_MUTE, () => this.toggleMute());
 		add(IpcRendererMessages.PUSH_TO_TALK, (_: unknown, pressing: boolean) => {
 			if (this.pushToTalkMode === pushToTalkOptions.VOICE) return;
-			if (this.deafenedState || this.mutedState) return;
+			if (this.deafenedState || this.mutedState || this.jammedState) return;
 			const track = this.inputStream?.getAudioTracks()[0];
 			if (!track) return;
 			track.enabled = this.pushToTalkMode === pushToTalkOptions.PUSH_TO_TALK ? pressing : !pressing;
@@ -342,7 +345,19 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private applyTrackEnabled(): void {
 		const track = this.inputStream?.getAudioTracks()[0];
 		if (!track) return;
-		track.enabled = !this.deafenedState && !this.mutedState && this.pushToTalkMode !== pushToTalkOptions.PUSH_TO_TALK;
+		track.enabled =
+			!this.deafenedState &&
+			!this.mutedState &&
+			!this.jammedState &&
+			this.pushToTalkMode !== pushToTalkOptions.PUSH_TO_TALK;
+		const outboundTrack = this.stream?.getAudioTracks()[0];
+		if (outboundTrack && outboundTrack !== track) outboundTrack.enabled = !this.jammedState;
+	}
+
+	setJammed(jammed: boolean): void {
+		if (this.jammedState === jammed) return;
+		this.jammedState = jammed;
+		this.applyTrackEnabled();
 	}
 
 	setPushToTalkMode(mode: number): void {
@@ -422,6 +437,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const reverb = context.createConvolver();
 		reverb.buffer = this.convolverBuffer;
+		const radioEcho = createRadioEcho(context);
 
 		source.connect(pan);
 		pan.connect(gain);
@@ -434,9 +450,11 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			gain,
 			pan,
 			reverb,
+			radioEcho,
 			muffle,
 			muffleConnected: false,
 			reverbConnected: false,
+			radioEchoConnected: false,
 			source,
 		});
 
@@ -455,6 +473,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		peer.gain.disconnect();
 		peer.reverb?.disconnect();
 		peer.muffle?.disconnect();
+		disconnectRadioEcho(peer.radioEcho);
 	}
 
 	private teardownAudioElement(element: HTMLAudioElement): void {
@@ -472,7 +491,15 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (!peer.voiceEffect) return;
 		disconnectVoiceDisguiseEffect(peer.voiceEffect);
 		peer.voiceEffect = undefined;
-		if (this.masterGain) rebuildEffectChain(peer, this.masterGain, peer.reverbConnected, peer.muffleConnected, false);
+		if (this.masterGain)
+			rebuildEffectChain(
+				peer,
+				this.masterGain,
+				peer.reverbConnected,
+				peer.muffleConnected,
+				peer.radioEchoConnected,
+				false
+			);
 	}
 
 	silenceAllPeers(): void {
@@ -506,7 +533,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		activeLobbySettings: ILobbySettings,
 		me: Player,
 		other: Player,
-		impostorRadioClientId: number
+		impostorRadioClientId: number,
+		impostorRadioClientIds?: readonly number[],
+		nosJackalRadioHearable = false
 	): number | null {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
@@ -514,9 +543,13 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const { pan, muffle } = peer;
 		if (this.lastGameState !== state) {
+			const previousState = this.lastGameState;
 			this.lastGameState = state;
 			if (state.map !== MapType.AIRSHIP || state.gameState !== GameState.TASKS) this.airshipSpawnUntil = 0;
-			else if (state.oldGameState === GameState.DISCUSSION || state.debug?.meetingHudState === 4)
+			else if (
+				(previousState?.gameState !== GameState.TASKS && state.oldGameState === GameState.DISCUSSION) ||
+				(previousState?.debug?.meetingHudState !== 4 && state.debug?.meetingHudState === 4)
+			)
 				this.airshipSpawnUntil = Date.now() + 15000;
 		}
 		const result = calculateVoiceAudio({
@@ -529,6 +562,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			other,
 			maxDistance: this.maxDistance,
 			impostorRadioClientId,
+			impostorRadioClientIds,
+			nosJackalRadioHearable,
 		});
 
 		if (result.panMaxDistance !== null) {
@@ -543,18 +578,36 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const wantReverb = result.reverb === null ? peer.reverbConnected : result.reverb;
 		const wantMuffle = result.muffle === null ? peer.muffleConnected : result.muffle !== false;
+		const wantRadioEcho = result.radioEcho;
 		const effect =
 			result.gain > 0
-				? selectVoiceEffect(state, settings, activeLobbySettings, me, other, impostorRadioClientId)
+				? selectVoiceEffect(
+						state,
+						settings,
+						activeLobbySettings,
+						me,
+						other,
+						impostorRadioClientId,
+						impostorRadioClientIds
+					)
 				: null;
 		if (effect && this.context) {
 			peer.voiceEffect ??= createVoiceDisguiseEffect(this.context, null, effect.strength);
-			updateVoiceDisguiseEffect(peer.voiceEffect, effect.strength, effect.direction, effect.formantScale, effect.jumbo);
+			updateVoiceDisguiseEffect(
+				peer.voiceEffect,
+				effect.strength,
+				effect.direction,
+				effect.formantScale,
+				effect.jumbo,
+				effect.squash,
+				effect.toneRate,
+				effect.directPitch
+			);
 		} else if (peer.voiceEffect) {
 			disconnectVoiceDisguiseEffect(peer.voiceEffect);
 			peer.voiceEffect = undefined;
 		}
-		rebuildEffectChain(peer, destination, wantReverb, wantMuffle, !!effect);
+		rebuildEffectChain(peer, destination, wantReverb, wantMuffle, wantRadioEcho, !!effect);
 
 		if (result.panPosition) {
 			const time = pan.context.currentTime;
@@ -572,16 +625,18 @@ function rebuildEffectChain(
 	destination: AudioNode,
 	wantReverb: boolean,
 	wantMuffle: boolean,
+	wantRadioEcho: boolean,
 	wantVoiceEffect: boolean
 ): void {
 	if (
 		peer.reverbConnected === wantReverb &&
 		peer.muffleConnected === wantMuffle &&
+		peer.radioEchoConnected === wantRadioEcho &&
 		peer.voiceEffectConnected === wantVoiceEffect
 	)
 		return;
 
-	for (const node of [peer.gain, peer.muffle, peer.reverb]) {
+	for (const node of [peer.gain, peer.muffle, peer.reverb, peer.radioEcho.output]) {
 		try {
 			node.disconnect();
 		} catch {
@@ -597,24 +652,66 @@ function rebuildEffectChain(
 	}
 	if (wantMuffle) chain.push(peer.muffle);
 	if (wantReverb) chain.push(peer.reverb);
-	chain.push(destination);
 
 	try {
 		for (let index = 0; index < chain.length - 1; index++) {
 			chain[index].connect(chain[index + 1]);
 		}
+		const chainOutput = chain[chain.length - 1];
+		if (wantRadioEcho) {
+			chainOutput.connect(peer.radioEcho.input);
+			peer.radioEcho.output.connect(destination);
+		} else {
+			chainOutput.connect(destination);
+		}
 		peer.reverbConnected = wantReverb;
 		peer.muffleConnected = wantMuffle;
+		peer.radioEchoConnected = wantRadioEcho;
 		peer.voiceEffectConnected = wantVoiceEffect;
 	} catch (error) {
 		console.warn('Failed to rebuild audio effect chain', error);
 		peer.reverbConnected = false;
 		peer.muffleConnected = false;
+		peer.radioEchoConnected = false;
 		peer.voiceEffectConnected = false;
 		try {
 			peer.gain.connect(destination);
 		} catch {
 			/* destination already gone */
+		}
+	}
+}
+
+function createRadioEcho(context: AudioContext): RadioEchoNodes {
+	const input = context.createGain();
+	const output = context.createGain();
+	const dry = context.createGain();
+	const wet = context.createGain();
+	const delay = context.createDelay(0.25);
+	const feedback = context.createGain();
+
+	dry.gain.value = 0.92;
+	wet.gain.value = 0.2;
+	delay.delayTime.value = 0.09;
+	feedback.gain.value = 0.12;
+
+	input.connect(dry);
+	dry.connect(output);
+	input.connect(delay);
+	delay.connect(wet);
+	wet.connect(output);
+	delay.connect(feedback);
+	feedback.connect(delay);
+
+	return { input, output, dry, wet, delay, feedback };
+}
+
+function disconnectRadioEcho(effect: RadioEchoNodes): void {
+	for (const node of [effect.input, effect.output, effect.dry, effect.wet, effect.delay, effect.feedback]) {
+		try {
+			node.disconnect();
+		} catch {
+			/* not connected */
 		}
 	}
 }

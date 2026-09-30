@@ -35,6 +35,30 @@ type CategoryId =
 	'general' | 'lobby' | 'players' | 'audio' | 'keybinds' | 'overlay' | 'advanced' | 'streaming' | 'update';
 
 const MY_LOBBY_COMMIT_DELAY = 750;
+const RADIO_ONLY_BACKUP_KEY = 'tanukibcl.impostorRadioOnlyBackup';
+const RADIO_ONLY_FORCED_SETTINGS: Partial<ILobbySettings> = {
+	impostorRadioOnlyMode: true,
+	impostorRadioEnabled: true,
+	meetingGhostOnly: true,
+	deadOnly: false,
+	wallsBlockAudio: false,
+	visionHearing: false,
+	voiceEffectEnabled: false,
+	hearImpostorsInVents: false,
+	impostersHearImpostersInvent: false,
+	commsSabotage: false,
+	hearThroughCameras: false,
+	snrJumboVoice: false,
+	jackalHearOutsideVents: false,
+	jackalTalkInVents: false,
+	jackalRadioEnabled: false,
+	sidekickHearOutsideVents: false,
+	sidekickTalkInVents: false,
+	nosVoicePositions: false,
+};
+const RADIO_ONLY_BACKUP_KEYS = Object.keys(RADIO_ONLY_FORCED_SETTINGS).filter(
+	(key) => key !== 'impostorRadioOnlyMode'
+) as (keyof ILobbySettings)[];
 
 export interface SettingsPanelProps {
 	t: TFunction;
@@ -62,6 +86,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 
 	const [myLobbyDraft, setMyLobbyDraft] = useState<ILobbySettings>(settings.myLobbySettings);
 	const pendingMyLobbyDraft = useRef<ILobbySettings | null>(null);
+	const radioOnlyBackup = useRef<Partial<ILobbySettings> | null>(null);
 
 	const flushMyLobbyDraft = useCallback(() => {
 		if (!pendingMyLobbyDraft.current) return;
@@ -78,6 +103,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 	const updateMyLobbySettings = useCallback((partial: Partial<ILobbySettings>) => {
 		setMyLobbyDraft((current) => {
 			const next = { ...current, ...partial };
+			pendingMyLobbyDraft.current = next;
+			return next;
+		});
+	}, []);
+
+	const changeRadioOnlyMode = useCallback((checked: boolean) => {
+		setMyLobbyDraft((current) => {
+			let next: ILobbySettings;
+			if (checked) {
+				const backup = Object.fromEntries(
+					RADIO_ONLY_BACKUP_KEYS.map((key) => [key, current[key]])
+				) as Partial<ILobbySettings>;
+				radioOnlyBackup.current = backup;
+				localStorage.setItem(RADIO_ONLY_BACKUP_KEY, JSON.stringify(backup));
+				next = { ...current, ...RADIO_ONLY_FORCED_SETTINGS };
+			} else {
+				let backup = radioOnlyBackup.current;
+				if (!backup) {
+					try {
+						backup = JSON.parse(localStorage.getItem(RADIO_ONLY_BACKUP_KEY) ?? 'null');
+					} catch {
+						backup = null;
+					}
+				}
+				next = { ...current, ...(backup ?? {}), impostorRadioOnlyMode: false };
+				radioOnlyBackup.current = null;
+				localStorage.removeItem(RADIO_ONLY_BACKUP_KEY);
+			}
 			pendingMyLobbyDraft.current = next;
 			return next;
 		});
@@ -207,6 +260,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							canEditMine={canEditMyLobbySettings}
 							editDisabledReason={t('settings.lobbysettings.inlobbyonly')}
 							update={updateMyLobbySettings}
+							onRadioOnlyModeChange={changeRadioOnlyMode}
 							confirm={confirm}
 						/>
 					)}
@@ -223,7 +277,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							confirm={confirm}
 						/>
 					)}
-					{category === 'keybinds' && <KeybindsSection t={t} settings={settings} setShortcut={setShortcut} />}
+					{category === 'keybinds' && (
+						<KeybindsSection t={t} settings={settings} mod={gameState?.mod} setShortcut={setShortcut} />
+					)}
 					{category === 'overlay' && <OverlaySection t={t} settings={settings} setSettings={setSettings} />}
 					{category === 'advanced' && (
 						<AdvancedSection t={t} settings={settings} setSettings={setSettings} confirm={confirm} />

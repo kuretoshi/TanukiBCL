@@ -10,6 +10,8 @@ export interface SnrLiveRole {
 	isNeutral?: boolean;
 	canKill?: boolean;
 	jumbo?: { currentSize: number; maxSize: number };
+	hat2Id?: string;
+	visor2Id?: string;
 }
 
 const jackalRoles = new Set(['Jackal', 'WaveCannonJackal']);
@@ -25,6 +27,10 @@ export function isSnrNeutralKiller(role?: SnrLiveRole): boolean {
 
 export function isSnrSidekick(role?: SnrLiveRole): boolean {
 	return !!role?.role.name && sidekickRoles.has(role.role.name);
+}
+
+export function isSnrJackalTeam(role?: SnrLiveRole): boolean {
+	return isSnrJackal(role) || isSnrSidekick(role);
 }
 
 export function hasSnrJumbo(role?: SnrLiveRole): boolean {

@@ -52,7 +52,7 @@ export class ConnectionQualitySampler {
 }
 
 export function qualityBars(quality?: ConnectionQuality): number {
-	if (quality?.rttMs == null) return 0;
+	if (quality?.serverPingMs == null && quality?.rttMs == null) return 0;
 	const { rttMs, jitterMs } = quality;
 	const latencyMs = quality.serverPingMs ?? rttMs;
 	// UI heuristics, not a measurement of Wi-Fi signal strength.

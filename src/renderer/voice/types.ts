@@ -3,6 +3,7 @@ import { AudioConnected, ClientBoolMap, SocketClientMap, numberStringMap } from 
 import { ILobbySettings } from '../../common/ISettings';
 import type { VoiceDisguiseEffect } from '../voiceEffect';
 import type { TohRole } from '../../common/TohRole';
+import type { NosRadioData } from '../../common/NosSnapshot';
 
 export interface ExtendedAudioElement extends HTMLAudioElement {
 	setSinkId: (sinkId: string) => Promise<void>;
@@ -16,10 +17,21 @@ export interface PeerAudioNodes {
 	gain: GainNode;
 	pan: PannerNode;
 	reverb: ConvolverNode;
+	radioEcho: RadioEchoNodes;
 	muffle: BiquadFilterNode;
 	source: MediaStreamAudioSourceNode;
 	reverbConnected: boolean;
+	radioEchoConnected: boolean;
 	muffleConnected: boolean;
+}
+
+export interface RadioEchoNodes {
+	input: GainNode;
+	output: GainNode;
+	dry: GainNode;
+	wet: GainNode;
+	delay: DelayNode;
+	feedback: GainNode;
 }
 
 export interface ClientPeerConfig {
@@ -61,10 +73,13 @@ export interface VoiceSnapshot {
 	playerSocketIds: numberStringMap;
 	audioConnected: AudioConnected;
 	connectionQuality: Record<string, ConnectionQuality | undefined>;
+	serverQuality?: ConnectionQuality;
 	impostorRadioClientId: number;
+	impostorRadioClientIds: number[];
 	activeLobbySettings: ILobbySettings | null;
 	hostId: number;
 	toh4eLobby: boolean;
 	tohRole: TohRole | null;
 	tohGameStartNames: numberStringMap;
+	nosRadiosByPlayer: Record<number, { clientId: number; radios: NosRadioData[]; receivedAt: number }>;
 }

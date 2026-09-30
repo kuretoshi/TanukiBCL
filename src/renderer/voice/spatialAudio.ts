@@ -18,6 +18,8 @@ export interface VoiceAudioInput {
 	other: Player;
 	maxDistance: number;
 	impostorRadioClientId: number;
+	impostorRadioClientIds?: readonly number[];
+	nosJackalRadioHearable?: boolean;
 	airshipSpawnFallback?: boolean;
 }
 
@@ -30,6 +32,7 @@ export interface VoiceAudioResult {
 	panMaxDistance: number | null;
 	muffle: MuffleSetting | false | null;
 	reverb: boolean | null;
+	radioEcho: boolean;
 }
 
 function distance(panPos: [number, number]): number {
@@ -51,9 +54,16 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		panMaxDistance: null,
 		muffle: null,
 		reverb: null,
+		radioEcho: false,
 	};
 
-	if (other.disconnected || other.isDummy) {
+	if (
+		other.disconnected ||
+		other.isDummy ||
+		(state.mod === 'NoS' &&
+			activeLobbySettings.nosFixerJammingVoiceBlock !== false &&
+			(me.nosPlayer?.isJammed === true || other.nosPlayer?.isJammed === true))
+	) {
 		return result;
 	}
 
@@ -68,6 +78,26 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const otherSidekick = state.mod === 'SUPER_NEW_ROLES' && isSnrSidekick(other.snrRole);
 	const meJackalTeam = meJackal || meSidekick;
 	const otherJackalTeam = otherJackal || otherSidekick;
+	const radioOnlyMode = activeLobbySettings.impostorRadioOnlyMode === true;
+	const radioEnabled = activeLobbySettings.impostorRadioEnabled || radioOnlyMode;
+	const activeRadioClientIds =
+		input.impostorRadioClientIds ?? (impostorRadioClientId >= 0 ? [impostorRadioClientId] : []);
+	const otherUsingRadio = activeRadioClientIds.includes(other.clientId);
+	const receivingImpostorRadio = !me.isDead && me.isImpostor && other.isImpostor && otherUsingRadio;
+	const ghostReceivingImpostorRadio = me.isDead && !other.isDead && other.isImpostor && otherUsingRadio && radioEnabled;
+	const receivingJackalRadio =
+		!me.isDead &&
+		meJackalTeam &&
+		otherJackalTeam &&
+		activeLobbySettings.jackalRadioEnabled === true &&
+		!radioOnlyMode &&
+		otherUsingRadio;
+	const receivingNosJackalRadio =
+		state.mod === 'NoS' &&
+		activeLobbySettings.jackalRadioEnabled === true &&
+		!radioOnlyMode &&
+		otherUsingRadio &&
+		input.nosJackalRadioHearable === true;
 	const snrVentConversation =
 		meJackalTeam &&
 		otherJackalTeam &&
@@ -115,7 +145,7 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 				panPos = [0, 0];
 			}
 
-			if (activeLobbySettings.meetingGhostOnly) {
+			if (activeLobbySettings.meetingGhostOnly || (radioOnlyMode && !me.isDead)) {
 				endGain = 0;
 			}
 			if (!me.isDead && activeLobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor) {
@@ -131,20 +161,25 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 				endGain = 0;
 			}
 			wallCheckEnabled = activeLobbySettings.wallsBlockAudio && !me.isDead;
-			if (
-				me.isImpostor &&
-				other.isImpostor &&
-				activeLobbySettings.impostorRadioEnabled &&
-				other.clientId === impostorRadioClientId
-			) {
+			if ((receivingImpostorRadio && radioEnabled) || receivingJackalRadio || receivingNosJackalRadio) {
+				endGain = 1;
 				skipDistanceCheck = true;
 				muffleEnabled = true;
+				result.radioEcho = true;
+				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
+			}
+			if (ghostReceivingImpostorRadio) {
+				endGain = 1;
+				skipDistanceCheck = true;
+				muffleEnabled = true;
+				result.radioEcho = true;
 				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
 			}
 
 			if (!me.isDead && other.isDead && canHearGhosts) {
 				result.reverb = true;
 				wallCheckEnabled = false;
+				if (radioOnlyMode) endGain = 1;
 				endGain *= settings.ghostVolumeAsImpostor / 100;
 			} else if (other.isDead && !me.isDead) {
 				endGain = 0;
@@ -165,6 +200,23 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			endGain = 1;
 			if (!me.isDead && other.isDead) {
 				endGain = 0;
+			}
+			if (
+				(receivingImpostorRadio && radioEnabled) ||
+				ghostReceivingImpostorRadio ||
+				receivingJackalRadio ||
+				receivingNosJackalRadio
+			) {
+				muffleEnabled = true;
+				result.radioEcho = true;
+				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
+			}
+			if (radioOnlyMode && otherUsingRadio) {
+				endGain = receivingImpostorRadio || ghostReceivingImpostorRadio ? 1 : 0;
+				if (receivingImpostorRadio || ghostReceivingImpostorRadio) {
+					muffleEnabled = true;
+					result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
+				}
 			}
 			break;
 

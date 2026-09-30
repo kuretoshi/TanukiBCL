@@ -1,4 +1,6 @@
 import { nosColorHex } from '../common/NosSnapshot';
+import { NosReaderUnexpectedExitError } from './nosSnapshotTracker';
+export { NosReaderUnexpectedExitError } from './nosSnapshotTracker';
 
 interface PaletteLayout {
 	pid: number;
@@ -59,6 +61,7 @@ export class NosPaletteTracker {
 	private request = 0;
 	private pending = false;
 	private retryAt = 0;
+	private stoppedPid = -1;
 	private layout?: PaletteLayout;
 	constructor(private resolve: (pid: number) => Promise<unknown>) {}
 	reset(): void {
@@ -73,6 +76,8 @@ export class NosPaletteTracker {
 			this.reset();
 			this.pid = pid;
 		}
+		if (this.stoppedPid !== -1 && this.stoppedPid !== pid) this.stoppedPid = -1;
+		if (this.stoppedPid === pid) return undefined;
 		if (!this.layout && !this.pending && Date.now() >= this.retryAt) {
 			this.pending = true;
 			const request = ++this.request;
@@ -82,8 +87,10 @@ export class NosPaletteTracker {
 					if (!isNosPaletteLayout(layout, pid)) throw new Error('Unsupported NoS palette');
 					this.layout = layout;
 				})
-				.catch(() => {
-					if (request === this.request) this.retryAt = Date.now() + 30000;
+				.catch((error) => {
+					if (request !== this.request) return;
+					if (error instanceof NosReaderUnexpectedExitError) this.stoppedPid = pid;
+					else this.retryAt = Date.now() + 30000;
 				})
 				.finally(() => {
 					if (request === this.request) this.pending = false;

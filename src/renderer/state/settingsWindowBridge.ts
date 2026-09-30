@@ -63,6 +63,8 @@ function sendDebugVoice(): void {
 		playerSocketIds: voice.playerSocketIds,
 		audioConnected: voice.audioConnected,
 		impostorRadioClientId: voice.impostorRadioClientId,
+		impostorRadioClientIds: voice.impostorRadioClientIds,
+		nosRadiosByPlayer: voice.nosRadiosByPlayer,
 		toh4eLobby: voice.toh4eLobby,
 		tohRole: voice.tohRole,
 	});

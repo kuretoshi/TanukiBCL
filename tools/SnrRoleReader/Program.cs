@@ -24,6 +24,7 @@ try
     }
     var source = SnrPlayerSource.Resolve(runtime, diagnostics);
     var module = source.Module;
+    var secondaryCosmetics = ReadSecondaryCosmetics(module);
     var array = source.Array.AsArray();
     // Decode names using the DLL belonging to the selected live module.
     if (string.IsNullOrEmpty(module.Name) || !File.Exists(module.Name))
@@ -43,12 +44,16 @@ try
         var roleBase = ReadObject(player, "roleBase");
         var abilities = ReadList(player, "_playerAbilities");
         var assignedTeam = Describe(roleBase, "AssignedTeam", enums);
+        var cosmetics = ReadObject(ReadObject(player, "Player"), "cosmetics");
+        secondaryCosmetics.TryGetValue(cosmetics.Address, out var secondary);
         rows.Add(new {
             playerId, role = Describe(player, "Role", enums), modifier = Describe(player, "ModifierRole", enums),
             ghostRole = Describe(player, "GhostRole", enums), roleClass = roleBase.Type?.Name,
             assignedTeam, isNeutral = DescribeName(roleBase, "AssignedTeam", enums) == "Neutral", canKill = ResolveCanKill(abilities),
             winnerTeam = Describe(roleBase, "WinnerTeam", enums),
             teamTag = Describe(roleBase, "TeamTag", enums),
+            hat2Id = secondary.hat2Id,
+            visor2Id = secondary.visor2Id,
             abilities = abilities.Select(a => new { name = a.Type?.Name, currentTeam = Describe(a, "CurrentTeam", enums) }).ToArray()
         });
     }
@@ -127,7 +132,35 @@ static object? BuildJumboLayout(SnrPlayerSource source)
 }
 
 static ClrInstanceField? Field(ClrObject obj, string name) => obj.Type?.Fields.FirstOrDefault(f => f.Name == name || f.Name == $"<{name}>k__BackingField");
+static Dictionary<ulong, (string? hat2Id, string? visor2Id)> ReadSecondaryCosmetics(ClrModule module)
+{
+    var result = new Dictionary<ulong, (string?, string?)>();
+    var owner = module.GetTypeByName("SuperNewRoles.CustomCosmetics.CosmeticsPlayer.CustomCosmeticsLayers");
+    var slot = owner?.GetStaticFieldByName("layers");
+    var dictionary = slot?.ReadObject(module.AppDomain) ?? default;
+    var entries = ReadObject(dictionary, "_entries");
+    if (entries.IsNull || !entries.IsArray) return result;
+    var array = entries.AsArray();
+    for (int i = 0; i < array.Length; i++)
+    {
+        var entry = array.GetStructValue(i);
+        var next = entry.Type?.GetFieldByName("next")?.Read<int>(entry.Address, true) ?? -2;
+        if (next < -1) continue;
+        var layer = entry.Type?.GetFieldByName("value")?.ReadObject(entry.Address, true) ?? default;
+        var cosmeticsLayer = ReadObject(layer, "cosmeticsLayer");
+        if (layer.IsNull || cosmeticsLayer.IsNull) continue;
+        var hat = ReadObject(ReadObject(layer, "hat2"), "Hat");
+        var visor = ReadObject(ReadObject(layer, "visor2"), "Visor");
+        result[cosmeticsLayer.Address] = (ReadString(hat, "ProdId"), ReadString(visor, "ProdId"));
+    }
+    return result;
+}
 static ClrObject ReadObject(ClrObject obj, string name) => Field(obj, name)?.ReadObject(obj.Address, false) ?? default;
+static string? ReadString(ClrObject obj, string name)
+{
+    var value = ReadObject(obj, name);
+    return value.IsNull ? null : value.AsString();
+}
 static long? ReadNumber(ClrObject obj, string name)
 {
     var field = Field(obj, name);

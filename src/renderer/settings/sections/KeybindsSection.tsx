@@ -4,6 +4,7 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import { ISettings } from '../../../common/ISettings';
+import { ModsType } from '../../../common/Mods';
 import { SettingRow, SettingsSection } from '../SettingsControls';
 
 const namedKeys = new Set([
@@ -34,6 +35,7 @@ export type ShortcutSetting = 'pushToTalkShortcut' | 'impostorRadioShortcut' | '
 export interface KeybindsSectionProps {
 	t: TFunction;
 	settings: ISettings;
+	mod?: ModsType;
 	setShortcut: (shortcut: ShortcutSetting, key: string) => void;
 }
 
@@ -151,12 +153,19 @@ const ShortcutField: React.FC<ShortcutFieldProps> = function ({
 	);
 };
 
-const KeybindsSection: React.FC<KeybindsSectionProps> = function ({ t, settings, setShortcut }) {
+const KeybindsSection: React.FC<KeybindsSectionProps> = function ({ t, settings, mod, setShortcut }) {
 	const [recording, setRecording] = useState<ShortcutSetting | null>(null);
 
 	const shortcuts: { key: ShortcutSetting; label: string }[] = [
 		{ key: 'pushToTalkShortcut', label: t('settings.keyboard.push_to_talk') },
-		{ key: 'impostorRadioShortcut', label: t('settings.keyboard.impostor_radio') },
+		{
+			key: 'impostorRadioShortcut',
+			label: t(
+				mod === 'SUPER_NEW_ROLES' || mod === 'NoS'
+					? 'settings.keyboard.impostor_jackal_radio'
+					: 'settings.keyboard.impostor_radio'
+			),
+		},
 		{ key: 'muteShortcut', label: t('settings.keyboard.mute') },
 		{ key: 'deafenShortcut', label: t('settings.keyboard.deafen') },
 	];

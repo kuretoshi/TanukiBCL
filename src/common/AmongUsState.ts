@@ -1,7 +1,7 @@
 import { CameraLocation, MapType } from './AmongusMap';
 import { ModsType } from './Mods';
 import type { SnrLiveRole } from './SnrRole';
-import type { NosPlayerData } from './NosSnapshot';
+import type { NosPlayerData, NosRadioData } from './NosSnapshot';
 import type { TohRole } from './TohRole';
 
 export interface AmongUsState {
@@ -26,6 +26,7 @@ export interface AmongUsState {
 	oldMeetingHud: boolean;
 	airshipMeetingByOutfit: boolean;
 	nosLocalMicPosition?: { x: number; y: number };
+	nosRadios?: NosRadioData[];
 	debug?: {
 		rawGameState: number;
 		meetingHud: number;
@@ -81,6 +82,8 @@ export interface Player {
 	roleTeam: number;
 	roleName: string;
 	snrRole?: SnrLiveRole;
+	snrHat2Id?: string;
+	snrVisor2Id?: string;
 	nosPlayer?: NosPlayerData;
 	tohRole?: TohRole;
 	nosLobbyColor?: string;
@@ -159,6 +162,7 @@ export interface VoiceState {
 	socketClients: SocketClientMap;
 	audioConnected: AudioConnected;
 	impostorRadioClientId: number;
+	impostorRadioClientIds?: number[];
 	localTalking: boolean;
 	localIsAlive: boolean;
 	muted: boolean;
