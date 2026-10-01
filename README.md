@@ -60,6 +60,12 @@ Lite版の「ロビー設定」は「現在のロビー」の表示のみで、�
 こちらのDiscordサーバーに報告をお願いします。
 https://discord.gg/cUX5KUkZPD
 
+## ご支援
+
+開発を応援していただけると励みになります！
+よろしくお願いします！
+https://ko-fi.com/kuretoshi
+
 ## 開発
 
 ### 必要なもの
