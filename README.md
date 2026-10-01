@@ -64,6 +64,7 @@ https://discord.gg/cUX5KUkZPD
 
 開発を応援していただけると励みになります！
 よろしくお願いします！
+
 https://ko-fi.com/kuretoshi
 
 ## 開発
