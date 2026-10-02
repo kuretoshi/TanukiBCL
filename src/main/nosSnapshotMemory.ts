@@ -3,7 +3,7 @@ import { NosPlayerData, NosRadioData, NosSnapshot } from '../common/NosSnapshot'
 type PlayerField = Exclude<keyof NosPlayerData, 'name'> | 'nameLength' | 'name';
 export interface NosLayout {
 	pid: number;
-	pointerSize: 4;
+	pointerSize: 4 | 8;
 	schemaVersion: number;
 	latestSlotAddress: number;
 	snapshot: {
@@ -25,12 +25,12 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 		Number.isInteger(offset) && offset >= 0 && offset + size <= limit;
 	if (
 		v.pid !== pid ||
-		v.pointerSize !== 4 ||
+		(v.pointerSize !== 4 && v.pointerSize !== 8) ||
 		v.schemaVersion !== 20260918 ||
 		!Number.isInteger(v.latestSlotAddress) ||
 		v.latestSlotAddress < 0x10000 ||
-		v.latestSlotAddress > 0xfffffffc ||
-		v.latestSlotAddress % 4 !== 0 ||
+		v.latestSlotAddress > Number.MAX_SAFE_INTEGER ||
+		v.latestSlotAddress % v.pointerSize !== 0 ||
 		!v.snapshot ||
 		!v.playerData ||
 		!Number.isInteger(v.playerData.size) ||
@@ -80,20 +80,32 @@ export function readNosSnapshot(
 	layout: NosLayout,
 	read: (address: number, size: number) => Buffer
 ): NosSnapshot & { publication: number } {
-	const pointer = (address: number) => read(address, 4).readUInt32LE(0);
-	const validPointer = (address: number) => address >= 0x10000 && address <= 0xfffffffc && address % 4 === 0;
+	const pointer = (address: number) => {
+		const bytes = read(address, layout.pointerSize);
+		return layout.pointerSize === 4 ? bytes.readUInt32LE(0) : Number(bytes.readBigUInt64LE(0));
+	};
+	const validPointer = (address: number) =>
+		Number.isSafeInteger(address) && address >= 0x10000 && address % layout.pointerSize === 0;
 	const snapshot = pointer(layout.latestSlotAddress);
 	if (!validPointer(snapshot)) throw new Error('NoS snapshot not published');
 	const s = layout.snapshot,
 		p = layout.playerData;
-	const headerSize = Math.max(...Object.values(s).filter((value): value is number => Number.isInteger(value))) + 4;
+	const headerSize = Math.max(
+		...Object.values(s)
+			.filter((value): value is number => Number.isInteger(value))
+			.map((value) => value + 4),
+		s.players + layout.pointerSize,
+		(s.radios ?? 0) + layout.pointerSize
+	);
 	const header = read(snapshot, headerSize);
+	const headerPointer = (offset: number) =>
+		layout.pointerSize === 4 ? header.readUInt32LE(offset) : Number(header.readBigUInt64LE(offset));
 	const count = header.readInt32LE(s.playersLength);
-	const playersAddress = header.readUInt32LE(s.players);
+	const playersAddress = headerPointer(s.players);
 	if (count < 0 || count > 24 || (count > 0 && !validPointer(playersAddress))) throw new Error('Invalid NoS players');
 	const payload = count ? read(playersAddress, count * p.size) : Buffer.alloc(0);
 	const radioCount = s.radiosLength == null ? 0 : header.readInt32LE(s.radiosLength);
-	const radiosAddress = s.radios == null ? 0 : header.readUInt32LE(s.radios);
+	const radiosAddress = s.radios == null ? 0 : headerPointer(s.radios);
 	if (radioCount < 0 || radioCount > 32 || (radioCount > 0 && !validPointer(radiosAddress)))
 		throw new Error('Invalid NoS radios');
 	const radioPayload =

@@ -12,7 +12,7 @@ jobs:
          - os: windows-latest
            dist: 'publish'
            installer: |
-             dist/Better-CrewLinkKai-Setup*.exe
+             dist/TanukiBCL-Setup*.exe
              dist/latest.yml
          - os: ubuntu-latest
            dist: 'publish:linux'
@@ -57,10 +57,3 @@ jobs:
         with:
           name: BetterCrewLink Unpacked 64bit
           path: 'dist/win-unpacked'
-
-      - name: Upload Unpacked 32bit
-        uses: actions/upload-artifact@v7
-        if: ${{ matrix.os == 'windows-latest' }}
-        with:
-          name: BetterCrewLink Unpacked 32bit
-          path: 'dist/win-ia32-unpacked'

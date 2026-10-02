@@ -15,17 +15,17 @@ interface PaletteLayout {
 	b: number;
 }
 
-const pointerValid = (value: number) =>
-	Number.isInteger(value) && value >= 0x10000 && value <= 0xfffffffc && value % 4 === 0;
+const pointerValid = (value: number, pointerSize: number) =>
+	Number.isSafeInteger(value) && value >= 0x10000 && value % pointerSize === 0;
 export function isNosPaletteLayout(value: unknown, pid: number): value is PaletteLayout {
 	if (!value || typeof value !== 'object') return false;
 	const v = value as PaletteLayout;
 	return (
 		v.pid === pid &&
-		v.pointerSize === 4 &&
-		pointerValid(v.arraySlot) &&
-		pointerValid(v.arrayType) &&
-		v.arrayLengthOffset === 4 &&
+		(v.pointerSize === 4 || v.pointerSize === 8) &&
+		pointerValid(v.arraySlot, v.pointerSize) &&
+		pointerValid(v.arrayType, v.pointerSize) &&
+		v.arrayLengthOffset === v.pointerSize &&
 		Number.isInteger(v.arrayDataOffset) &&
 		v.arrayDataOffset >= 8 &&
 		v.arrayDataOffset <= 64 &&
@@ -37,9 +37,16 @@ export function isNosPaletteLayout(value: unknown, pid: number): value is Palett
 }
 
 export function readNosPalette(layout: PaletteLayout, read: (address: number, size: number) => Buffer): string[] {
-	const pointer = (address: number) => read(address, 4).readUInt32LE();
+	const pointer = (address: number) => {
+		const bytes = read(address, layout.pointerSize);
+		return layout.pointerSize === 4 ? bytes.readUInt32LE() : Number(bytes.readBigUInt64LE());
+	};
 	const array = pointer(layout.arraySlot);
-	if (!pointerValid(array) || pointer(array) !== layout.arrayType || pointer(array + layout.arrayLengthOffset) !== 32)
+	if (
+		!pointerValid(array, layout.pointerSize) ||
+		pointer(array) !== layout.arrayType ||
+		read(array + layout.arrayLengthOffset, 4).readInt32LE() !== 32
+	)
 		throw new Error('NoS palette changed');
 	const bytes = read(array + layout.arrayDataOffset, 32 * layout.stride);
 	const colors = Array.from({ length: 32 }, (_, i) => {

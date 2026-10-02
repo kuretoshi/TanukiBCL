@@ -4,8 +4,6 @@ using Nebula.Modules.Cosmetics;
 DynamicPalette.Initialize();
 TBCLFields.Initialize();
 Console.WriteLine("ready");
-// The resolver enables only our owned fixture's flag; all subsequent samples are read-only.
-while (!TBCLFields.RequireUpdate) Thread.Sleep(10);
 TBCLFields.Publish();
 Console.WriteLine("published");
 while (Console.ReadLine() is string command) {

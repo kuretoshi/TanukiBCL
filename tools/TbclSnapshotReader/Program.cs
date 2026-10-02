@@ -45,7 +45,6 @@ internal static class Program
                 case "layout":
                 {
                     var metadata = Resolve(pid);
-                    EnableContinuousUpdates(pid, metadata);
                     Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, metadata }, jsonOptions));
                     break;
                 }
@@ -53,7 +52,6 @@ internal static class Program
                 {
                     string outputPath = args.Length >= 3 ? args[2] : "tbcl-metadata.json";
                     ResolvedMetadata metadata = Resolve(pid);
-                    EnableContinuousUpdates(pid, metadata);
                     File.WriteAllText(outputPath, JsonSerializer.Serialize(metadata, jsonOptions), Encoding.UTF8);
 
                     Console.WriteLine(JsonSerializer.Serialize(new
@@ -62,10 +60,8 @@ internal static class Program
                         mode = "resolve",
                         pid,
                         metadata = Path.GetFullPath(outputPath),
-                        requireUpdateAddress = Hex(metadata.RequireUpdateAddress),
                         latestSlotAddress = Hex(metadata.LatestSlotAddress),
-                        playerDataSize = metadata.PlayerData.Size,
-                        continuousUpdatesEnabled = true
+                        playerDataSize = metadata.PlayerData.Size
                     }, jsonOptions));
                     break;
                 }
@@ -151,36 +147,34 @@ internal static class Program
         var candidates = runtime.EnumerateModules()
             .Where(m => string.Equals(Path.GetFileName(m.Name), NebulaModuleName, StringComparison.OrdinalIgnoreCase)).ToArray();
         var modules = candidates
-            .Where(m => m.GetTypeByName(TbclTypeName)?.GetStaticFieldByName("RequireUpdate") != null)
+            .Where(m => m.GetTypeByName(TbclTypeName)?.GetStaticFieldByName("Latest") != null)
             .ToArray();
         if (modules.Length != 1) throw new InvalidOperationException($"Expected one {TbclTypeName} module, found {modules.Length}. " +
-            string.Join("; ", candidates.Select(m => $"{m.Name}: type={m.GetTypeByName(TbclTypeName) != null}, initialized={m.GetTypeByName(TbclTypeName)?.GetStaticFieldByName("RequireUpdate")?.IsInitialized(m.AppDomain)}")));
+            string.Join("; ", candidates.Select(m => $"{m.Name}: type={m.GetTypeByName(TbclTypeName) != null}, initialized={m.GetTypeByName(TbclTypeName)?.GetStaticFieldByName("Latest")?.IsInitialized(m.AppDomain)}")));
         ClrModule module = modules[0];
 
         ClrType tbcl = module.GetTypeByName(TbclTypeName)
             ?? throw new InvalidOperationException($"{TbclTypeName} type not found");
 
-        ClrStaticField requireUpdate = tbcl.GetStaticFieldByName("RequireUpdate")
-            ?? throw new InvalidOperationException("RequireUpdate static field not found");
+        ClrStaticField nextIndex = tbcl.GetStaticFieldByName("nextIndex")
+            ?? throw new InvalidOperationException("TBCLFields.nextIndex static field not found");
         ClrStaticField latest = tbcl.GetStaticFieldByName("Latest")
             ?? throw new InvalidOperationException("Latest static field not found");
-        if (tbcl.IsCollectible || requireUpdate.ElementType != ClrElementType.Boolean ||
-            latest.ElementType != ClrElementType.Pointer)
+        if (tbcl.IsCollectible || nextIndex.ElementType != ClrElementType.Int32 || latest.ElementType != ClrElementType.Pointer)
             throw new InvalidOperationException("Unsupported TBCL static fields");
 
         // ClrMD classifies a pointer-typed static (Snapshot* Latest) as an object reference and
         // resolves it against the GC static base, which yields an unrelated address.
-        // RequireUpdate is a primitive, so it resolves against the correct non-GC static base;
-        // derive that base from it and apply Latest's own offset.
-        ulong requireUpdateAddress = requireUpdate.GetAddress(module.AppDomain);
-        if (requireUpdateAddress == 0)
-            throw new InvalidOperationException("Failed to resolve TBCLFields.RequireUpdate address");
-        if (requireUpdate.Offset < 0 || latest.Offset < 0)
+        // nextIndex is a primitive and resolves against the correct non-GC static base.
+        ulong anchorAddress = nextIndex.GetAddress(module.AppDomain);
+        if (anchorAddress == 0)
+            throw new InvalidOperationException("Failed to resolve TBCLFields.nextIndex address");
+        if (nextIndex.Offset < 0 || latest.Offset < 0)
             throw new InvalidOperationException("Failed to resolve TBCL static field offsets");
-        if (requireUpdateAddress <= (ulong)requireUpdate.Offset)
+        if (anchorAddress <= (ulong)nextIndex.Offset)
             throw new InvalidOperationException("Unexpected TBCL non-GC static base");
 
-        ulong nonGcStaticBase = requireUpdateAddress - (ulong)requireUpdate.Offset;
+        ulong nonGcStaticBase = anchorAddress - (ulong)nextIndex.Offset;
         ulong latestSlotAddress = nonGcStaticBase + (ulong)latest.Offset;
 
         ClrType snapshot = ResolveNestedType(module, SnapshotTypeName, "Snapshot");
@@ -261,50 +255,11 @@ internal static class Program
             ProcessStartUtcTicks = started,
             PointerSize = target.DataReader.PointerSize,
             SchemaVersion = ExpectedSchemaVersion,
-            RequireUpdateAddress = requireUpdateAddress,
             LatestSlotAddress = latestSlotAddress,
             Snapshot = snapshotLayout,
             PlayerData = playerLayout,
             RadioData = radioLayout
         };
-    }
-
-    static void EnableContinuousUpdates(int pid, ResolvedMetadata metadata)
-    {
-        using Process process = ValidateProcess(pid);
-        long started = process.StartTime.ToUniversalTime().Ticks;
-        ValidateMetadata(pid, started, metadata);
-
-        using SafeProcessHandle readHandle = Native.OpenProcess(
-            Native.ProcessAccess.QueryInformation |
-            Native.ProcessAccess.VmRead,
-            false,
-            pid);
-
-        if (readHandle.IsInvalid)
-            throw new InvalidOperationException($"OpenProcess for update check failed: Win32 error {Marshal.GetLastWin32Error()}");
-
-        // A different client may already have enabled publication. Read before requesting
-        // write access so a running NoS session can be observed without modifying it.
-        if (ReadBytes(readHandle, metadata.RequireUpdateAddress, 1)[0] != 0)
-        {
-            ValidateProcessUnchanged(pid, started);
-            return;
-        }
-
-        using SafeProcessHandle handle = Native.OpenProcess(
-            Native.ProcessAccess.QueryInformation |
-            Native.ProcessAccess.VmWrite |
-            Native.ProcessAccess.VmOperation,
-            false,
-            pid);
-
-        if (handle.IsInvalid)
-            throw new InvalidOperationException($"OpenProcess for update enable failed: Win32 error {Marshal.GetLastWin32Error()}");
-
-        // TBCLFields treats RequireUpdate as a persistent enable flag.
-        WriteByte(handle, metadata.RequireUpdateAddress, 1);
-        ValidateProcessUnchanged(pid, started);
     }
 
     static object ReadSnapshot(int pid, ResolvedMetadata metadata)
@@ -323,8 +278,7 @@ internal static class Program
         if (handle.IsInvalid)
             throw new InvalidOperationException($"OpenProcess failed: Win32 error {Marshal.GetLastWin32Error()}");
 
-        // RequireUpdate is a persistent enable flag and was set by resolve.
-        // read is intentionally read-only: it simply consumes the latest published slot.
+        // NoS publishes continuously; read only consumes the latest published slot.
         ulong snapshotAddress = ReadPointer(handle, metadata.LatestSlotAddress, metadata.PointerSize);
         if (snapshotAddress == 0)
             throw new InvalidOperationException(
@@ -553,24 +507,12 @@ internal static class Program
             : BitConverter.ToUInt64(bytes, 0);
     }
 
-    static void WriteByte(SafeProcessHandle process, ulong address, byte value)
-    {
-        byte[] buffer = [value];
-        if (!Native.WriteProcessMemory(process, (nint)address, buffer, 1, out nuint written)
-            || written != 1)
-        {
-            throw new InvalidOperationException(
-                $"WriteProcessMemory(0x{address:X}) failed: Win32 error {Marshal.GetLastWin32Error()}, written={written}");
-        }
-    }
-
     sealed class ResolvedMetadata
     {
         public int Pid { get; set; }
         public long ProcessStartUtcTicks { get; set; }
         public int PointerSize { get; set; }
         public int SchemaVersion { get; set; }
-        public ulong RequireUpdateAddress { get; set; }
         public ulong LatestSlotAddress { get; set; }
         public SnapshotLayout Snapshot { get; set; } = new();
         public PlayerDataLayout PlayerData { get; set; } = new();
@@ -622,9 +564,7 @@ internal static class Program
         [Flags]
         internal enum ProcessAccess : uint
         {
-            VmOperation = 0x0008,
             VmRead = 0x0010,
-            VmWrite = 0x0020,
             QueryInformation = 0x0400
         }
 
@@ -643,13 +583,5 @@ internal static class Program
             nuint nSize,
             out nuint lpNumberOfBytesRead);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool WriteProcessMemory(
-            SafeProcessHandle hProcess,
-            nint lpBaseAddress,
-            byte[] lpBuffer,
-            nuint nSize,
-            out nuint lpNumberOfBytesWritten);
     }
 }

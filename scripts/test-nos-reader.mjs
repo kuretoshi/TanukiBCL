@@ -59,7 +59,7 @@ try {
 	handle = memoryjs.openProcess(child.pid);
 	const read = (address, size) => memoryjs.readBuffer(handle.handle, address, size);
 	const paletteResponse = JSON.parse(
-		execFileSync(resolve('out/nos-reader/TbclSnapshotReader.exe'), ['palette', String(child.pid)], {
+		execFileSync(resolve('out/nos-reader/x86/TbclSnapshotReader.exe'), ['palette', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
@@ -72,7 +72,7 @@ try {
 	assert.equal(readNosPalette(palette, read)[3], '#4080bf', 'Read lobby RGB before any role snapshot publication');
 	const published = once(lines, 'line');
 	const response = JSON.parse(
-		execFileSync(resolve('out/nos-reader/TbclSnapshotReader.exe'), ['layout', String(child.pid)], {
+		execFileSync(resolve('out/nos-reader/x86/TbclSnapshotReader.exe'), ['layout', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
@@ -205,7 +205,7 @@ try {
 	await command('clear');
 	assert.equal(live().players.length, 0);
 	console.log(
-		'PASS NoS x86: enable once, live unmanaged snapshots, UTF-16 name, RGB, team changes, empty/reset, PID guard, stale clearing'
+		'PASS NoS x86: read-only unmanaged snapshots, UTF-16 name, RGB, team changes, empty/reset, PID guard, stale clearing'
 	);
 } finally {
 	if (handle) memoryjs.closeProcess(handle.handle);

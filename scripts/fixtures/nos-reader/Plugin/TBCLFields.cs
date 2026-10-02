@@ -4,9 +4,9 @@ namespace Nebula.Collab;
 
 public static unsafe class TBCLFields
 {
-    public static bool RequireUpdate;
+    private static int nextIndex;
     public static Snapshot* Latest;
-    static TBCLFields() { RequireUpdate = false; Latest = null; }
+    static TBCLFields() { nextIndex = 0; Latest = null; }
     public struct Snapshot {
         public float LocalMicPositionX, LocalMicPositionY;
         public int PlayersLength;
@@ -44,5 +44,6 @@ public static unsafe class TBCLFields
         *snapshot = new Snapshot { LocalMicPositionX = 1f, LocalMicPositionY = -1f,
             PlayersLength = empty ? 0 : 1, Players = player, RadiosLength = 1, Radios = radio };
         Latest = snapshot;
+        nextIndex++;
     }
 }

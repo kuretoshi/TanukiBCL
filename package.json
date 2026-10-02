@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.7",
+	"version": "3.2.8",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -29,15 +29,15 @@
 		"test:upstream": "node scripts/test-upstream-fixes.mjs",
 		"verify:esm": "node scripts/verify-esm.mjs",
 		"build": "electron-vite build",
-		"dist": "electron-vite build && electron-builder --win --x64 --ia32",
-		"dist:32": "electron-vite build && electron-builder --win --ia32",
-		"dist:64": "electron-vite build && electron-builder --win --x64",
+		"dist": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64",
+		"dist:32": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --ia32",
+		"dist:64": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64",
 		"dist:linux": "electron-vite build && electron-builder --linux --x64",
-		"publish": "electron-vite build && electron-builder --win --x64 --ia32 --publish always",
+		"publish": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64 --publish always",
 		"publish:linux": "electron-vite build && electron-builder --x64 --linux --publish always",
 		"compile": "electron-vite build",
-		"dist:lite": "electron-vite build && electron-builder --win --x64 --config electron-builder-lite.yml",
-		"publish:lite": "electron-vite build && electron-builder --win --x64 --config electron-builder-lite.yml --publish always"
+		"dist:lite": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64 --config electron-builder-lite.yml",
+		"publish:lite": "powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64 --config electron-builder-lite.yml --publish always"
 	},
 	"dependencies": {
 		"@jimp/core": "1.6.1",

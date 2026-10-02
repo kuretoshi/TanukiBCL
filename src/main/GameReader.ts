@@ -133,9 +133,9 @@ export default class GameReader {
 	debugBaselines: Record<string, Record<number, number>> = {};
 	nativeReadFailureCount = 0;
 	private snrRoles = new SnrLiveTracker(readSnrRoles);
-	private nosSnapshot = new NosSnapshotTracker(resolveNosSnapshot);
+	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
 	private tohRoles = new TohLiveTracker(readTohLayout);
-	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette'));
+	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette', this.is_64bit));
 	private snrRound = 0;
 	private snrInGame = false;
 	private snrCosmeticAppearances = new Map<string, { hat: string; skin: string; visor: string }>();
@@ -152,6 +152,7 @@ export default class GameReader {
 	async checkProcessOpen(): Promise<void> {
 		const processesOpen = getProcesses()
 			.filter((p) => p.szExeFile === targetProcessName)
+			.filter((p) => p.cntThreads > 0)
 			.filter((p) => !targetProcessId || p.th32ProcessID === targetProcessId)
 			.sort((a, b) => a.th32ProcessID - b.th32ProcessID);
 		let error = '';
