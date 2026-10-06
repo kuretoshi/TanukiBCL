@@ -4,11 +4,23 @@ import { resolve } from 'path';
 import { existsSync, readFileSync } from 'node:fs';
 
 const debugAuthPath = resolve(__dirname, '.tools/debug-password.json');
-const debugAuth = existsSync(debugAuthPath) ? readFileSync(debugAuthPath, 'utf8').replace(/^\uFEFF/, '') : '';
+const debugAuthUrl = (
+	process.env.TANUKI_DEBUG_AUTH_URL ?? 'https://debug-auth.kuretoshi.work/v1/debug-auth/verify'
+).trim();
+if (debugAuthUrl) {
+	const endpoint = new URL(debugAuthUrl);
+	if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
+		throw new Error('TANUKI_DEBUG_AUTH_URL must be an HTTPS URL without credentials, query, or fragment.');
+}
+const debugAuth =
+	!debugAuthUrl && existsSync(debugAuthPath) ? readFileSync(debugAuthPath, 'utf8').replace(/^\uFEFF/, '') : '';
 
 export default defineConfig({
 	main: {
-		define: { 'process.env.TANUKI_DEBUG_AUTH': JSON.stringify(debugAuth) },
+		define: {
+			'process.env.TANUKI_DEBUG_AUTH': JSON.stringify(debugAuth),
+			'process.env.TANUKI_DEBUG_AUTH_URL': JSON.stringify(debugAuthUrl),
+		},
 		plugins: [externalizeDepsPlugin()],
 		build: {
 			rollupOptions: {

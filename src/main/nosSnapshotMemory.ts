@@ -1,6 +1,13 @@
 import { NosPlayerData, NosRadioData, NosSnapshot } from '../common/NosSnapshot';
 
-type PlayerField = Exclude<keyof NosPlayerData, 'name'> | 'nameLength' | 'name';
+type PlayerField = Exclude<keyof NosPlayerData, 'name' | 'skin' | 'hat' | 'visor'> | 'nameLength' | 'name';
+export interface NosCostumeLayout {
+	offset: number;
+	nameLength: number;
+	name: number;
+	capacity: number;
+	size: number;
+}
 export interface NosLayout {
 	pid: number;
 	pointerSize: 4 | 8;
@@ -14,7 +21,11 @@ export interface NosLayout {
 		radiosLength?: number | null;
 		radios?: number | null;
 	};
-	playerData: Record<PlayerField | 'size', number>;
+	playerData: Record<PlayerField | 'size', number> & {
+		skin?: NosCostumeLayout | null;
+		hat?: NosCostumeLayout | null;
+		visor?: NosCostumeLayout | null;
+	};
 	radioData?: { size: number; kind: number; hearableMask: number; nameLength: number; name: number } | null;
 }
 
@@ -22,11 +33,11 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	if (!value || typeof value !== 'object') return false;
 	const v = value as NosLayout;
 	const validOffset = (offset: number, size: number, limit: number) =>
-		Number.isInteger(offset) && offset >= 0 && offset + size <= limit;
+		Number.isInteger(offset) && Number.isInteger(size) && size > 0 && offset >= 0 && offset + size <= limit;
 	if (
 		v.pid !== pid ||
 		(v.pointerSize !== 4 && v.pointerSize !== 8) ||
-		v.schemaVersion !== 20260918 ||
+		![20260918, 20260928, 20261005].includes(v.schemaVersion) ||
 		!Number.isInteger(v.latestSlotAddress) ||
 		v.latestSlotAddress < 0x10000 ||
 		v.latestSlotAddress > Number.MAX_SAFE_INTEGER ||
@@ -39,6 +50,23 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	)
 		return false;
 	const p = v.playerData;
+	const costumes = [p.skin, p.hat, p.visor];
+	const costumeCount = costumes.filter((c) => c != null).length;
+	if (costumeCount !== 0 && costumeCount !== 3) return false;
+	if (v.schemaVersion === 20261005 && costumeCount !== 3) return false;
+	if (
+		!costumes.every(
+			(c) =>
+				!c ||
+				(Number.isInteger(c.capacity) &&
+					c.capacity > 0 &&
+					c.capacity <= 1024 &&
+					validOffset(c.offset, c.size, p.size) &&
+					validOffset(c.nameLength, 1, c.size) &&
+					validOffset(c.name, c.capacity * 2, c.size))
+		)
+	)
+		return false;
 	const bodyRateFieldCount = [p.bodyRateX, p.bodyRateY].filter(Number.isInteger).length;
 	if (bodyRateFieldCount === 1) return false;
 	const hasBodyRate = bodyRateFieldCount === 2;
@@ -129,7 +157,15 @@ export function readNosSnapshot(
 			length = u8('nameLength');
 		if (ids.has(playerId) || length > 32) throw new Error('Invalid NoS player identity');
 		ids.add(playerId);
+		const costume = (layout?: NosCostumeLayout | null) => {
+			if (!layout) return undefined;
+			const base = start + layout.offset;
+			const length = payload[base + layout.nameLength];
+			if (length > layout.capacity) throw new Error('Invalid NoS costume name');
+			return { name: payload.toString('utf16le', base + layout.name, base + layout.name + length * 2) };
+		};
 		players.push({
+			...(p.skin ? { skin: costume(p.skin), hat: costume(p.hat), visor: costume(p.visor) } : {}),
 			playerId,
 			name: payload.toString('utf16le', start + p.name, start + p.name + length * 2),
 			isKiller: bool('isKiller'),

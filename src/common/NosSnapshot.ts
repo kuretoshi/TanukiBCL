@@ -1,5 +1,8 @@
 /** NoS TBCLFields data; deliberately separate from SNR RoleId/ModifierRoleId. */
 export interface NosPlayerData {
+	skin?: { name: string };
+	hat?: { name: string };
+	visor?: { name: string };
 	playerId: number;
 	name: string;
 	isKiller: boolean;

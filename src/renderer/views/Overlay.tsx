@@ -108,6 +108,8 @@ const Overlay: React.FC = function () {
 				lowered={gameState.mod === 'SUPER_NEW_ROLES'}
 				inGame={gameState.gameState === GameState.TASKS}
 				mod={gameState.mod}
+				nosReadFailed={gameState.nosReadStatus?.failed}
+				nosReadMessage={gameState.nosReadStatus?.message}
 			/>
 			{settings.meetingOverlay && gameState.gameState === GameState.DISCUSSION && (
 				<MeetingHud gameState={gameState} voiceState={voiceState} playerColors={playerColors} />
@@ -132,6 +134,8 @@ interface OverlayWatermarkProps {
 	lowered: boolean;
 	inGame: boolean;
 	mod: AmongUsState['mod'];
+	nosReadFailed?: boolean;
+	nosReadMessage?: string;
 }
 
 const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
@@ -139,6 +143,8 @@ const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 	lowered,
 	inGame,
 	mod,
+	nosReadFailed,
+	nosReadMessage,
 }: OverlayWatermarkProps) => {
 	const isNoS = mod === 'NoS';
 	const modName =
@@ -154,6 +160,12 @@ const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 
 	return (
 		<div
+			title={isNoS ? nosReadMessage : undefined}
+			style={
+				isNoS && nosReadFailed
+					? { backgroundColor: '#581e24', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 360 }
+					: undefined
+			}
 			className={`tanuki-overlay-watermark${lowered ? ' tanuki-overlay-watermark_snr' : ''}${
 				inGame ? ' tanuki-overlay-watermark_game' : ''
 			}${isNoS ? ' tanuki-overlay-watermark_nos' : ''}`}
@@ -163,6 +175,7 @@ const OverlayWatermark: React.FC<OverlayWatermarkProps> = ({
 				{modName && ` [${modName}]`}
 			</div>
 			<div>{serverURL}</div>
+			{isNoS && nosReadFailed && <div role="status">{nosReadMessage}</div>}
 		</div>
 	);
 };

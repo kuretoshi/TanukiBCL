@@ -48,7 +48,7 @@ const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.t
 const lobby = { ...defaultLobbySettings };
 const settings = { voiceEffectStrength: 70, enableSpatialAudio: true, ghostVolumeAsImpostor: 40 };
 const me = { id: 1, clientId: 1, name: 'A', appearanceName: 'A', x: 0, y: 0, isLocal: true };
-const other = { id: 2, clientId: 2, name: 'B', appearanceName: 'A', x: 1, y: 0, sizeScale: 1, specialRole: 'UNKNOWN' };
+const other = { id: 2, clientId: 2, name: 'B', appearanceName: 'A', x: 1, y: 0 };
 const state = {
 	gameState: GameState.TASKS,
 	mod: 'SUPER_NEW_ROLES',
@@ -102,8 +102,6 @@ assert.equal(
 	rule(state, { ...lobby, impostorRadioEnabled: true }, { ...me, isImpostor: true }, { ...other, isImpostor: true }, 2),
 	null
 );
-assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 1.5, specialRole: 'JUMBO' }), null);
-assert.equal(rule(state, lobby, me, { ...other, appearanceName: 'B', sizeScale: 0.5, specialRole: 'MINI' }), null);
 console.log('ok voice effects: disguise, size, meeting, death, radio and host toggle');
 
 const spatial = (changes = {}) =>
@@ -616,9 +614,7 @@ const disguised = {
 	appearanceVisorId: 'target-visor',
 	appearanceId: 'target',
 	shiftedColor: 4,
-	sizeScale: 1.5,
 	inVent: true,
-	specialRole: 'JUMBO',
 };
 const taskSnapshot = { ...state, players: [me, disguised], mixupSabotaged: true, camouflaged: true };
 assert.equal(normalizeMeetingState(taskSnapshot), taskSnapshot);
@@ -638,7 +634,7 @@ assert.deepEqual(
 assert.equal(restored.currentOutfit, 0);
 assert.equal(restored.shiftedColor, -1);
 assert.equal(restored.inVent, false);
-assert.equal(restored.sizeScale, 1);
+assert.equal(Object.hasOwn(restored, 'sizeScale'), false);
 assert.equal(restored.clientId, disguised.clientId);
 assert.equal(restored.nameHash, 123);
 assert.equal(restored.playerConfigId, 456);
@@ -867,7 +863,7 @@ function findProcessChecker(node) {
 	ts.forEachChild(node, findProcessChecker);
 }
 findProcessChecker(readerSource);
-let runningProcesses = [{ szExeFile: 'Among Us.exe', th32ProcessID: 42 }];
+let runningProcesses = [{ szExeFile: 'Among Us.exe', th32ProcessID: 42, cntThreads: 1 }];
 const checkProcess = vm.runInNewContext(
 	ts.transpileModule(`({ ${checkProcessMethod.getText(readerSource)} })`, {
 		compilerOptions: { target: ts.ScriptTarget.ES2020 },
@@ -1011,18 +1007,12 @@ for (const entries of [
 					? address[offset]
 					: { outfit: 3, x: 1, y: 2, role: 1, dummy: false, vent: 0 }[offset],
 		readDictionary: (_ptr, _limit, visit) => entries.forEach(([key, value], index) => visit(key, value, index)),
-		readRoleSizeScale: () => {
-			throw new Error('size inference must stay disabled');
-		},
-		getSpecialRoleFromSize: () => {
-			throw new Error('special role inference must stay disabled');
-		},
 		formatRoleLabel: () => 'IMPOSTOR',
 		hashCode: (value) => value.length,
 	};
 	const parsed = parsePlayer.call(fixture, 1, Buffer.alloc(0));
-	assert.equal(parsed.sizeScale, 1);
-	assert.equal(parsed.specialRole, 'UNKNOWN');
+	assert.equal(Object.hasOwn(parsed, 'sizeScale'), false);
+	assert.equal(Object.hasOwn(parsed, 'specialRole'), false);
 	assert.equal(parsed.name, 'Original');
 	assert.equal(parsed.colorId, 2);
 	assert.equal(parsed.skinId, 'original-skin');

@@ -153,7 +153,27 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 
 	return (
 		<Box sx={classes.root}>
-			{detectedMod && <Box sx={classes.detectedMod}>MOD: {detectedMod}</Box>}
+			{detectedMod && (
+				<Box
+					title={gameState.nosReadStatus?.message}
+					sx={{
+						...classes.detectedMod,
+						...(gameState.mod === 'NoS' && gameState.nosReadStatus?.failed
+							? { backgroundColor: '#581e24', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 360 }
+							: {}),
+					}}
+				>
+					MOD: {detectedMod}
+					{gameState.mod === 'NoS' && gameState.nosReadStatus?.failed && (
+						<div role="status">{gameState.nosReadStatus.message}</div>
+					)}
+				</Box>
+			)}
+			{voice.versionWarning && lobbyDetected && (
+				<Typography role="status" color="warning.main" align="center" sx={{ px: 2, mb: 1 }}>
+					{voice.versionWarning}
+				</Typography>
+			)}
 			{error && (
 				<Box sx={classes.error}>
 					<Typography align="center" variant="h6" color="error">
@@ -261,8 +281,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 											borderColor="#2ecc71"
 											isAlive={!voice.otherDead[player.clientId]}
 											isUsingRadio={
-												!(player.disconnected || player.bugged) &&
-												visibleRadioClientIds.includes(player.clientId)
+												!(player.disconnected || player.bugged) && visibleRadioClientIds.includes(player.clientId)
 											}
 											size={otherPlayerAvatarSize}
 											socketConfig={playerConfig}

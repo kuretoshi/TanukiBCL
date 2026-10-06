@@ -24,7 +24,8 @@ const {
 	NosPaletteTracker,
 	NosReaderUnexpectedExitError: NosPaletteReaderUnexpectedExitError,
 } = await bundle('src/main/nosPalette.ts');
-const { nosColorHex, findNosColorIndex, isNosRadioData, canHearNosJackalRadio } = await bundle('src/common/NosSnapshot.ts');
+const { nosColorHex, findNosColorIndex, isNosRadioData, canHearNosJackalRadio } =
+	await bundle('src/common/NosSnapshot.ts');
 assert.equal(nosColorHex({ colorR: 0.25, colorG: 0.5, colorB: 0.75 }), '#4080bf');
 assert.equal(findNosColorIndex({ colorR: 0.25, colorG: 0.5, colorB: 0.75 }, [['#000000'], ['#3f7fbf']]), 1);
 assert.equal(findNosColorIndex(undefined, [['#000000']]), -1);
@@ -38,11 +39,25 @@ assert.equal(canHearNosJackalRadio(jackalA, 3), false);
 assert.equal(canHearNosJackalRadio(jackalB, 1), false);
 assert.equal(canHearNosJackalRadio(jackalB, 3), true);
 assert.equal(canHearNosJackalRadio([{ ...jackalA[0], kind: 0 }], 1), false);
-const fixture = resolve(cache, 'fixture');
-execFileSync('dotnet', ['publish', 'scripts/fixtures/nos-reader/Host/Host.csproj', '-c', 'Release', '-o', fixture], {
-	windowsHide: true,
-	stdio: 'pipe',
-});
+const architecture = process.argv.includes('--x64') ? 'x64' : 'x86';
+const fixture = resolve(cache, `fixture-${architecture}`);
+execFileSync(
+	'dotnet',
+	[
+		'publish',
+		'scripts/fixtures/nos-reader/Host/Host.csproj',
+		'-c',
+		'Release',
+		'-r',
+		`win-${architecture}`,
+		'-o',
+		fixture,
+	],
+	{
+		windowsHide: true,
+		stdio: 'pipe',
+	}
+);
 const child = spawn(resolve(fixture, 'Among Us.exe'), [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 const lines = createInterface({ input: child.stdout });
 let handle;
@@ -59,7 +74,7 @@ try {
 	handle = memoryjs.openProcess(child.pid);
 	const read = (address, size) => memoryjs.readBuffer(handle.handle, address, size);
 	const paletteResponse = JSON.parse(
-		execFileSync(resolve('out/nos-reader/x86/TbclSnapshotReader.exe'), ['palette', String(child.pid)], {
+		execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['palette', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
@@ -72,7 +87,7 @@ try {
 	assert.equal(readNosPalette(palette, read)[3], '#4080bf', 'Read lobby RGB before any role snapshot publication');
 	const published = once(lines, 'line');
 	const response = JSON.parse(
-		execFileSync(resolve('out/nos-reader/x86/TbclSnapshotReader.exe'), ['layout', String(child.pid)], {
+		execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['layout', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
@@ -81,6 +96,23 @@ try {
 	await published;
 	const layout = response.metadata;
 	assert.ok(isNosLayout(layout, child.pid), JSON.stringify(response));
+	assert.equal(layout.schemaVersion, 20261005);
+	assert.equal(layout.playerData.skin.capacity, 128);
+	assert.equal(layout.playerData.size, 880);
+	const legacyPlayer = { ...layout.playerData, size: 104, skin: null, hat: null, visor: null };
+	const legacy = { ...layout, schemaVersion: 20260928, playerData: legacyPlayer };
+	assert.ok(isNosLayout(legacy, child.pid));
+	assert.equal(readNosSnapshot(legacy, read).players[0].name, 'テスト');
+	assert.equal(readNosSnapshot(legacy, read).players[0].skin, undefined);
+	assert.equal(readNosSnapshot(layout, read).players[0].skin.name, 'Test');
+	assert.equal(readNosSnapshot(layout, read).players[0].hat.name, '');
+	assert.equal(
+		isNosLayout(
+			{ ...layout, playerData: { ...layout.playerData, skin: { ...layout.playerData.skin, offset: 10000 } } },
+			child.pid
+		),
+		false
+	);
 	assert.equal(isNosLayout({ ...layout, pid: child.pid + 1 }, child.pid), false);
 	assert.equal(isNosLayout({ ...layout, playerData: { ...layout.playerData, name: 10000 } }, child.pid), false);
 	assert.equal(isNosLayout({ ...layout, schemaVersion: 0 }, child.pid), false);
@@ -156,7 +188,7 @@ try {
 		await new Promise((resolve) => setImmediate(resolve));
 		retrying.update(child.pid, 'lobby', read);
 		assert.equal(attempts, 1, 'Do not create snapshots repeatedly while initialization is pending');
-		time += 30000;
+		time += 5000;
 		retrying.update(child.pid, 'lobby', read);
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(attempts, 2, 'Retry initialization in the same lobby');
@@ -166,20 +198,76 @@ try {
 	} finally {
 		Date.now = now;
 	}
-	let terminatedAttempts = 0;
-	const terminated = new NosSnapshotTracker(async () => {
-		terminatedAttempts++;
-		throw new NosReaderUnexpectedExitError('Reader was terminated');
+
+	let recoveryCalls = 0;
+	const recovering = new NosSnapshotTracker(async () => {
+		recoveryCalls++;
+		return layout;
 	});
-	terminated.update(child.pid, 'round', read);
-	await new Promise((resolve) => setImmediate(resolve));
-	terminated.update(child.pid, 'next round', read);
-	terminated.reset();
-	terminated.update(child.pid, 'after menu', read);
-	assert.equal(terminatedAttempts, 1, 'Do not relaunch a terminated reader for the same game process');
-	terminated.update(child.pid + 1, 'new process', read);
-	await new Promise((resolve) => setImmediate(resolve));
-	assert.equal(terminatedAttempts, 2, 'A new game process may try the reader again');
+	const unreadable = () => {
+		throw new Error('stale address');
+	};
+	try {
+		Date.now = () => time;
+		recovering.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		recovering.update(child.pid, 'round', read);
+		await command('team');
+		assert.ok(recovering.update(child.pid, 'round', read));
+		recovering.update(child.pid, 'round', unreadable);
+		time += 100;
+		assert.ok(recovering.update(child.pid, 'round', read), 'Transient failure recovers without restarting helper');
+		assert.equal(recoveryCalls, 1);
+		recovering.update(child.pid, 'round', unreadable);
+		time += 4999;
+		recovering.update(child.pid, 'round', unreadable);
+		assert.equal(recoveryCalls, 1);
+		time += 1;
+		recovering.update(child.pid, 'round', unreadable);
+		recovering.update(child.pid, 'round', read);
+		recovering.update(child.pid, 'round', read);
+		assert.equal(recoveryCalls, 2, 'Re-resolve invalid addresses once, without overlapping helpers');
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(recovering.update(child.pid, 'round', read), undefined, 'Do not restore old publications');
+		await command('team');
+		assert.ok(recovering.update(child.pid, 'round', read), 'Same round automatically recovers');
+		time += 3001;
+		assert.equal(recovering.update(child.pid, 'round', read), undefined);
+		time += 5000;
+		recovering.update(child.pid, 'round', read);
+		recovering.update(child.pid, 'round', read);
+		assert.equal(recoveryCalls, 3, 'Stopped publications also re-resolve automatically');
+		await new Promise((resolve) => setImmediate(resolve));
+		recovering.update(child.pid, 'round', read);
+		await command('team');
+		assert.ok(recovering.update(child.pid, 'round', read));
+
+		let terminatedAttempts = 0;
+		const terminated = new NosSnapshotTracker(async () => {
+			terminatedAttempts++;
+			if (terminatedAttempts <= 2) throw new NosReaderUnexpectedExitError('Reader was terminated');
+			return layout;
+		});
+		terminated.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		terminated.update(child.pid, 'round', read);
+		assert.equal(terminatedAttempts, 1);
+		time += 5000;
+		terminated.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(terminatedAttempts, 2, 'Retry a terminated helper in the same round');
+		time += 9999;
+		terminated.update(child.pid, 'round', read);
+		assert.equal(terminatedAttempts, 2, 'Back off after repeated helper failures');
+		time += 1;
+		terminated.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		terminated.update(child.pid, 'round', read);
+		await command('team');
+		assert.ok(terminated.update(child.pid, 'round', read), 'Recover after helper failures without leaving the round');
+	} finally {
+		Date.now = now;
+	}
 	let paletteAttempts = 0;
 	const terminatedPalette = new NosPaletteTracker(async () => {
 		paletteAttempts++;
@@ -196,6 +284,7 @@ try {
 		}),
 		undefined
 	);
+	assert.match(tracker.message, /unavailable/);
 	tracker.reset();
 	tracker.update(child.pid, 'round2', read);
 	tracker.reset();
@@ -205,7 +294,7 @@ try {
 	await command('clear');
 	assert.equal(live().players.length, 0);
 	console.log(
-		'PASS NoS x86: read-only unmanaged snapshots, UTF-16 name, RGB, team changes, empty/reset, PID guard, stale clearing'
+		`PASS NoS ${architecture}: costumes, legacy layout, UTF-16 name, RGB, team changes, empty/reset, PID guard, stale clearing`
 	);
 } finally {
 	if (handle) memoryjs.closeProcess(handle.handle);

@@ -29,10 +29,13 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 		if (authenticating || !password) return;
 		setAuthenticating(true);
 		try {
-			if (await ipcRenderer.invoke('OPEN_DEBUG', password)) {
+			const result = await ipcRenderer.invoke('OPEN_DEBUG', password);
+			if (result === 'authorized') {
 				setPasswordOpen(false);
 				setPasswordError('');
-			} else setPasswordError('認証できませんでした。パスワードと開発者用の設定を確認してください。');
+			} else if (result === 'unavailable') {
+				setPasswordError('認証サーバーに接続できないか、混雑しています。時間をおいて再試行してください。');
+			} else setPasswordError('認証できませんでした。配布されたデバッグ用パスワードを確認してください。');
 		} catch {
 			setPasswordError('認証処理に失敗しました。再試行してください。');
 		} finally {
@@ -43,7 +46,7 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 	return (
 		<>
 			<Dialog open={passwordOpen} onClose={closePassword} fullWidth maxWidth="xs">
-				<DialogTitle>開発者認証</DialogTitle>
+				<DialogTitle>デバッグ画面の認証</DialogTitle>
 				<form
 					onSubmit={(event) => {
 						event.preventDefault();
@@ -59,7 +62,7 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 							value={password}
 							disabled={authenticating}
 							error={!!passwordError}
-							helperText={passwordError || '開発者用パスワードを入力してください。'}
+							helperText={passwordError || '開発者または確認担当者用のデバッグパスワードを入力してください。'}
 							onChange={(event) => setPassword(event.target.value)}
 						/>
 					</DialogContent>

@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.8",
+	"version": "3.2.9",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -19,6 +19,10 @@
 		"url": "https://bettercrewlink.app"
 	},
 	"scripts": {
+		"debug:password:add": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-debug-password.ps1 -Add",
+		"test:nos-cosmetics": "node scripts/test-nos-cosmetics.mjs",
+		"test:debug-auth": "node scripts/test-debug-auth.mjs",
+		"test:remote-debug-auth": "node scripts/test-remote-debug-auth.mjs",
 		"rebuild:native": "electron-builder install-app-deps",
 		"lint": "eslint src",
 		"format": "prettier --write src",

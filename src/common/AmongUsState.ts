@@ -25,6 +25,8 @@ export interface AmongUsState {
 	mod: ModsType;
 	oldMeetingHud: boolean;
 	airshipMeetingByOutfit: boolean;
+	nosReadStatus?: { failed: boolean; message: string; schemaVersion?: number };
+	nosLoadedContents?: { path: string; status: string; data?: unknown };
 	nosLocalMicPosition?: { x: number; y: number };
 	nosRadios?: NosRadioData[];
 	debug?: {
@@ -85,10 +87,9 @@ export interface Player {
 	snrHat2Id?: string;
 	snrVisor2Id?: string;
 	nosPlayer?: NosPlayerData;
+	nosCosmetics?: Partial<Record<'skin' | 'hat' | 'hatBack' | 'visor' | 'bodyMask', string>>;
 	tohRole?: TohRole;
 	nosLobbyColor?: string;
-	sizeScale: number;
-	specialRole: 'JUMBO' | 'MINI' | 'UNKNOWN';
 	isImpostor: boolean;
 	isThirdParty: boolean;
 	isDead: boolean;

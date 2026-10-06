@@ -1,0 +1,22 @@
+[Unit]
+Description=TanukiBCL debug authentication
+After=network.target
+
+[Service]
+User=tanuki-debug-auth
+Group=tanuki-debug-auth
+WorkingDirectory=/opt/tanuki-debug-auth
+StateDirectory=tanuki-debug-auth
+StateDirectoryMode=0700
+Environment=DEBUG_AUTH_DB=/var/lib/tanuki-debug-auth/auth.sqlite3
+ExecStart=/opt/tanuki-debug-auth/.venv/bin/gunicorn --bind 127.0.0.1:8765 --workers 2 --timeout 30 auth:create_app()
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tanuki-debug-auth
+
+[Install]
+WantedBy=multi-user.target

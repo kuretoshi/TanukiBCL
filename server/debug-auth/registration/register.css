@@ -1,0 +1,12 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #242229; color: #f6f4f8; }
+body { margin: 0; padding: 24px 16px; }
+main { max-width: 480px; margin: 32px auto; padding: 24px; background: #302d36; border: 1px solid #63546c; border-radius: 16px; }
+h1 { font-size: 24px; margin-top: 0; }
+p { line-height: 1.7; }
+label { display: block; margin: 20px 0 8px; }
+input, button { box-sizing: border-box; width: 100%; padding: 12px; font: inherit; border-radius: 8px; border: 1px solid #887d92; }
+input { background: #242229; color: inherit; }
+button { margin-top: 24px; background: #bd83d6; color: #211629; font-weight: bold; cursor: pointer; }
+button:disabled { opacity: .6; }
+#result { color: #f2c8ff; overflow-wrap: anywhere; }
+.note { color: #cbc3d1; font-size: 14px; }

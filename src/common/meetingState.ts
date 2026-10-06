@@ -20,7 +20,6 @@ export function normalizeMeetingState(state: AmongUsState): AmongUsState {
 			appearanceVisorId: player.visorId,
 			appearanceId: `${player.colorId}|${player.hatId}|${player.skinId}|${player.visorId}`,
 			shiftedColor: -1,
-			sizeScale: 1,
 			inVent: false,
 		})),
 	};

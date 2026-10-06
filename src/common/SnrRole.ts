@@ -9,6 +9,9 @@ export interface SnrLiveRole {
 	ghostRole: SnrEnumValue | null;
 	isNeutral?: boolean;
 	canKill?: boolean;
+	assignedTeam?: SnrEnumValue | null;
+	winnerTeam?: SnrEnumValue | null;
+	teamTag?: SnrEnumValue | null;
 	jumbo?: { currentSize: number; maxSize: number };
 	hat2Id?: string;
 	visor2Id?: string;

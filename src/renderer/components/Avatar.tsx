@@ -1,3 +1,4 @@
+import { useNosBodyMask } from '../lib/nosCosmetics';
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { hasVisibleAppearanceChanged, Player } from '../../common/AmongUsState';
 import { getCosmetic, redAlive, cosmeticType, getHatDementions, useHatsLoaded, HatDementions } from '../lib/cosmetics';
@@ -69,6 +70,7 @@ export interface CanvasProps {
 	borderColor: string;
 	color: number;
 	nosColor?: string;
+	nosCosmetics?: Player['nosCosmetics'];
 	overflow: boolean;
 	usingRadio: boolean | undefined;
 	onClick?: () => void;
@@ -208,13 +210,25 @@ const Avatar: React.FC<AvatarProps> = function ({
 				? player.appearanceColorId
 				: player.colorId;
 	const displayHat = normalizeHatId(
-		hasDisplayOutfit || player.appearanceHatId.startsWith('Modded_') ? player.appearanceHatId : player.hatId
+		mod === 'NoS' && player.nosPlayer?.hat
+			? player.nosPlayer.hat.name
+			: hasDisplayOutfit || player.appearanceHatId.startsWith('Modded_')
+				? player.appearanceHatId
+				: player.hatId
 	);
 	const displaySkin = normalizeSkinId(
-		hasDisplayOutfit || player.appearanceSkinId.startsWith('Modded_') ? player.appearanceSkinId : player.skinId
+		mod === 'NoS' && player.nosPlayer?.skin
+			? player.nosPlayer.skin.name
+			: hasDisplayOutfit || player.appearanceSkinId.startsWith('Modded_')
+				? player.appearanceSkinId
+				: player.skinId
 	);
 	const displayVisor = normalizeVisorId(
-		hasDisplayOutfit || player.appearanceVisorId.startsWith('Modded_') ? player.appearanceVisorId : player.visorId
+		mod === 'NoS' && player.nosPlayer?.visor
+			? player.nosPlayer.visor.name
+			: hasDisplayOutfit || player.appearanceVisorId.startsWith('Modded_')
+				? player.appearanceVisorId
+				: player.visorId
 	);
 	const displayHat2 = normalizeHatId(player.snrHat2Id);
 	const displayVisor2 = normalizeVisorId(player.snrVisor2Id);
@@ -237,6 +251,9 @@ const Avatar: React.FC<AvatarProps> = function ({
 	) : (
 		<Canvas
 			color={displayColor}
+			nosCosmetics={
+				mod === 'NoS' ? (showHat === false ? { skin: player.nosCosmetics?.skin } : player.nosCosmetics) : undefined
+			}
 			nosColor={mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined}
 			hat={showHat === false ? '' : displayHat}
 			visor={showHat === false ? '' : displayVisor}
@@ -401,34 +418,45 @@ const Canvas = React.memo(function Canvas({
 	borderColor,
 	color,
 	nosColor,
+	nosCosmetics,
 	overflow,
 	usingRadio,
 	onClick,
 	mod,
 }: CanvasProps) {
 	const nosAvatar = useNosAvatar(isAlive, nosColor);
+	const bodyMask = useNosBodyMask(isAlive ? nosCosmetics?.bodyMask : undefined);
 	const hatsLoaded = useHatsLoaded();
 	const hatImg = useMemo(() => {
 		return {
 			base: getCosmetic(color, isAlive, cosmeticType.base),
-			hat_front: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod),
-			hat_back: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod),
-			skin: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod),
-			visor: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod),
+			hat_front: nosCosmetics?.hat ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod)),
+			hat_back:
+				nosCosmetics?.hatBack ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod)),
+			skin: nosCosmetics?.skin ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod)),
+			visor: nosCosmetics?.visor ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod)),
 			hat2_front: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat2, mod),
 			hat2_back: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat2, mod),
 			visor2: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor2, mod),
 			dementions: {
-				hat: getHatDementions(hat, mod, cosmeticType.hat),
-				hatBack: getHatDementions(hat, mod, cosmeticType.hat_back),
+				hat: nosCosmetics?.hat
+					? { top: '-52%', width: '140%', left: '-18px' }
+					: getHatDementions(hat, mod, cosmeticType.hat),
+				hatBack: nosCosmetics?.hatBack
+					? { top: '-52%', width: '140%', left: '-18px' }
+					: getHatDementions(hat, mod, cosmeticType.hat_back),
 				hat2: getHatDementions(hat2, mod, cosmeticType.hat),
 				hat2Back: getHatDementions(hat2, mod, cosmeticType.hat_back),
-				visor: getHatDementions(visor, mod, cosmeticType.visor),
+				visor: nosCosmetics?.visor
+					? { top: '-52%', width: '140%', left: '-18px' }
+					: getHatDementions(visor, mod, cosmeticType.visor),
 				visor2: getHatDementions(visor2, mod, cosmeticType.visor),
-				skin: getHatDementions(skin, mod, cosmeticType.skin),
+				skin: nosCosmetics?.skin
+					? { top: '-52%', width: '140%', left: '-18px' }
+					: getHatDementions(skin, mod, cosmeticType.skin),
 			},
 		};
-	}, [color, hat, hat2, skin, visor, visor2, hatsLoaded, isAlive, mod]);
+	}, [color, hat, hat2, skin, visor, visor2, hatsLoaded, isAlive, mod, nosCosmetics]);
 
 	const classes = useCanvasStyles({
 		isAlive,
@@ -446,6 +474,18 @@ const Canvas = React.memo(function Canvas({
 		e.currentTarget.style.display = '';
 	};
 
+	const bodyMaskStyle = bodyMask
+		? {
+				WebkitMaskImage: `url(${bodyMask})`,
+				maskImage: `url(${bodyMask})`,
+				WebkitMaskSize: '140% auto',
+				maskSize: '140% auto',
+				WebkitMaskPosition: `${-25 + Math.max(2, size / 40) / 2}px ${size * -0.3}px`,
+				maskPosition: `${-25 + Math.max(2, size / 40) / 2}px ${size * -0.3}px`,
+				WebkitMaskRepeat: 'no-repeat',
+				maskRepeat: 'no-repeat',
+			}
+		: {};
 	const hatElement = (
 		<>
 			{hatImg.hat2_back && (
@@ -524,17 +564,21 @@ const Canvas = React.memo(function Canvas({
 						transform: 'unset',
 					}}
 				>
-					<Box
-						component="img"
-						src={nosAvatar || hatImg.base}
-						sx={classes.base}
-						onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-							e.currentTarget.onerror = null;
-							e.currentTarget.src = redAlive;
-						}}
-					/>
+					<Box sx={{ position: 'absolute', inset: 0, zIndex: 6, ...bodyMaskStyle }}>
+						<Box
+							component="img"
+							src={nosAvatar || hatImg.base}
+							sx={classes.base}
+							onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+								e.currentTarget.onerror = null;
+								e.currentTarget.src = redAlive;
+							}}
+						/>
 
-					{hatImg.skin && <Box component="img" src={hatImg.skin} sx={classes.skin} onError={onerror} onLoad={onload} />}
+						{hatImg.skin && (
+							<Box component="img" src={hatImg.skin} sx={classes.skin} onError={onerror} onLoad={onload} />
+						)}
+					</Box>
 					{overflow && hatElement}
 				</Box>
 				{!overflow && hatElement}

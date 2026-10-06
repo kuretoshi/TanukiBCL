@@ -1,3 +1,5 @@
+import packageJson from '../../../package.json';
+import { compareAppVersions, mismatchedAppVersions, requiredAppVersion } from '../../common/appVersion';
 import { AmongUsState, ClientBoolMap, GameState, numberStringMap, Player } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
 import { GameInfo } from '../../common/GameInfo';
@@ -54,6 +56,7 @@ const OVERLAY_VOICE_KEYS: (keyof VoiceSnapshot)[] = [
 const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	connected: false,
 	error: '',
+	versionWarning: '',
 	talking: false,
 	muted: false,
 	deafened: false,
@@ -135,6 +138,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private audioUnsubscribers: (() => void)[] = [];
 	private connectionUnsubscribers: (() => void)[] = [];
 
+	private peerVersions: Record<string, string> = {};
+	private versionSentAt = 0;
+	private versionSession = '';
 	private otherVAD: ClientBoolMap = {};
 	private localTalking = false;
 	private playerConfigs: playerConfigMap = {};
@@ -268,6 +274,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.radioStatusVersions = {};
 		this.lastRadioStatusSentAt = 0;
 		this.playerConfigs = {};
+		this.peerVersions = {};
+		this.versionSentAt = 0;
+		this.versionSession = '';
 		this.host = emptyHost();
 		this.prev = emptyPrev();
 		this.snapshot = preserveError && lastError ? { ...EMPTY_SNAPSHOT, error: lastError } : EMPTY_SNAPSHOT;
@@ -398,6 +407,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		add(this.connection.on('peerStream', (peerId, stream) => this.audio.addPeer(peerId, stream)));
 		add(
 			this.connection.on('peerReady', () => {
+				this.versionSentAt = 0;
 				this.prev.tohRoleSentSignatures = {};
 				this.prev.nosRadioSentAt = 0;
 				const { gameState } = gameStore.getSnapshot();
@@ -415,6 +425,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		add(
 			this.connection.on('peerClosed', (peerId) => {
+				delete this.peerVersions[peerId];
+				this.updateVersionWarning();
 				this.prev.tohRoleSentSignatures = {};
 				if (this.connection.getClient(peerId)?.clientId === this.host.parsedHostId) {
 					this.tohRoleOverride = null;
@@ -436,6 +448,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		add(
 			this.connection.on('lobbyReset', () => {
+				this.peerVersions = {};
+				this.versionSentAt = 0;
+				this.patch({ versionWarning: '' });
 				this.prev.tohLobbySentSignature = '';
 				this.prev.tohRoleSentSignatures = {};
 				this.otherVAD = {};
@@ -453,6 +468,19 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private onPeerData(peerId: string, data: Record<string, unknown>): void {
 		const state = gameStore.getSnapshot().gameState;
 		const senderClientId = this.connection.getClient(peerId)?.clientId;
+		if (data.type === 'app-version') {
+			if (
+				data.lobbyCode !== state.lobbyCode ||
+				typeof data.version !== 'string' ||
+				compareAppVersions(data.version, packageJson.version) === undefined ||
+				senderClientId === undefined ||
+				!state.players?.some((player) => player.clientId === senderClientId && !player.disconnected)
+			)
+				return;
+			this.peerVersions[peerId] = data.version;
+			this.updateVersionWarning();
+			return;
+		}
 		if (data.type === 'nos-radio-data') {
 			const sender = state.players?.find((player) => player.clientId === senderClientId);
 			if (
@@ -546,6 +574,39 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			if (this.host.parsedHostId !== this.connection.getClient(peerId)?.clientId) return;
 			this.patch({ activeLobbySettings: { ...defaultLobbySettings, ...data } as ILobbySettings });
 		}
+	}
+
+	private updateVersionWarning(): void {
+		const state = gameStore.getSnapshot().gameState;
+		const hostVersion = this.host.isHost
+			? packageJson.version
+			: Object.entries(this.peerVersions).find(
+					([peerId]) => this.connection.getClient(peerId)?.clientId === this.host.parsedHostId
+				)?.[1];
+		const participants = Object.entries(this.peerVersions).flatMap(([peerId, version]) => {
+			const clientId = this.connection.getClient(peerId)?.clientId;
+			const player = state.players?.find((player) => player.clientId === clientId && !player.disconnected);
+			return player ? [{ name: player.name, version }] : [];
+		});
+		const required = requiredAppVersion(
+			packageJson.version,
+			hostVersion,
+			this.host.isHost,
+			participants.map((player) => player.version)
+		);
+		const mismatches = mismatchedAppVersions(packageJson.version, participants);
+		const mismatchWarning = mismatches.length
+			? `TanukiBCLのバージョンが異なるプレイヤーがいます: ${mismatches
+					.map((player) => `${player.name}（v${player.version}）`)
+					.join('、')}。この端末はv${packageJson.version}です。`
+			: '';
+		const updateWarning = required
+			? this.host.isHost
+				? `参加者はv${required}です。ホストのTanukiBCLをアップデートしてください（現在v${packageJson.version}）。`
+				: `ホストはv${required}です。この端末のTanukiBCLをアップデートしてください（現在v${packageJson.version}）。`
+			: '';
+		const versionWarning = [mismatchWarning, updateWarning].filter(Boolean).join(' ');
+		if (versionWarning !== this.snapshot.versionWarning) this.patch({ versionWarning });
 	}
 
 	private static inputSignature(settings: ISettings): string {
@@ -677,6 +738,19 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			activeLobbySettings: this.activeLobbySettings,
 		});
 
+		const versionSession = `${state.lobbyCode}|${state.clientId}`;
+		if (inactive || versionSession !== this.versionSession) {
+			this.peerVersions = {};
+			this.versionSentAt = 0;
+			this.versionSession = versionSession;
+		}
+		if (!inactive && Date.now() - this.versionSentAt >= 3000) {
+			this.connection.broadcast(
+				JSON.stringify({ type: 'app-version', lobbyCode: state.lobbyCode, version: packageJson.version })
+			);
+			this.versionSentAt = Date.now();
+		}
+		this.updateVersionWarning();
 		this.handleHostChange(state);
 		this.handleGameStateTransition(state, myPlayer);
 		this.handleLobbyConnection(state, myPlayer);
@@ -1064,12 +1138,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (!myPlayer) return;
 		const playerSocketIds = this.connection.playerSocketIds;
 		const targets = (state.players ?? [])
-			.filter(
-				(player) =>
-					!player.isLocal &&
-					!player.bugged &&
-					!player.disconnected
-			)
+			.filter((player) => !player.isLocal && !player.bugged && !player.disconnected)
 			.map((player) => playerSocketIds[player.clientId])
 			.filter(Boolean);
 		this.connection.sendControlToPeers(
@@ -1095,13 +1164,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const valid = this.snapshot.impostorRadioClientIds.filter((clientId) => {
 			if (clientId === myPlayer.clientId) return this.impostorRadioPressed && this.canUseRadio(state, myPlayer);
 			const player = state.players?.find((candidate) => candidate.clientId === clientId);
-			return (
-				!!player &&
-				this.canUseRadio(state, player) &&
-				!player.isDead &&
-				!player.disconnected &&
-				!player.bugged
-			);
+			return !!player && this.canUseRadio(state, player) && !player.isDead && !player.disconnected && !player.bugged;
 		});
 		if (valid.length !== this.snapshot.impostorRadioClientIds.length)
 			this.patch({ impostorRadioClientIds: valid, impostorRadioClientId: valid[0] ?? -1 });
@@ -1290,8 +1353,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 								shiftedColor: player.shiftedColor,
 								realColor: playerColors[player.colorId],
 							}),
-					usingRadio:
-						visibleRadioClientIds.includes(player.clientId),
+					usingRadio: visibleRadioClientIds.includes(player.clientId),
 					connected:
 						(playerSocketIds[player.clientId] &&
 							socketClients[playerSocketIds[player.clientId]]?.clientId === player.clientId) ||

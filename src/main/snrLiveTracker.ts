@@ -1,5 +1,14 @@
-import { hasSnrJumbo, isSnrJackal, SnrLiveRole } from '../common/SnrRole';
+import { hasSnrJumbo, isSnrJackal, SnrEnumValue, SnrLiveRole } from '../common/SnrRole';
 import { isSnrLiveLayout, readSnrLiveRoles, SnrLiveLayout } from './snrLiveMemory';
+
+function readTeam(value: unknown): SnrEnumValue | null | undefined {
+	if (value === null) return null;
+	if (!value || typeof value !== 'object') return undefined;
+	const team = value as Partial<SnrEnumValue>;
+	return Number.isSafeInteger(team.value) && (team.name === null || typeof team.name === 'string')
+		? { value: team.value!, name: team.name! }
+		: undefined;
+}
 
 export class SnrLiveTracker {
 	private pid = -1;
@@ -11,9 +20,13 @@ export class SnrLiveTracker {
 	private needsRoleMetadata = false;
 	private roleMetadataRetryAt = 0;
 	private cosmeticRefreshAt = 0;
+	private discoveryRetryAt = 0;
 	private roleMetadata = new Map<
 		number,
-		{ roleId: number; isNeutral: boolean; canKill: boolean; hat2Id?: string; visor2Id?: string }
+		{ roleId: number; isNeutral: boolean; canKill: boolean; hat2Id?: string; visor2Id?: string } & Pick<
+			SnrLiveRole,
+			'assignedTeam' | 'winnerTeam' | 'teamTag'
+		>
 	>();
 	message = 'SNR役職未取得';
 
@@ -29,6 +42,7 @@ export class SnrLiveTracker {
 		this.needsRoleMetadata = false;
 		this.roleMetadataRetryAt = 0;
 		this.cosmeticRefreshAt = 0;
+		this.discoveryRetryAt = 0;
 		this.roleMetadata.clear();
 		this.message = 'SNR役職未取得';
 	}
@@ -44,6 +58,9 @@ export class SnrLiveTracker {
 				role?: { value?: number };
 				isNeutral?: boolean;
 				canKill?: boolean;
+				assignedTeam?: unknown;
+				winnerTeam?: unknown;
+				teamTag?: unknown;
 				hat2Id?: string;
 				visor2Id?: string;
 			}>;
@@ -51,6 +68,7 @@ export class SnrLiveTracker {
 		if (response.status !== 'ok' || response.pid !== pid || !isSnrLiveLayout(response.liveLayout, pid)) return false;
 		this.pid = pid;
 		this.layout = response.liveLayout;
+		this.discoveryRetryAt = 0;
 		this.needsRoleMetadata = !(response.players ?? []).some(
 			(player) =>
 				Number.isInteger(player.playerId) &&
@@ -70,6 +88,9 @@ export class SnrLiveTracker {
 						roleId: player.role!.value!,
 						isNeutral: player.isNeutral === true,
 						canKill: player.canKill === true,
+						assignedTeam: readTeam(player.assignedTeam),
+						winnerTeam: readTeam(player.winnerTeam),
+						teamTag: readTeam(player.teamTag),
 						hat2Id: player.hat2Id || previousMetadata.get(player.playerId!)?.hat2Id,
 						visor2Id: player.visor2Id || previousMetadata.get(player.playerId!)?.visor2Id,
 					},
@@ -93,12 +114,13 @@ export class SnrLiveTracker {
 							: `cosmetics-${Math.floor(Date.now() / 5000)}`
 				}`
 			: session;
-		const retryReady = !this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt;
+		const retryReady =
+			(!this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt) && Date.now() >= this.discoveryRetryAt;
 		if (
 			(!this.layout || this.needsJumboLayout || this.needsRoleMetadata || refreshCosmetics) &&
 			retryReady &&
 			!this.pending &&
-			this.attemptedSession !== discoverySession
+			(this.attemptedSession !== discoverySession || !this.layout)
 		) {
 			this.attemptedSession = discoverySession;
 			this.pending = true;
@@ -107,10 +129,16 @@ export class SnrLiveTracker {
 			void this.discover(pid)
 				.then((result) => {
 					if (request !== this.request) return;
-					if (!this.accept(pid, result)) this.message = 'SNR役職未取得。「SNR役職を取得」で再確認してください。';
+					if (!this.accept(pid, result)) {
+						this.discoveryRetryAt = Date.now() + 10000;
+						this.message = 'SNR役職未取得（10秒後に自動再取得）。';
+					}
 				})
 				.catch(() => {
-					if (request === this.request) this.message = 'SNR役職の読み取り位置を取得できませんでした。';
+					if (request === this.request) {
+						this.discoveryRetryAt = Date.now() + 10000;
+						this.message = 'SNR役職の読み取り位置を取得できませんでした（10秒後に自動再取得）。';
+					}
 				})
 				.finally(() => {
 					if (request === this.request) this.pending = false;
@@ -128,6 +156,9 @@ export class SnrLiveTracker {
 						...role,
 						isNeutral: true,
 						canKill: true,
+						assignedTeam: metadata?.roleId === role.role.value ? metadata.assignedTeam : undefined,
+						winnerTeam: metadata?.roleId === role.role.value ? metadata.winnerTeam : undefined,
+						teamTag: metadata?.roleId === role.role.value ? metadata.teamTag : undefined,
 						hat2Id: metadata?.hat2Id,
 						visor2Id: metadata?.visor2Id,
 					});
@@ -136,6 +167,9 @@ export class SnrLiveTracker {
 						...role,
 						isNeutral: metadata.isNeutral,
 						canKill: metadata.canKill,
+						assignedTeam: metadata.assignedTeam,
+						winnerTeam: metadata.winnerTeam,
+						teamTag: metadata.teamTag,
 						hat2Id: metadata.hat2Id,
 						visor2Id: metadata.visor2Id,
 					});
@@ -150,7 +184,7 @@ export class SnrLiveTracker {
 			return roles;
 		} catch {
 			// Keep only the layout, never old role values; moving objects are resolved next tick.
-			this.message = 'SNR役職未取得（更新待ち）。続く場合は「SNR役職を取得」で再確認してください。';
+			this.message = 'SNR役職未取得（自動更新待ち）。';
 			return new Map();
 		}
 	}

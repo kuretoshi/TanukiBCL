@@ -36,6 +36,7 @@ import { readSnrRoles } from './snrRoleReader';
 import { SnrLiveTracker } from './snrLiveTracker';
 import { formatSnrRole } from '../common/SnrRole';
 import { formatNosTeam } from '../common/NosSnapshot';
+import { NosContentsTracker } from './nosContents';
 import { NosSnapshotTracker } from './nosSnapshotTracker';
 import { resolveNosSnapshot } from './nosSnapshotReader';
 import { NosPaletteTracker } from './nosPalette';
@@ -133,16 +134,13 @@ export default class GameReader {
 	debugBaselines: Record<string, Record<number, number>> = {};
 	nativeReadFailureCount = 0;
 	private snrRoles = new SnrLiveTracker(readSnrRoles);
+	nosContents = new NosContentsTracker();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
 	private tohRoles = new TohLiveTracker(readTohLayout);
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette', this.is_64bit));
 	private snrRound = 0;
 	private snrInGame = false;
 	private snrCosmeticAppearances = new Map<string, { hat: string; skin: string; visor: string }>();
-
-	acceptSnrRoles(pid: number, result: unknown): void {
-		if (this.amongUs && this.pid === pid) this.snrRoles.accept(pid, result);
-	}
 
 	constructor(sendIPC: Electron.WebContents['send']) {
 		this.is_linux = platform() === 'linux';
@@ -607,12 +605,14 @@ export default class GameReader {
 						: undefined;
 				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
 				if (this.loadedMod.id === 'NoS') {
+					this.nosContents.update(path.dirname(this.gamePath));
 					const data = new Map(nos?.players.map((player) => [player.playerId, player]));
 					for (const player of players) {
 						const published = player.disconnected ? undefined : data.get(player.id);
 						// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
 						player.nosLobbyColor = player.disconnected ? undefined : nosLobbyColors?.[player.id];
 						player.nosPlayer = published;
+						player.nosCosmetics = this.nosContents.cosmetics(published);
 						// Vanilla's substitute role is not an authoritative NoS team.
 						player.isImpostor = published?.isImpostor ?? false;
 						player.isThirdParty = published?.isNeutral ?? false;
@@ -620,7 +620,25 @@ export default class GameReader {
 						if (published) player.appearanceName = published.name;
 					}
 				}
+				const missingNosPlayers = nos
+					? players.filter((player) => !player.disconnected && !nos.players.some((data) => data.playerId === player.id))
+					: [];
 				const newState: AmongUsState = normalizeMeetingState({
+					nosReadStatus:
+						this.loadedMod.id === 'NoS'
+							? {
+									failed: snrActive && (!nos || missingNosPlayers.length > 0),
+									message:
+										snrActive && nos && missingNosPlayers.length > 0
+											? `NoSプレイヤーデータ未取得: PlayerId ${missingNosPlayers.map((player) => player.id).join(', ')}`
+											: this.nosSnapshot.message,
+									schemaVersion: this.nosSnapshot.schemaVersion,
+								}
+							: undefined,
+					nosLoadedContents:
+						this.loadedMod.id === 'NoS' && voiceDebugEnabled
+							? this.nosContents.update(path.dirname(this.gamePath))
+							: undefined,
 					nosLocalMicPosition: nos?.localMicPosition,
 					nosRadios: nos?.radios,
 					lobbyCode: lobbyCode,
@@ -823,7 +841,7 @@ export default class GameReader {
 				const objectFloats = this.readDebugFloatCandidates(player.objectPtr, 0, 220);
 				const playerFloats = this.readDebugFloatCandidates(player.ptr, 0, 160);
 				const roleFloats = this.readDebugFloatCandidates(player.rolePtr, 0, 260);
-				return `${player.clientId}:${name} role=${player.roleName} size=${player.sizeScale.toFixed(3)} pos=${player.x.toFixed(2)},${player.y.toFixed(2)} obj=[${objectFloats || '-'}] player=[${playerFloats || '-'}] roleFloats=[${roleFloats || '-'}]`;
+				return `${player.clientId}:${name} role=${player.roleName} pos=${player.x.toFixed(2)},${player.y.toFixed(2)} obj=[${objectFloats || '-'}] player=[${playerFloats || '-'}] roleFloats=[${roleFloats || '-'}]`;
 			})
 			.join('\n');
 	}
@@ -1551,40 +1569,10 @@ export default class GameReader {
 
 	formatRoleLabel(player?: Player): string {
 		if (!player) return 'unknown';
-		if (player.specialRole !== 'UNKNOWN') return player.specialRole;
 		if (player.isImpostor) return 'Impostor';
 		if (player.isThirdParty) return `ThirdParty(${player.roleTeam})`;
 		return 'Crewmate';
 	}
-
-	/* TODO: ミニ・ジャンボのサイズ推定は未完成のため、一時的に無効化。
-	private readRoleSizeScale(rolePtr: number): number {
-		if (!rolePtr) return 1;
-		const candidates: number[] = [];
-
-		for (let offset = 0; offset <= 256; offset += 4) {
-			const value = this.readMemory<number>('float', rolePtr + offset, undefined, NaN);
-			if (!Number.isFinite(value)) {
-				continue;
-			}
-			if (value > 0.2 && value < 3 && (value < 0.9 || value > 1.1)) {
-				candidates.push(Number(value.toFixed(3)));
-			}
-		}
-
-		const likelySizeValues = Array.from(new Set(candidates)).filter(
-			(value) => (value >= 0.35 && value <= 0.8) || (value >= 1.2 && value <= 2.5)
-		);
-
-		return likelySizeValues.length === 1 ? likelySizeValues[0] : 1;
-	}
-
-	private getSpecialRoleFromSize(sizeScale: number): Player['specialRole'] {
-		if (sizeScale >= 1.2) return 'JUMBO';
-		if (sizeScale <= 0.8) return 'MINI';
-		return 'UNKNOWN';
-	}
-	*/
 
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
 		if (!this.PlayerStruct || !this.offsets) return undefined;
@@ -1676,16 +1664,10 @@ export default class GameReader {
 		const x_round = parseFloat(x?.toFixed(4));
 		const y_round = parseFloat(y?.toFixed(4));
 
-		// TODO: 判定が完成するまで、サイズと特殊役職は通常値に固定する。
-		// const sizeScale = this.readRoleSizeScale(data.rolePtr);
-		// const specialRole = this.getSpecialRoleFromSize(sizeScale);
-		const sizeScale = 1;
-		const specialRole: Player['specialRole'] = 'UNKNOWN';
 		const roleName = this.formatRoleLabel({
 			roleTeam: data.impostor,
 			isImpostor: data.impostor == 1,
 			isThirdParty: data.impostor != 0 && data.impostor != 1,
-			specialRole,
 		} as Player);
 		const nameHash = this.hashCode(name);
 		const playerConfigId = playerUid ? this.hashCode(playerUid) : nameHash;
@@ -1723,8 +1705,6 @@ export default class GameReader {
 			rolePtr: data.rolePtr,
 			roleTeam: data.impostor,
 			roleName,
-			sizeScale,
-			specialRole,
 			isImpostor: data.impostor == 1,
 			isThirdParty: data.impostor != 0 && data.impostor != 1,
 			isDead: data.dead == 1,

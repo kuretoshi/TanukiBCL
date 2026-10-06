@@ -1,6 +1,6 @@
 import electronUpdater from 'electron-updater';
-import { readSnrRoles } from './snrRoleReader';
 import { verifyDebugPassword } from './debugAuth';
+import { verifyRemoteDebugPassword } from './remoteDebugAuth';
 import { setVoiceDebugEnabled } from './GameReader';
 import { app, BrowserWindow, ipcMain, session, net, protocol, dialog } from 'electron';
 import { copyFile } from 'node:fs/promises';
@@ -88,6 +88,7 @@ declare global {
 }
 
 protocol.registerSchemesAsPrivileged([
+	{ scheme: 'nos-cosmetic', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 	{
 		scheme: 'snr-cosmetic',
 		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
@@ -657,6 +658,15 @@ if (!gotTheLock) {
 
 	// create main BrowserWindow when electron is ready
 	app.whenReady().then(async () => {
+		protocol.handle('nos-cosmetic', async (request) => {
+			const url = new URL(request.url);
+			if (gameReader.loadedMod.id !== 'NoS' || url.host !== 'image') return new Response(null, { status: 404 });
+			gameReader.nosContents.update(joinPath(gameReader.gamePath, '..'));
+			const image = await gameReader.nosContents.image(url.pathname.slice(1), url.searchParams.get('color') ?? '');
+			return image
+				? new Response(new Uint8Array(image), { headers: { 'Content-Type': 'image/png' } })
+				: new Response(null, { status: 404 });
+		});
 		protocol.handle('snr-cosmetic', async (request) => {
 			const url = new URL(request.url);
 			const part = url.host as SnrCosmeticPart;
@@ -750,27 +760,6 @@ if (!gotTheLock) {
 		if (event.sender !== global.debugWindow?.webContents) return '';
 		return readDebugLog();
 	});
-	let readingSnrRoles = false;
-	ipcMain.handle('debug:snr-roles', async (event) => {
-		if (event.sender !== global.debugWindow?.webContents) return { status: 'error', message: '開発者認証が必要です。' };
-		if (readingSnrRoles) return { status: 'error', message: '取得中です。' };
-		if (!gameReader.amongUs || gameReader.loadedMod.id !== 'SUPER_NEW_ROLES')
-			return { status: 'error', message: 'SuperNewRolesの起動を確認してください。' };
-		const pid = gameReader.pid;
-		readingSnrRoles = true;
-		try {
-			const result = await readSnrRoles(pid);
-			if (!gameReader.amongUs || gameReader.pid !== pid)
-				return { status: 'error', message: '取得中にゲームが終了または切り替わりました。' };
-			console.log('[SNR roles]', JSON.stringify({ pid, result }));
-			gameReader.acceptSnrRoles(pid, result);
-			if ((result as { status?: string }).status === 'error')
-				console.warn('[SNR roles] 取得失敗', JSON.stringify({ pid, result }));
-			return result;
-		} finally {
-			readingSnrRoles = false;
-		}
-	});
 	let savingDebugLog = false;
 	ipcMain.handle('debug:save-log', async (event) => {
 		const window = global.debugWindow;
@@ -795,17 +784,32 @@ if (!gotTheLock) {
 		}
 	});
 	let nextDebugAttempt = 0;
-	ipcMain.handle('OPEN_DEBUG', (event, password: unknown) => {
-		if (event.sender !== global.settingsWindow?.webContents || Date.now() < nextDebugAttempt) return false;
+	let debugAttemptPending = false;
+	ipcMain.handle('OPEN_DEBUG', async (event, password: unknown) => {
+		if (event.sender !== global.settingsWindow?.webContents || Date.now() < nextDebugAttempt || debugAttemptPending)
+			return 'denied';
 		nextDebugAttempt = Date.now() + 1000;
-		if (!verifyDebugPassword(password)) return false;
+		debugAttemptPending = true;
+		let result: 'authorized' | 'denied' | 'unavailable';
+		try {
+			const endpoint = process.env.TANUKI_DEBUG_AUTH_URL;
+			result = endpoint
+				? await verifyRemoteDebugPassword(password, endpoint, net.fetch)
+				: verifyDebugPassword(password)
+					? 'authorized'
+					: 'denied';
+		} finally {
+			debugAttemptPending = false;
+		}
+		if (result !== 'authorized') return result;
+		if (event.sender.isDestroyed() || event.sender !== global.settingsWindow?.webContents) return 'denied';
 		if (!global.debugWindow) global.debugWindow = createDebugWindow();
 		else {
 			if (global.debugWindow.isMinimized()) global.debugWindow.restore();
 			global.debugWindow.show();
 			global.debugWindow.focus();
 		}
-		return true;
+		return 'authorized';
 	});
 	ipcMain.on('OPEN_INQUIRY', () => {
 		if (!global.inquiryWindow) global.inquiryWindow = createInquiryWindow();

@@ -4,6 +4,7 @@ namespace Nebula.Collab;
 
 public static unsafe class TBCLFields
 {
+    public const int Version = 20261005;
     private static int nextIndex;
     public static Snapshot* Latest;
     static TBCLFields() { nextIndex = 0; Latest = null; }
@@ -14,6 +15,10 @@ public static unsafe class TBCLFields
         public int RadiosLength;
         public RadioData* Radios;
     }
+    public struct CostumeData {
+        public byte NameLength;
+        public fixed char Name[128];
+    }
     public struct PlayerData {
         public byte PlayerId;
         public bool IsKiller, IsImpostor, IsCrewmate, IsNeutral, IsImpostorlike, IsJammed;
@@ -22,6 +27,7 @@ public static unsafe class TBCLFields
         public byte NameLength;
         public fixed char Name[32];
         public float ColorR, ColorG, ColorB;
+        public CostumeData Skin, Hat, Visor;
     }
     public enum RadioKind { Unknown, Impostor, Jackal }
     public struct RadioData {
@@ -37,6 +43,8 @@ public static unsafe class TBCLFields
             SpeakerPositionX = 2.5f, SpeakerPositionY = -1.25f, BodyRateX = 1.25f, BodyRateY = .75f,
             ColorR = .25f, ColorG = .5f, ColorB = .75f, NameLength = 3 };
         var name = "テスト"; for (int i = 0; i < name.Length; i++) player->Name[i] = name[i];
+        player->Skin.NameLength = 4;
+        var costumeName = "Test"; for (int i = 0; i < costumeName.Length; i++) player->Skin.Name[i] = costumeName[i];
         var snapshot = (Snapshot*)Marshal.AllocHGlobal(sizeof(Snapshot));
         var radio = (RadioData*)Marshal.AllocHGlobal(sizeof(RadioData));
         *radio = new RadioData { Kind = RadioKind.Jackal, HearableMask = 0xB, NameLength = 6 };

@@ -1,108 +1,55 @@
-import React, { useState } from 'react';
-import { Box, Button, Typography, Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material';
-import { ipcRenderer } from '../lib/electron-bridge';
+import React from 'react';
+import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material';
 import { AmongUsState } from '../../common/AmongUsState';
+import type { SnrEnumValue } from '../../common/SnrRole';
 
-type EnumValue = { value: number; name: string | null } | null;
-interface SnrRow {
-	playerId: number;
-	role: EnumValue;
-	modifier: EnumValue;
-	ghostRole: EnumValue;
-	assignedTeam: EnumValue;
-	winnerTeam: EnumValue;
-	teamTag: EnumValue;
-	roleClass: string | null;
-	abilities: { name: string | null; currentTeam: EnumValue }[];
-}
-interface SnrResult {
-	status: string;
-	message?: string;
-	pid?: number;
-	capturedAt?: string;
-	version?: string;
-	players?: SnrRow[];
-	diagnostics?: unknown[];
-}
-const label = (value: EnumValue) => (value ? `${value.name || '不明'} (${value.value})` : '未取得');
+const label = (value: SnrEnumValue | null | undefined) =>
+	value ? `${value.name ?? '名称不明'} (${value.value})` : '未取得';
 
 export default function SnrRolePanel({ gameState }: { gameState: AmongUsState }): React.JSX.Element {
-	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState<SnrResult | null>(null);
-	const read = async () => {
-		if (busy) return;
-		setBusy(true);
-		setResult(null);
-		try {
-			setResult((await ipcRenderer.invoke('debug:snr-roles')) as SnrResult);
-		} catch {
-			setResult({ status: 'error', message: '取得処理に失敗しました。' });
-		} finally {
-			setBusy(false);
-		}
-	};
+	const players = gameState.players ?? [];
 	return (
-		<Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: 2, userSelect: 'text' }}>
-			<Button variant="outlined" disabled={busy || gameState.mod !== 'SUPER_NEW_ROLES'} onClick={() => void read()}>
-				{busy ? '取得中…' : 'SNR役職を取得'}
-			</Button>
-			<Typography variant="body2" sx={{ my: 1 }}>
-				取得ボタンを押した時点の管理メモリを読み取ります。音声の陣営判定には反映しません。
-				取得後は「リアルタイム」タブの役職表示も自動更新します。
+		<Box sx={{ p: 2, userSelect: 'text', overflowX: 'auto' }}>
+			<Typography variant="body2" sx={{ mb: 1 }}>
+				役職・追加属性・幽霊役職は常時更新します。割り当て陣営・勝利陣営・チームは既存の自動取得結果で約5秒ごとに更新します。
 			</Typography>
-			<Typography variant="caption">
-				スナップショット作成時にゲームが一瞬停止する場合があります。試合中の連続取得は避けてください。
+			<Typography variant="caption" color="text.secondary">
+				{gameState.debug?.snrRoleStatus || 'SNR情報を自動取得中…'}
 			</Typography>
-			{result?.status === 'error' && (
-				<Typography role="alert" sx={{ mt: 1 }}>
-					{result.message}
-				</Typography>
-			)}
-			{result?.status === 'ok' && (
-				<>
-					<Typography sx={{ my: 1 }}>
-						取得時刻: {result.capturedAt} / PID: {result.pid} / SNR: {result.version}
-					</Typography>
-					<Table size="small">
-						<TableHead>
-							<TableRow>
-								{['Player ID', 'SNR役職', '割り当て陣営', '勝利陣営', 'チーム', '追加属性', '幽霊役職'].map((t) => (
-									<TableCell key={t}>{t}</TableCell>
-								))}
-							</TableRow>
-						</TableHead>
-						<TableBody>
-							{result.players?.map((p) => (
-								<TableRow key={p.playerId}>
-									<TableCell>{p.playerId}</TableCell>
-									<TableCell>{label(p.role)}</TableCell>
-									<TableCell>{label(p.assignedTeam)}</TableCell>
-									<TableCell>{label(p.winnerTeam)}</TableCell>
-									<TableCell>{label(p.teamTag)}</TableCell>
-									<TableCell>{label(p.modifier)}</TableCell>
-									<TableCell>{label(p.ghostRole)}</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-					{result.players?.length === 0 && (
-						<Typography sx={{ mt: 1 }}>
-							プレイヤー情報はまだ初期化されていません。役職割り当て後に再取得してください。
-						</Typography>
-					)}
-					<Box component="pre" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-						{JSON.stringify(result.players, null, 2)}
-					</Box>
-				</>
-			)}
-			{!!result?.diagnostics?.length && (
-				<Box component="details" sx={{ mt: 2 }}>
-					<summary>取得診断</summary>
-					<Box component="pre" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-						{JSON.stringify(result.diagnostics, null, 2)}
-					</Box>
-				</Box>
-			)}
+			<Table size="small" sx={{ mt: 1, '& th, & td': { verticalAlign: 'top' } }}>
+				<TableHead>
+					<TableRow>
+						{['プレイヤー / ID', 'SNR役職', '割り当て陣営', '勝利陣営', 'チーム', '追加属性', '幽霊役職'].map(
+							(title) => (
+								<TableCell key={title}>{title}</TableCell>
+							)
+						)}
+					</TableRow>
+				</TableHead>
+				<TableBody>
+					{players.map((player) => (
+						<TableRow key={player.id} selected={player.isLocal}>
+							<TableCell>
+								{player.name}
+								{player.isLocal ? '（自分）' : ''}
+								<br />
+								ID: {player.id}
+							</TableCell>
+							<TableCell>{label(player.snrRole?.role)}</TableCell>
+							<TableCell>{label(player.snrRole?.assignedTeam)}</TableCell>
+							<TableCell>{label(player.snrRole?.winnerTeam)}</TableCell>
+							<TableCell>{label(player.snrRole?.teamTag)}</TableCell>
+							<TableCell>
+								{player.snrRole?.modifier ? label(player.snrRole.modifier) : player.snrRole ? 'なし' : '未取得'}
+							</TableCell>
+							<TableCell>
+								{player.snrRole?.ghostRole ? label(player.snrRole.ghostRole) : player.snrRole ? 'なし' : '未取得'}
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+			{!players.length && <Typography sx={{ mt: 1 }}>プレイヤー情報を待っています…</Typography>}
 		</Box>
 	);
 }

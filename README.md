@@ -123,6 +123,20 @@ npm.cmd run build
 N-API対応の検証済みビルドを使うため、配布設定の`npmRebuild`は無効です。ネイティブ依存を変更した場合は、NodeとElectronの両方で読み込みとメモリ読み取りを再検証してください。今回の配布確認対象はWindows x64です。
 
 
+## デバッグ確認担当者のパスワード追加
+
+3.2.9の配布版は招待コード方式です。管理者がPiでコードを発行し、担当者に [登録ページ](https://debug-auth.kuretoshi.work/debug-register) とコードを渡します。担当者が自分で設定したパスワードでデバッグ画面を開けます。コードは1回限り・標準72時間有効です。発行・無効化の手順は [server/debug-auth/README.md](server/debug-auth/README.md) を参照してください。
+
+以下はビルド時に `TANUKI_DEBUG_AUTH_URL` を明示的に空文字へ設定した、ローカル認証版の手順です。
+
+開発者は [scripts/add-debug-password.cmd](scripts/add-debug-password.cmd) をダブルクリックして、担当者名と新しいパスワードを2回入力できます。ターミナルでは `npm run debug:password:add` でも起動できます。既存のパスワードは残り、最大16個まで追加できます。
+
+設定はGit管理外の `.tools/debug-password.json` にソルトとハッシュで保存されます。追加後、通常版とLite版を再ビルドして配布してください。確認担当者は配布されたパスワードを設定画面のデバッグ認証で入力して開きます。配布済みアプリには再ビルド前の追加は反映されません。
+
+従来の `scripts/set-debug-password.ps1` を `-Add` なしで実行すると、既存の全パスワードを1個の新しいパスワードに置き換えます。
+
+通常のビルドは公開済みのHTTPS認証APIを使用します。ビルド時に `TANUKI_DEBUG_AUTH_URL` を指定すると接続先を変更できます。このモードではローカルパスワードを組み込まず、通信失敗時にもローカル認証へ切り替えません。
+
 ## 貢献
 
 不具合修正、翻訳改善、日本語表現の調整、機能改善の Pull Request を歓迎します。

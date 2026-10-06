@@ -4,6 +4,9 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 
 internal static class Program
 {
@@ -13,6 +16,7 @@ internal static class Program
     const string PlayerDataTypeName = "Nebula.Collab.TBCLFields+PlayerData";
     const string RadioDataTypeName = "Nebula.Collab.TBCLFields+RadioData";
     const int ExpectedSchemaVersion = 20260918;
+    const int CostumeSchemaVersion = 20261005;
     const int PlayersCapacity = 24;
     const int RadiosCapacity = 8;
     const int NameCapacity = 32;
@@ -198,6 +202,9 @@ internal static class Program
 
         var playerLayout = new PlayerDataLayout
         {
+            Skin = ResolveCostumeLayout(playerData, "Skin"),
+            Hat = ResolveCostumeLayout(playerData, "Hat"),
+            Visor = ResolveCostumeLayout(playerData, "Visor"),
             PlayerId = RequiredField(playerData, "PlayerId").Offset,
             IsKiller = RequiredField(playerData, "IsKiller").Offset,
             IsImpostor = RequiredField(playerData, "IsImpostor").Offset,
@@ -224,7 +231,10 @@ internal static class Program
 			playerLayout.ColorB + sizeof(float),
 			(playerLayout.BodyRateX ?? 0) + sizeof(float),
 			(playerLayout.BodyRateY ?? 0) + sizeof(float),
-			(playerLayout.IsJammed ?? 0) + sizeof(byte)
+			(playerLayout.IsJammed ?? 0) + sizeof(byte),
+            playerLayout.Skin is { } skin ? skin.Offset + skin.Size : 0,
+            playerLayout.Hat is { } hat ? hat.Offset + hat.Size : 0,
+            playerLayout.Visor is { } visor ? visor.Offset + visor.Size : 0
 		}.Max(), 4);
 
 		RadioDataLayout? radioLayout = null;
@@ -254,7 +264,7 @@ internal static class Program
             Pid = pid,
             ProcessStartUtcTicks = started,
             PointerSize = target.DataReader.PointerSize,
-            SchemaVersion = ExpectedSchemaVersion,
+            SchemaVersion = ReadSchemaVersion(playerData.Module, playerLayout.Skin is not null),
             LatestSlotAddress = latestSlotAddress,
             Snapshot = snapshotLayout,
             PlayerData = playerLayout,
@@ -365,6 +375,9 @@ internal static class Program
 
         return new
         {
+            skin = ParseCostume(bytes, start, layout.Skin),
+            hat = ParseCostume(bytes, start, layout.Hat),
+            visor = ParseCostume(bytes, start, layout.Visor),
             playerId = U8(layout.PlayerId),
             isKiller = Bool(layout.IsKiller),
             isImpostor = Bool(layout.IsImpostor),
@@ -381,6 +394,52 @@ internal static class Program
         };
     }
 
+    static int ReadSchemaVersion(ClrModule module, bool hasCostumes)
+    {
+        using var assembly = File.OpenRead(module.Name!);
+        using var pe = new PEReader(assembly);
+        var reader = pe.GetMetadataReader();
+        foreach (var handle in reader.TypeDefinitions) {
+            var type = reader.GetTypeDefinition(handle);
+            if (reader.GetString(type.Name) != "TBCLFields" || reader.GetString(type.Namespace) != "Nebula.Collab") continue;
+            foreach (var fieldHandle in type.GetFields()) {
+                var field = reader.GetFieldDefinition(fieldHandle);
+                if (reader.GetString(field.Name) != "Version") continue;
+                var constantHandle = field.GetDefaultValue();
+                if (constantHandle.IsNil) break;
+                var constant = reader.GetConstant(constantHandle);
+                if (constant.TypeCode == ConstantTypeCode.Int32) return reader.GetBlobReader(constant.Value).ReadInt32();
+            }
+        }
+        return hasCostumes ? CostumeSchemaVersion : ExpectedSchemaVersion;
+    }
+
+    static CostumeLayout? ResolveCostumeLayout(ClrType player, string name)
+    {
+        var field = player.GetFieldByName(name);
+        if (field is null) return null;
+        var type = field.Type ?? throw new InvalidOperationException($"Missing {name} costume type");
+        var buffer = RequiredField(type, "Name");
+        var length = RequiredField(type, "NameLength");
+        // ClrMD reports only the first char for a fixed buffer field, and StaticSize includes object headers.
+        var bufferType = buffer.Type ?? throw new InvalidOperationException("Missing costume name buffer type");
+        using var assembly = File.OpenRead(bufferType.Module.Name!);
+        using var pe = new PEReader(assembly);
+        int bufferSize = pe.GetMetadataReader().GetTypeDefinition(MetadataTokens.TypeDefinitionHandle((int)(bufferType.MetadataToken & 0x00ffffff))).GetLayout().Size;
+        int capacity = bufferSize / sizeof(char);
+        if (capacity <= 0 || capacity > 1024) throw new InvalidOperationException($"Invalid {name} name capacity");
+        return new CostumeLayout { Offset = field.Offset, NameLength = length.Offset, Name = buffer.Offset, Capacity = capacity, Size = Math.Max(length.Offset + 1, buffer.Offset + bufferSize) };
+    }
+
+    static object? ParseCostume(byte[] bytes, int start, CostumeLayout? costume)
+    {
+        if (costume is null) return null;
+        int offset = start + costume.Offset;
+        int length = bytes[offset + costume.NameLength];
+        if (length > costume.Capacity) throw new InvalidOperationException("Invalid costume name length");
+        return new { name = Encoding.Unicode.GetString(bytes, offset + costume.Name, length * sizeof(char)) };
+    }
+
     static void ValidateMetadata(int pid, long started, ResolvedMetadata metadata)
     {
         if (metadata.Pid != pid)
@@ -389,7 +448,7 @@ internal static class Program
             throw new InvalidOperationException("The Among Us process has restarted. Run resolve again.");
         if (metadata.PointerSize is not (4 or 8))
             throw new InvalidOperationException("Invalid pointer size in metadata");
-        if (metadata.SchemaVersion != ExpectedSchemaVersion)
+        if (metadata.SchemaVersion != ExpectedSchemaVersion && metadata.SchemaVersion != 20260928 && metadata.SchemaVersion != CostumeSchemaVersion)
             throw new InvalidOperationException($"Unsupported TBCL schema version {metadata.SchemaVersion}");
 
         ValidateLayout(metadata.Snapshot, metadata.PlayerData, metadata.RadioData, metadata.PointerSize);
@@ -407,6 +466,11 @@ internal static class Program
         if (snapshotOffsets.Any(x => x < 0))
             throw new InvalidOperationException("Invalid Snapshot layout metadata");
 
+        var costumes = new[] { player.Skin, player.Hat, player.Visor };
+        if (costumes.Any(c => c is not null) && costumes.Any(c => c is null)) throw new InvalidOperationException("Incomplete costume layout");
+        foreach (var costume in costumes) {
+            if (costume is not null && (costume.Offset < 0 || costume.Capacity <= 0 || costume.Capacity > 1024 || costume.NameLength < 0 || costume.NameLength >= costume.Size || costume.Name < 0 || costume.Name + costume.Capacity * 2 > costume.Size || costume.Offset + costume.Size > player.Size)) throw new InvalidOperationException("Invalid costume layout");
+        }
         int[] playerOffsets =
         [
             player.PlayerId, player.IsKiller, player.IsImpostor, player.IsCrewmate,
@@ -532,6 +596,9 @@ internal static class Program
     sealed class PlayerDataLayout
     {
         public int Size { get; set; }
+        public CostumeLayout? Skin { get; set; }
+        public CostumeLayout? Hat { get; set; }
+        public CostumeLayout? Visor { get; set; }
         public int PlayerId { get; set; }
         public int IsKiller { get; set; }
         public int IsImpostor { get; set; }
@@ -548,6 +615,15 @@ internal static class Program
         public int ColorR { get; set; }
         public int ColorG { get; set; }
         public int ColorB { get; set; }
+    }
+
+    sealed class CostumeLayout
+    {
+        public int Offset { get; set; }
+        public int NameLength { get; set; }
+        public int Name { get; set; }
+        public int Capacity { get; set; }
+        public int Size { get; set; }
     }
 
 	sealed class RadioDataLayout

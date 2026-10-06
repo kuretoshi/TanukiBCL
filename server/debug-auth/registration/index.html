@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ベタクル デバッグ利用登録</title>
+  <link rel="stylesheet" href="/debug-register/register.css">
+  <script src="/debug-register/register.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>デバッグ利用登録</h1>
+    <p>管理者から受け取った招待コードで、ベタクルのデバッグ画面を開くパスワードを設定します。</p>
+    <form id="registration">
+      <label for="code">招待コード</label>
+      <input id="code" required maxlength="128" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <label for="password">デバッグ用パスワード（12文字以上）</label>
+      <input id="password" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
+      <label for="confirmation">パスワードを再入力</label>
+      <input id="confirmation" type="password" required minlength="12" maxlength="1024" autocomplete="new-password">
+      <button type="submit">登録する</button>
+    </form>
+    <p id="result" role="status" aria-live="polite"></p>
+    <p class="note">招待コードは1回限りです。登録後は、対応版ベタクルのデバッグ画面で設定したパスワードを入力してください。</p>
+  </main>
+</body>
+</html>

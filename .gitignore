@@ -32,6 +32,8 @@ out/
 /.cache/
 /coverage/
 /.eslintcache
+__pycache__/
+/server/debug-auth/*.sqlite3*
 
 # Local environment settings and temporary files
 .env

@@ -109,6 +109,46 @@ assert.equal(automaticMetadataCalls, 2, 'Retry role metadata automatically after
 assert.equal(automaticMetadataTracker.update(123, 'auto-round', read).get(3).canKill, true);
 console.log('PASS SNR ghost eligibility: metadata retries automatically');
 
+
+const originalClock = Date.now;
+let testTime = originalClock();
+Date.now = () => testTime;
+try {
+  setRole(137, 0);
+  let discoveries = 0;
+  let team = { value: 2, name: 'Neutral' };
+  const result = () => ({ status: 'ok', pid: 123, liveLayout: layout, players: [{ playerId: 3, role: { value: 137 }, isNeutral: true, canKill: true, assignedTeam: team, winnerTeam: team, teamTag: { value: 0, name: null } }] });
+  const detailed = new SnrLiveTracker(async () => { discoveries++; return result(); });
+  detailed.accept(123, result());
+  assert.equal(detailed.update(123, 'details', read).get(3).assignedTeam.name, 'Neutral');
+  assert.equal(detailed.update(123, 'details', read).get(3).teamTag.value, 0);
+  team = { value: 1, name: 'Impostor' };
+  testTime += 5001;
+  detailed.update(123, 'details', read);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(discoveries, 1, 'Reuse the existing five-second refresh, do not add a snapshot loop');
+  assert.equal(detailed.update(123, 'details', read).get(3).winnerTeam.name, 'Impostor');
+  setRole(222, 0);
+  assert.equal(detailed.update(123, 'details', read).get(3).assignedTeam, undefined, 'Never apply team metadata from a previous role');
+  detailed.reset();
+  assert.equal(detailed.update(124, 'new-process', read).size, 0);
+  await new Promise(resolve => setImmediate(resolve));
+  let retries = 0;
+  const recovering = new SnrLiveTracker(async () => { retries++; return { status: 'error' }; });
+  recovering.update(123, 'retry', read);
+  await new Promise(resolve => setImmediate(resolve));
+  recovering.update(123, 'retry', read);
+  assert.equal(retries, 1);
+  testTime += 10001;
+  recovering.update(123, 'retry', read);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(retries, 2, 'Retry failed initial discovery automatically after ten seconds');
+  console.log('PASS SNR details: automatic team refresh, zero values, role change clearing and throttled retry');
+} finally {
+  Date.now = originalClock;
+  setRole(11, 16);
+}
+
 if (process.argv.includes('--real-game')) {
   const sample = JSON.parse(await readFile('.cache/live-sample.json', 'utf8'));
   assert.ok(isSnrLiveLayout(sample.liveLayout, sample.pid));

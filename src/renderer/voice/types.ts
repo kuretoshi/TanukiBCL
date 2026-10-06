@@ -62,6 +62,7 @@ export const DEFAULT_ICE_CONFIG_TURN: RTCConfiguration = {
 export { defaultLobbySettings } from '../../common/defaultLobbySettings';
 
 export interface VoiceSnapshot {
+	versionWarning: string;
 	connected: boolean;
 	error: string;
 	talking: boolean;
