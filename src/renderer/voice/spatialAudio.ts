@@ -84,7 +84,9 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		input.impostorRadioClientIds ?? (impostorRadioClientId >= 0 ? [impostorRadioClientId] : []);
 	const otherUsingRadio = activeRadioClientIds.includes(other.clientId);
 	const receivingImpostorRadio = !me.isDead && me.isImpostor && other.isImpostor && otherUsingRadio;
-	const ghostReceivingImpostorRadio = me.isDead && !other.isDead && other.isImpostor && otherUsingRadio && radioEnabled;
+	const jackalRadioEnabled = activeLobbySettings.jackalRadioEnabled === true && !radioOnlyMode;
+	const ghostReceivingRadio =
+		me.isDead && !other.isDead && otherUsingRadio && (other.isImpostor ? radioEnabled : jackalRadioEnabled);
 	const receivingJackalRadio =
 		!me.isDead &&
 		meJackalTeam &&
@@ -98,6 +100,8 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		!radioOnlyMode &&
 		otherUsingRadio &&
 		input.nosJackalRadioHearable === true;
+	const canHearRadio =
+		(receivingImpostorRadio && radioEnabled) || ghostReceivingRadio || receivingJackalRadio || receivingNosJackalRadio;
 	const snrVentConversation =
 		meJackalTeam &&
 		otherJackalTeam &&
@@ -161,14 +165,9 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 				endGain = 0;
 			}
 			wallCheckEnabled = activeLobbySettings.wallsBlockAudio && !me.isDead;
-			if ((receivingImpostorRadio && radioEnabled) || receivingJackalRadio || receivingNosJackalRadio) {
-				endGain = 1;
-				skipDistanceCheck = true;
-				muffleEnabled = true;
-				result.radioEcho = true;
-				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };
-			}
-			if (ghostReceivingImpostorRadio) {
+			if (otherUsingRadio && !canHearRadio) {
+				endGain = 0;
+			} else if (canHearRadio) {
 				endGain = 1;
 				skipDistanceCheck = true;
 				muffleEnabled = true;
@@ -201,13 +200,8 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			if (!me.isDead && other.isDead) {
 				endGain = 0;
 			}
-			const canHearMeetingRadio =
-				(receivingImpostorRadio && radioEnabled) ||
-				ghostReceivingImpostorRadio ||
-				receivingJackalRadio ||
-				receivingNosJackalRadio;
-			if (otherUsingRadio) endGain = canHearMeetingRadio ? 1 : 0;
-			if (otherUsingRadio && canHearMeetingRadio) {
+			if (otherUsingRadio) endGain = canHearRadio ? 1 : 0;
+			if (otherUsingRadio && canHearRadio) {
 				muffleEnabled = true;
 				result.radioEcho = true;
 				result.muffle = { type: 'highpass', frequency: 1000, q: 10 };

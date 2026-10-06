@@ -71,7 +71,6 @@ export interface CanvasProps {
 	color: number;
 	nosColor?: string;
 	nosCosmetics?: Player['nosCosmetics'];
-	overflow: boolean;
 	usingRadio: boolean | undefined;
 	onClick?: () => void;
 	mod: ModsType;
@@ -90,7 +89,6 @@ export interface AvatarProps {
 	showborder?: boolean;
 	showHat?: boolean;
 	lookLeft?: boolean;
-	overflow?: boolean;
 	isUsingRadio?: boolean;
 	onConfigChange?: (config: SocketConfig, persist: boolean) => void;
 	hideWhenAppearanceChanged?: boolean;
@@ -170,7 +168,6 @@ const Avatar: React.FC<AvatarProps> = function ({
 	showHat,
 	isUsingRadio,
 	lookLeft = false,
-	overflow = false,
 	onConfigChange,
 	mod,
 	hideWhenAppearanceChanged,
@@ -264,7 +261,6 @@ const Avatar: React.FC<AvatarProps> = function ({
 			lookLeft={lookLeft === true}
 			borderColor={talking ? borderColor : showborder === true ? '#ccbdcc86' : 'transparent'}
 			size={size}
-			overflow={overflow}
 			usingRadio={isUsingRadio}
 			mod={mod}
 		/>
@@ -382,7 +378,6 @@ const useCanvasStyles = (props: UseCanvasStylesParams) => ({
 		display: props.isAlive ? 'block' : 'none',
 	},
 	avatar: {
-		// overflow: 'hidden',
 		borderRadius: '50%',
 		position: 'relative',
 		borderStyle: 'solid',
@@ -419,7 +414,6 @@ const Canvas = React.memo(function Canvas({
 	color,
 	nosColor,
 	nosCosmetics,
-	overflow,
 	usingRadio,
 	onClick,
 	mod,
@@ -579,9 +573,8 @@ const Canvas = React.memo(function Canvas({
 							<Box component="img" src={hatImg.skin} sx={classes.skin} onError={onerror} onLoad={onload} />
 						)}
 					</Box>
-					{overflow && hatElement}
+					{hatElement}
 				</Box>
-				{!overflow && hatElement}
 				{usingRadio && <Box component="img" src={RadioSVG} sx={classes.radio} />}
 			</Box>
 		</>

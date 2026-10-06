@@ -282,7 +282,6 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 						isAlive={!voiceState.otherDead[player.clientId] || (player.isLocal && !player.isDead)}
 						size={100}
 						lookLeft={!(positionParse === 'left' || positionParse === 'bottom_left')}
-						overflow={isOnSide && !showName}
 						showHat={true}
 						mod={gameState.mod}
 					/>

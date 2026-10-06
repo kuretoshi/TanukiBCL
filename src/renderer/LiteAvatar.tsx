@@ -72,7 +72,6 @@ export interface LiteAvatarProps {
 	showborder?: boolean;
 	showHat?: boolean;
 	lookLeft?: boolean;
-	overflow?: boolean;
 	isUsingRadio?: boolean;
 	onConfigChange?: () => void;
 	mod: ModsType;

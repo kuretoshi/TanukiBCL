@@ -591,7 +591,7 @@ export default class GameReader {
 					}
 				} else this.tohRoles.reset();
 				const nos =
-					this.loadedMod.id === 'NoS' && !this.is_linux && snrActive
+					this.loadedMod.id === 'NoS' && !this.is_linux && (snrActive || state === GameState.LOBBY)
 						? this.nosSnapshot.update(
 								this.pid,
 								`${lobbyCode}:${this.snrRound}:${snrActive ? 'game' : 'lobby'}`,
