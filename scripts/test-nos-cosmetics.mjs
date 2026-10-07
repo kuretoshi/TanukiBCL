@@ -56,6 +56,7 @@ try {
 			},
 		},
 		Visors: { nosvisor_test: { ...entry, ProductId: 'nosvisor_test' } },
+		Skins: { nosskin_test: { ...entry, ProductId: 'nosskin_test' } },
 	};
 	await writeFile(join(cosmic, 'LoadedContents.json'), JSON.stringify(manifest));
 	const now = Date.now;
@@ -63,6 +64,18 @@ try {
 	Date.now = () => time;
 	try {
 		assert.equal(tracker.update(root).status, '読み取り成功');
+		const lobbyPlayer = {
+			appearanceHatId: 'noshat_test', appearanceVisorId: 'nosvisor_test', appearanceSkinId: 'nosskin_test',
+			hatId: 'hat_None', visorId: 'visor_EmptyVisor', skinId: 'skin_None', disconnected: false,
+		};
+		const lobby = tracker.lobbyCosmetics(lobbyPlayer, '#ff8000');
+		assert.ok(lobby.hat && lobby.visor && lobby.skin, 'Lobby outfits must load without round PlayerData');
+		assert.equal(new URL(lobby.hat).searchParams.get('color'), '1,0.5019607843137255,0');
+		assert.equal(tracker.lobbyCosmetics({ ...lobbyPlayer, disconnected: true }, '#ff8000'), undefined);
+		assert.equal(tracker.lobbyCosmetics({ ...lobbyPlayer, appearanceHatId: '', appearanceSkinId: '', appearanceVisorId: '' }), undefined,
+			'Unequipping in lobby must discard previous costume images');
+		const lobbyUrl = new URL(lobby.skin);
+		assert.ok(await tracker.image(lobbyUrl.pathname.slice(1), lobbyUrl.searchParams.get('color')));
 		const cosmetics = tracker.cosmetics({
 			hat: { name: 'noshat_test' },
 			visor: { name: 'nosvisor_test' },

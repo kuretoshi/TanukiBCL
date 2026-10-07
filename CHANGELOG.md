@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.13
+
+- NoSのロビーで試合用PlayerDataが未取得でも、現在のSkin・Hat・Visor IDとNoSの色からアバター画像を表示。装備変更・解除に追従するよう修正（通常版・Lite版共通）。
+
 ## v3.2.12
 
 - インポスターラジオ専用モード以外で、タスク中のラジオの声が近くのクルーに聞こえていた問題を修正。ラジオ使用中の声は、同じチームの生存者と幽霊にのみ届くように変更（ジャッカルのラジオも幽霊に届くように統一）。

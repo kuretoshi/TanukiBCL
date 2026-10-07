@@ -164,7 +164,25 @@ export class NosContentsTracker {
 		}
 	}
 
-	cosmetics(player?: NosPlayerData): Player['nosCosmetics'] {
+	/** Lobby outfits exist before NoS publishes its round's PlayerData. */
+	lobbyCosmetics(player: Player, color?: string): Player['nosCosmetics'] {
+		if (player.disconnected) return undefined;
+		const rgb = /^#[0-9a-f]{6}$/i.test(color ?? '')
+			? [1, 3, 5].map((offset) => parseInt(color!.slice(offset, offset + 2), 16) / 255)
+			: [1, 1, 1];
+		return this.cosmetics({
+			skin: { name: player.appearanceSkinId ?? player.skinId },
+			hat: { name: player.appearanceHatId ?? player.hatId },
+			visor: { name: player.appearanceVisorId ?? player.visorId },
+			colorR: rgb[0],
+			colorG: rgb[1],
+			colorB: rgb[2],
+		});
+	}
+
+	cosmetics(
+		player?: Pick<NosPlayerData, 'skin' | 'hat' | 'visor' | 'colorR' | 'colorG' | 'colorB'>
+	): Player['nosCosmetics'] {
 		if (!player) return undefined;
 		const result: NonNullable<Player['nosCosmetics']> = {};
 		for (const kind of ['skin', 'hat', 'visor'] as const) {

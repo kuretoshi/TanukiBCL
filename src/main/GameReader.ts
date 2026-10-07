@@ -612,7 +612,13 @@ export default class GameReader {
 						// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
 						player.nosLobbyColor = player.disconnected ? undefined : nosLobbyColors?.[player.id];
 						player.nosPlayer = published;
-						player.nosCosmetics = this.nosContents.cosmetics(published);
+						player.nosCosmetics =
+							state === GameState.LOBBY
+								? this.nosContents.lobbyCosmetics(
+										player,
+										player.nosLobbyColor ?? this.playercolors[player.appearanceColorId]?.[0]
+									)
+								: this.nosContents.cosmetics(published);
 						// Vanilla's substitute role is not an authoritative NoS team.
 						player.isImpostor = published?.isImpostor ?? false;
 						player.isThirdParty = published?.isNeutral ?? false;
