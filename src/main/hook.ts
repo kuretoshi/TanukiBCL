@@ -1,5 +1,7 @@
 import { app, ipcMain } from 'electron';
 import GameReader from './GameReader';
+import { GameState } from '../common/AmongUsState';
+import { isSnrJackalTeam } from '../common/SnrRole';
 import keyboardWatcherModule from 'node-keyboard-watcher';
 const { keyboardWatcher } = keyboardWatcherModule;
 import Store from 'electron-store';
@@ -16,6 +18,7 @@ let pushToTalkShortcut: K | undefined;
 let deafenShortcut: K | undefined;
 let muteShortcut: K | undefined;
 let impostorRadioShortcut: K | undefined;
+let jackalRadioShortcut: K | undefined;
 
 function sendToRenderer(sender: Electron.WebContents, message: IpcRendererMessages, ...args: unknown[]): void {
 	if (sender.isDestroyed()) {
@@ -34,11 +37,13 @@ function resetKeyHooks(): void {
 	deafenShortcut = store.get('deafenShortcut', 'RControl') as K;
 	muteShortcut = store.get('muteShortcut', 'RAlt') as K;
 	impostorRadioShortcut = store.get('impostorRadioShortcut', 'F') as K;
+	jackalRadioShortcut = store.get('jackalRadioShortcut', 'G') as K;
 	keyboardWatcher.clearKeyHooks();
 	addKeyHandler(pushToTalkShortcut);
 	addKeyHandler(deafenShortcut);
 	addKeyHandler(muteShortcut);
 	addKeyHandler(impostorRadioShortcut);
+	addKeyHandler(jackalRadioShortcut);
 }
 
 ipcMain.on(IpcHandlerMessages.RESET_KEYHOOKS, () => {
@@ -79,7 +84,17 @@ ipcMain.handle(IpcMessages.REQUEST_GAME_INFO, () => {
 ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 	if (!readingGame) {
 		readingGame = true;
-		let speaking: number = 0;
+		const held = new Set<number>();
+		const radioKeys = new Map<number, IpcRendererMessages>();
+		const availableRadio = (kind: number): boolean => {
+			const state = gameReader?.lastState;
+			const player = state?.players?.find((value) => value.clientId === state.clientId);
+			if (!player || player.isDead || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION))
+				return false;
+			return state.mod === 'NoS'
+				? (state.nosRadios?.some((radio) => radio.kind === kind) ?? false)
+				: kind === 0 && (player.isImpostor || (state.mod === 'SUPER_NEW_ROLES' && isSnrJackalTeam(player.snrRole)));
+		};
 		gameReader = new GameReader((message: IpcRendererMessages, ...args: unknown[]) =>
 			sendToRenderer(event.sender, message, ...args)
 		);
@@ -89,59 +104,36 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 
 			keyboardWatcher.on('keydown', (keyId: number) => {
 				try {
-					if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
-						speaking += 1;
+					if (held.has(keyId)) return;
+					if (keyCodeMatches(pushToTalkShortcut!, keyId)) held.add(keyId);
+					const kind =
+						keyCodeMatches(jackalRadioShortcut!, keyId) && gameReader.lastState.mod === 'NoS'
+							? 1
+							: keyCodeMatches(impostorRadioShortcut!, keyId)
+								? 0
+								: undefined;
+					if (kind !== undefined && availableRadio(kind)) {
+						const message = kind === 0 ? IpcRendererMessages.IMPOSTOR_RADIO : IpcRendererMessages.JACKAL_RADIO;
+						held.add(keyId);
+						radioKeys.set(keyId, message);
+						sendToRenderer(event.sender, message, true);
 					}
-					if (
-						keyCodeMatches(impostorRadioShortcut!, keyId) &&
-						gameReader?.lastState.players?.find((value) => {
-							return value.clientId === gameReader.lastState.clientId;
-						})?.isImpostor
-					) {
-						speaking += 1;
-						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, true);
-					}
-
-					// Cover weird cases which shouldn't happen but just in case
-					if (speaking > 2) {
-						speaking = 2;
-					}
-					if (speaking) {
-						sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, true);
-					}
+					if (held.size) sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, true);
 				} catch (error) {
 					console.error('Keyboard keydown handler failed:', error);
 				}
 			});
-
 			keyboardWatcher.on('keyup', (keyId: number) => {
 				try {
-					if (keyCodeMatches(pushToTalkShortcut!, keyId)) {
-						speaking -= 1;
+					held.delete(keyId);
+					if (keyCodeMatches(deafenShortcut!, keyId)) sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_DEAFEN);
+					if (keyCodeMatches(muteShortcut!, keyId)) sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_MUTE);
+					const message = radioKeys.get(keyId);
+					if (message) {
+						sendToRenderer(event.sender, message, false);
+						radioKeys.delete(keyId);
 					}
-					if (keyCodeMatches(deafenShortcut!, keyId)) {
-						sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_DEAFEN);
-					}
-					if (keyCodeMatches(muteShortcut!, keyId)) {
-						sendToRenderer(event.sender, IpcRendererMessages.TOGGLE_MUTE);
-					}
-					if (
-						keyCodeMatches(impostorRadioShortcut!, keyId) &&
-						gameReader?.lastState.players?.find((value) => {
-							return value.clientId === gameReader.lastState.clientId;
-						})?.isImpostor
-					) {
-						speaking -= 1;
-						sendToRenderer(event.sender, IpcRendererMessages.IMPOSTOR_RADIO, false);
-					}
-
-					// Cover weird cases which shouldn't happen but just in case
-					if (speaking < 0) {
-						speaking = 0;
-					}
-					if (!speaking) {
-						sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, false);
-					}
+					if (!held.size) sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, false);
 				} catch (error) {
 					console.error('Keyboard keyup handler failed:', error);
 				}

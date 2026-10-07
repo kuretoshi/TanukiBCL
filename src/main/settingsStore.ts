@@ -143,6 +143,7 @@ export const settingsStore = new Store<ISettings>({
 			type: 'string',
 			default: 'RControl',
 		},
+		jackalRadioShortcut: { type: 'string', default: 'G' },
 		impostorRadioShortcut: {
 			type: 'string',
 			default: 'F',

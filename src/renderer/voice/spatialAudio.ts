@@ -40,6 +40,28 @@ function distance(panPos: [number, number]): number {
 	return Math.sqrt(panPos[0] * panPos[0] + panPos[1] * panPos[1]);
 }
 
+function cameraPanPosition(state: AmongUsState, other: Player): [number, number] | undefined {
+	if (state.currentCamera !== CameraLocation.NONE && state.currentCamera !== CameraLocation.Skeld) {
+		const cameraPos = AmongUsMaps[state.map].cameras[state.currentCamera];
+		return [other.x - cameraPos.x, other.y - cameraPos.y];
+	}
+	if (state.currentCamera === CameraLocation.Skeld) {
+		let closest = 999;
+		let cameraPos = { x: 999, y: 999 };
+		for (const camera of Object.values(AmongUsMaps[state.map].cameras)) {
+			const cameraDist = Math.sqrt(Math.pow(other.x - camera.x, 2) + Math.pow(other.y - camera.y, 2));
+			if (closest > cameraDist) {
+				closest = cameraDist;
+				cameraPos = camera;
+			}
+		}
+		if (closest !== 999) {
+			return [other.x - cameraPos.x, other.y - cameraPos.y];
+		}
+	}
+	return undefined;
+}
+
 export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const { state, settings, activeLobbySettings, maxDistance, impostorRadioClientId } = input;
 	const useNosPositions = state.mod === 'NoS' && activeLobbySettings.nosVoicePositions === true;
@@ -254,23 +276,7 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			return result;
 		}
 
-		if (state.currentCamera !== CameraLocation.NONE && state.currentCamera !== CameraLocation.Skeld) {
-			const cameraPos = AmongUsMaps[state.map].cameras[state.currentCamera];
-			panPos = [other.x - cameraPos.x, other.y - cameraPos.y];
-		} else if (state.currentCamera === CameraLocation.Skeld) {
-			let closest = 999;
-			let cameraPos = { x: 999, y: 999 };
-			for (const camera of Object.values(AmongUsMaps[state.map].cameras)) {
-				const cameraDist = Math.sqrt(Math.pow(other.x - camera.x, 2) + Math.pow(other.y - camera.y, 2));
-				if (closest > cameraDist) {
-					closest = cameraDist;
-					cameraPos = camera;
-				}
-			}
-			if (closest !== 999) {
-				panPos = [other.x - cameraPos.x, other.y - cameraPos.y];
-			}
-		}
+		panPos = cameraPanPosition(state, other) ?? panPos;
 
 		if (distance(panPos) > maxDistance) {
 			return result;

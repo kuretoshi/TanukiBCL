@@ -5,13 +5,39 @@
 import { basename } from 'node:path';
 const checks = [
 	['electron-log/main.js', ['transports', 'functions']],
-	['memoryjs', ['findModule', 'getProcesses', 'openProcess', 'readBuffer', 'readMemory', 'findPattern', 'virtualAllocEx', 'writeBuffer', 'writeMemory', 'getProcessPath']],
+	[
+		'memoryjs',
+		[
+			'findModule',
+			'getProcesses',
+			'openProcess',
+			'readBuffer',
+			'readMemory',
+			'findPattern',
+			'virtualAllocEx',
+			'writeBuffer',
+			'writeMemory',
+			'getProcessPath',
+		],
+	],
 	['electron-overlay-window', ['overlayWindow']],
 	['node-keyboard-watcher', ['keyboardWatcher']],
 	['registry-js', ['enumerateValues', 'enumerateKeys', 'HKEY']],
 	['vdf-parser', ['parse']],
 	['electron-devtools-installer', ['default', 'installExtension', 'REACT_DEVELOPER_TOOLS']],
 ];
+
+function verifyMemoryRead(memory) {
+	const handle = memory.openProcess(process.pid);
+	try {
+		const executable = memory.findModule(basename(process.execPath), process.pid);
+		const bytes = memory.readBuffer(handle.handle, executable.modBaseAddr, 2);
+		if (bytes.toString() !== 'MZ') throw new Error('readBuffer returned an invalid executable header');
+		console.log('ok memoryjs readBuffer (own process)');
+	} finally {
+		memory.closeProcess(handle.handle);
+	}
+}
 
 let failed = false;
 for (const [name, keys] of checks) {
@@ -22,18 +48,10 @@ for (const [name, keys] of checks) {
 		if (missing.length > 0) {
 			console.error(`FAIL ${name}: missing export(s): ${missing.join(', ')}`);
 			failed = true;
-		} else {
-			console.log(`ok ${name}`);
-			if (name === 'memoryjs') {
-				const handle = exported.openProcess(process.pid);
-				try {
-					const executable = exported.findModule(basename(process.execPath), process.pid);
-					const bytes = exported.readBuffer(handle.handle, executable.modBaseAddr, 2);
-					if (bytes.toString() !== 'MZ') throw new Error('readBuffer returned an invalid executable header');
-					console.log('ok memoryjs readBuffer (own process)');
-				} finally { exported.closeProcess(handle.handle); }
-			}
+			continue;
 		}
+		console.log(`ok ${name}`);
+		if (name === 'memoryjs') verifyMemoryRead(exported);
 	} catch (err) {
 		console.error(`FAIL ${name}: ${err.message}`);
 		failed = true;

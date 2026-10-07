@@ -11,17 +11,23 @@ if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 
 	const view = query.get('view') || 'app';
-	if (view === 'app') {
-		import('./views/App');
-	} else if (view === 'lobbies') {
-		import('./views/LobbyBrowser/LobbyBrowserContainer');
-	} else if (view === 'debug') {
-		import('./views/DebugWindow');
-	} else if (view === 'inquiry') {
-		import('./views/InquiryWindow');
-	} else if (view === 'settings') {
-		import('./views/SettingsWindow');
-	} else {
-		import('./views/Overlay');
+	switch (view) {
+		case 'app':
+			void import('./views/App');
+			break;
+		case 'lobbies':
+			void import('./views/LobbyBrowser/LobbyBrowserContainer');
+			break;
+		case 'debug':
+			void import('./views/DebugWindow');
+			break;
+		case 'inquiry':
+			void import('./views/InquiryWindow');
+			break;
+		case 'settings':
+			void import('./views/SettingsWindow');
+			break;
+		default:
+			void import('./views/Overlay');
 	}
 }

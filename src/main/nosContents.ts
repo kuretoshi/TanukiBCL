@@ -142,26 +142,26 @@ export class NosContentsTracker {
 					adaptive: costume.Adaptive === true,
 				});
 				parts[part] = key;
-				if (kind === 'hat' && layer === 'Main' && typeof image.MaskAddress === 'string') {
-					const mask = findImage(image.MaskAddress);
-					if (mask) {
-						const maskKey = `${key}mask`;
-						this.assets.set(maskKey, {
-							file: mask,
-							extraInFront: false,
-							columns: image.DivisionX,
-							rows: image.DivisionY,
-							adaptive: false,
-							mask: true,
-						});
-						parts.bodyMask = maskKey;
-					}
-				}
+				if (kind === 'hat' && layer === 'Main' && typeof image.MaskAddress === 'string')
+					this.registerBodyMask(findImage(image.MaskAddress), key, image.DivisionX, image.DivisionY, parts);
 			}
 			if (!Object.keys(parts).length) continue;
 			this.costumes.set(`${kind}:${id}`, parts);
 			if (typeof costume.ProductId === 'string') this.costumes.set(`${kind}:${costume.ProductId}`, parts);
 		}
+	}
+
+	private registerBodyMask(
+		file: string | NosZipImage | undefined,
+		key: string,
+		columns: number,
+		rows: number,
+		parts: Partial<Record<Part, string>>
+	): void {
+		if (!file) return;
+		const maskKey = `${key}mask`;
+		this.assets.set(maskKey, { file, extraInFront: false, columns, rows, adaptive: false, mask: true });
+		parts.bodyMask = maskKey;
 	}
 
 	/** Lobby outfits exist before NoS publishes its round's PlayerData. */

@@ -9,6 +9,7 @@ async function bundle(entry) {
 	return import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].contents).toString('base64'));
 }
 const nos = await bundle('src/common/NosSnapshot.ts');
+const policy = await bundle('src/common/nosRadio.ts');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { defaultLobbySettings } = await bundle('src/renderer/voice/types.ts');
@@ -32,10 +33,14 @@ const source = ts.createSourceFile(
 );
 const names = [
 	'getNosRadios',
+	'senderNosRadioKind',
+	'setImpostorRadio',
+	'stopAllRadio',
+	'applyImpostorRadio',
+	'sendRadioStatus',
 	'canNosJackalRadioReach',
 	'canNosImpostorRadioReach',
 	'canNosRadioReach',
-	'hasNosJackalRadio',
 	'canUseRadio',
 	'areRadioPartners',
 	'areRadioTeammates',
@@ -55,8 +60,16 @@ assert.equal(methods.length, names.length);
 const controller = vm.runInNewContext(
 	ts.transpileModule('({' + methods.join(',') + '})', { compilerOptions: { target: ts.ScriptTarget.ES2020 } })
 		.outputText,
-	{ ...nos, GameState, gameStore: { getSnapshot: () => ({ gameState: state }) } }
+	{
+		...nos,
+		...policy,
+		radioOnAudio: { play: () => Promise.resolve() },
+		GameState,
+		gameStore: { getSnapshot: () => ({ gameState: state }) },
+	}
 );
+controller.heldNosRadio = new policy.HeldNosRadio();
+controller.nosRadioKinds = {};
 controller.activeLobbySettings = { ...defaultLobbySettings, impostorRadioEnabled: true, jackalRadioEnabled: true };
 const local = { id: 2, clientId: 20, isLocal: true, isImpostor: false, isDead: false, x: 0, y: 0 };
 const remote = { id: 5, clientId: 50, isLocal: false, isImpostor: true, isDead: false, x: 50, y: 0 };
@@ -133,36 +146,103 @@ assert.equal(
 controller.snapshot.nosRadiosByPlayer[5].radios = radios(1 << 2, 1);
 assert.equal(controller.areRadioPartners(state, local, remote), false, 'impostor-only mode does not enable Jackal');
 
-let audioCases = 0;
-for (const senderX of [1, 50])
-	for (const gameState of [GameState.TASKS, GameState.DISCUSSION])
-		for (const dead of [false, true])
-			for (const listenerImpostor of [false, true])
-				for (const senderImpostor of [false, true])
-					for (const hearable of [false, true])
-						for (const onlyMode of [false, true]) {
-							const result = calculateVoiceAudio({
-								state: { ...state, gameState, map: 0, currentCamera: -1, closedDoors: [] },
-								settings: { ghostVolumeAsImpostor: 100 },
-								activeLobbySettings: {
-									...defaultLobbySettings,
-									impostorRadioEnabled: true,
-									impostorRadioOnlyMode: onlyMode,
-								},
-								me: { ...local, isDead: dead, isImpostor: listenerImpostor },
-								other: { ...remote, isImpostor: senderImpostor, x: senderX },
-								maxDistance: 5.32,
-								impostorRadioClientId: 50,
-								nosImpostorRadioHearable: hearable,
-							});
-							assert.equal(
-								result.gain,
-								hearable ? 1 : 0,
-								`phase=${gameState} dead=${dead} listenerImp=${listenerImpostor} senderImp=${senderImpostor} bit=${hearable} only=${onlyMode}`
-							);
-							assert.equal(result.radioEcho, hearable);
-							audioCases++;
-						}
+// Dual membership must never merge the two channel masks.
+controller.activeLobbySettings = { ...defaultLobbySettings, impostorRadioEnabled: true, jackalRadioEnabled: true };
+controller.snapshot.nosRadiosByPlayer[5].radios = [...radios(1 << 2, 0), ...radios(1 << 7, 1)];
+assert.equal(controller.areRadioPartners(state, local, remote), false, 'legacy dual channel report is ambiguous');
+controller.onPeerData('remote', { impostorRadio: true, impostorRadioVersion: 2, nosRadioKind: 1 });
+assert.equal(
+	controller.canNosImpostorRadioReach(state, remote, local),
+	false,
+	'Jackal transmission never uses impostor mask'
+);
+assert.equal(controller.areRadioPartners(state, local, remote), false);
+controller.onPeerData('remote', { impostorRadio: true, impostorRadioVersion: 3, nosRadioKind: 0 });
+assert.equal(controller.areRadioPartners(state, local, remote), true);
+assert.equal(controller.canNosJackalRadioReach(state, remote, local), false);
+controller.onPeerData('remote', { impostorRadio: true, impostorRadioVersion: 999, nosRadioKind: 2 });
+assert.equal(controller.radioStatusVersions[50], 3, 'invalid kind does not poison version');
+controller.onPeerData('remote', { impostorRadio: true, impostorRadioVersion: 2, nosRadioKind: 1 });
+assert.equal(controller.nosRadioKinds[50], 0, 'stale packet cannot change channel');
+const packets = [];
+controller.connection.playerSocketIds = { 50: 'remote' };
+controller.connection.sendControlToPeers = (_targets, payload) => packets.push(JSON.parse(payload));
+state.nosRadios = [...radios(0, 0), ...radios(0, 1)];
+controller.radioStatusVersion = 0;
+controller.setImpostorRadio(true, 0);
+controller.setImpostorRadio(true, 1);
+controller.setImpostorRadio(true, 0); // Key repeat must not steal priority.
+assert.equal(controller.heldNosRadio.kind, 1);
+controller.setImpostorRadio(false, 1);
+assert.equal(controller.heldNosRadio.kind, 0);
+controller.setImpostorRadio(false, 0);
+assert.deepEqual(
+	packets.map((packet) => [packet.impostorRadio, packet.nosRadioKind]),
+	[
+		[true, 0],
+		[true, 1],
+		[true, 0],
+		[false, undefined],
+	]
+);
+controller.setImpostorRadio(true, 1);
+controller.activeLobbySettings.jackalRadioEnabled = false;
+controller.cleanupImpostorRadio(state, local);
+assert.equal(
+	controller.impostorRadioPressed,
+	false,
+	'disabled selected channel stops instead of switching to impostor'
+);
+assert.equal(controller.heldNosRadio.kind, undefined);
+controller.activeLobbySettings.jackalRadioEnabled = true;
+controller.setImpostorRadio(true, 0);
+local.isDead = true;
+controller.cleanupImpostorRadio(state, local);
+assert.equal(controller.heldNosRadio.kind, undefined, 'death releases both channel keys');
+local.isDead = false;
+controller.setImpostorRadio(true, 1);
+state.mod = 'NONE';
+controller.cleanupImpostorRadio(state, local);
+assert.equal(controller.impostorRadioPressed, false, 'changing mod clears the held NoS channel');
+state.mod = 'NoS';
+
+const choices = {
+	senderX: [1, 50],
+	gameState: [GameState.TASKS, GameState.DISCUSSION],
+	dead: [false, true],
+	listenerImpostor: [false, true],
+	senderImpostor: [false, true],
+	hearable: [false, true],
+	onlyMode: [false, true],
+};
+const audioScenarios = Object.entries(choices).reduce(
+	(scenarios, [key, values]) => scenarios.flatMap((scenario) => values.map((value) => ({ ...scenario, [key]: value }))),
+	[{}]
+);
+assert.equal(audioScenarios.length, 128);
+audioScenarios.forEach(({ senderX, gameState, dead, listenerImpostor, senderImpostor, hearable, onlyMode }) => {
+	const result = calculateVoiceAudio({
+		state: { ...state, gameState, map: 0, currentCamera: -1, closedDoors: [] },
+		settings: { ghostVolumeAsImpostor: 100 },
+		activeLobbySettings: {
+			...defaultLobbySettings,
+			impostorRadioEnabled: true,
+			impostorRadioOnlyMode: onlyMode,
+		},
+		me: { ...local, isDead: dead, isImpostor: listenerImpostor },
+		other: { ...remote, isImpostor: senderImpostor, x: senderX },
+		maxDistance: 5.32,
+		impostorRadioClientId: 50,
+		nosImpostorRadioHearable: hearable,
+	});
+	assert.equal(
+		result.gain,
+		hearable ? 1 : 0,
+		`phase=${gameState} dead=${dead} listenerImp=${listenerImpostor} senderImp=${senderImpostor} bit=${hearable} only=${onlyMode}`
+	);
+	assert.equal(result.radioEcho, hearable);
+});
+const audioCases = audioScenarios.length;
 console.log(
 	`PASS NoS radio masks: sender-owned direction, self bit absent, missing/stale reports, channel settings, receiver-only UI, bit 31 and ${audioCases} audio cases`
 );

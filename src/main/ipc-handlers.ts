@@ -302,58 +302,62 @@ export const initializeIpcHandlers = (): void => {
 		const availableGamePlatforms: GamePlatformMap = {};
 
 		// Deal with default platforms first
-		if (desktop_platform === 'win32') {
-			// Steam
-			if (
-				enumerateValues(HKEY.HKEY_CLASSES_ROOT, 'steam').find((value) =>
-					value ? value.name === 'URL Protocol' : false
-				)
-			) {
-				availableGamePlatforms[GamePlatform.STEAM] = DefaultGamePlatforms[GamePlatform.STEAM];
-			}
-
-			// Epic Games
-			if (
-				enumerateValues(HKEY.HKEY_CLASSES_ROOT, 'com.epicgames.launcher').find((value) =>
-					value ? value.name === 'URL Protocol' : false
-				)
-			) {
-				availableGamePlatforms[GamePlatform.EPIC] = DefaultGamePlatforms[GamePlatform.EPIC];
-			}
-
-			// Microsoft Store
-			// Search for 'Innersloth.Among Us....' key and grab it
-			const microsoft_regkey = enumerateKeys(
-				HKEY.HKEY_CURRENT_USER,
-				'SOFTWARE\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages'
-			).find((reg_key) => reg_key.startsWith('Innersloth.AmongUs' as string));
-
-			if (microsoft_regkey) {
-				// Grab the game path from the above key
-				const value_found = enumerateValues(
-					HKEY.HKEY_CURRENT_USER,
-					'SOFTWARE\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages' +
-						'\\' +
-						microsoft_regkey
-				).find((value) => (value ? value.name === 'PackageRootFolder' : false));
-				if (value_found) {
-					availableGamePlatforms[GamePlatform.MICROSOFT] = DefaultGamePlatforms[GamePlatform.MICROSOFT];
-					availableGamePlatforms[GamePlatform.MICROSOFT].runPath = value_found.data as string;
-				}
-			}
-		} else if (desktop_platform === 'linux') {
-			// Add platform to availableGamePlatforms and setup data if platform is available, do nothing otherwise
-			try {
-				const vdfString = fs.readFileSync(homedir() + '/.steam/registry.vdf').toString();
-				const vdfObject = parse(vdfString) as {
-					Registry: { HKCU: { Software: { Valve: { Steam: { Apps: { 945360: { installed: number } } } } } } };
-				};
-				//checks if Among Us's listed as installed in the .vdf-file
-				if (vdfObject['Registry']['HKCU']['Software']['Valve']['Steam']['Apps']['945360']['installed'] == 1) {
+		switch (desktop_platform) {
+			case 'win32': {
+				// Steam
+				if (
+					enumerateValues(HKEY.HKEY_CLASSES_ROOT, 'steam').find((value) =>
+						value ? value.name === 'URL Protocol' : false
+					)
+				) {
 					availableGamePlatforms[GamePlatform.STEAM] = DefaultGamePlatforms[GamePlatform.STEAM];
 				}
-			} catch {
-				/* empty */
+
+				// Epic Games
+				if (
+					enumerateValues(HKEY.HKEY_CLASSES_ROOT, 'com.epicgames.launcher').find((value) =>
+						value ? value.name === 'URL Protocol' : false
+					)
+				) {
+					availableGamePlatforms[GamePlatform.EPIC] = DefaultGamePlatforms[GamePlatform.EPIC];
+				}
+
+				// Microsoft Store
+				// Search for 'Innersloth.Among Us....' key and grab it
+				const microsoft_regkey = enumerateKeys(
+					HKEY.HKEY_CURRENT_USER,
+					'SOFTWARE\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages'
+				).find((reg_key) => reg_key.startsWith('Innersloth.AmongUs' as string));
+
+				if (microsoft_regkey) {
+					// Grab the game path from the above key
+					const value_found = enumerateValues(
+						HKEY.HKEY_CURRENT_USER,
+						'SOFTWARE\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages' +
+							'\\' +
+							microsoft_regkey
+					).find((value) => (value ? value.name === 'PackageRootFolder' : false));
+					if (value_found) {
+						availableGamePlatforms[GamePlatform.MICROSOFT] = DefaultGamePlatforms[GamePlatform.MICROSOFT];
+						availableGamePlatforms[GamePlatform.MICROSOFT].runPath = value_found.data as string;
+					}
+				}
+				break;
+			}
+			case 'linux': {
+				// Add platform to availableGamePlatforms and setup data if platform is available, do nothing otherwise
+				try {
+					const vdfString = fs.readFileSync(homedir() + '/.steam/registry.vdf').toString();
+					const vdfObject = parse(vdfString) as {
+						Registry: { HKCU: { Software: { Valve: { Steam: { Apps: { 945360: { installed: number } } } } } } };
+					};
+					//checks if Among Us's listed as installed in the .vdf-file
+					if (vdfObject['Registry']['HKCU']['Software']['Valve']['Steam']['Apps']['945360']['installed'] == 1) {
+						availableGamePlatforms[GamePlatform.STEAM] = DefaultGamePlatforms[GamePlatform.STEAM];
+					}
+				} catch {
+					/* empty */
+				}
 			}
 		}
 
@@ -364,7 +368,9 @@ export const initializeIpcHandlers = (): void => {
 			if (game_platform.launchType === PlatformRunType.URI) {
 				// I really have no clue how to check this, so we're trusting they exist
 				availableGamePlatforms[key] = game_platform;
-			} else if (game_platform.launchType === PlatformRunType.EXE) {
+				continue;
+			}
+			if (game_platform.launchType === PlatformRunType.EXE) {
 				try {
 					fs.accessSync(path.join(game_platform.runPath, game_platform.execute[0]), fs.constants.X_OK);
 					availableGamePlatforms[key] = game_platform;

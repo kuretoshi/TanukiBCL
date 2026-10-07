@@ -4,11 +4,10 @@ param(
     [string]$ConfigurationPath = (Join-Path (Split-Path $PSScriptRoot -Parent) '.tools/debug-password.json')
 )
 
-$ErrorActionPreference = 'Stop'
-$records = @()
-if ($Add) {
-    if (Test-Path -LiteralPath $ConfigurationPath) {
-        $existing = Get-Content -LiteralPath $ConfigurationPath -Raw | ConvertFrom-Json
+function Read-PasswordRecords {
+    param([string]$Path)
+    if (!(Test-Path -LiteralPath $Path)) { return @() }
+        $existing = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
         if ($existing.PSObject.Properties.Name -contains 'passwords') {
             if ($existing.passwords -isnot [array]) { throw 'Invalid password configuration.' }
             $records = @($existing.passwords)
@@ -20,7 +19,14 @@ if ($Add) {
                 throw 'Invalid password configuration. Existing passwords were not changed.'
             }
         }
-    }
+
+    return $records
+}
+
+$ErrorActionPreference = 'Stop'
+$records = @()
+if ($Add) {
+    $records = @(Read-PasswordRecords $ConfigurationPath)
     if ($records.Count -ge 16) { throw 'At most 16 debug passwords can be configured.' }
     if ([string]::IsNullOrWhiteSpace($Name)) { $Name = Read-Host 'Name for this tester (not the password)' }
     $Name = $Name.Trim()

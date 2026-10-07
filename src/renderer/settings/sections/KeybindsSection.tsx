@@ -30,7 +30,8 @@ const namedKeys = new Set([
 	'LControl',
 ]);
 
-export type ShortcutSetting = 'pushToTalkShortcut' | 'impostorRadioShortcut' | 'muteShortcut' | 'deafenShortcut';
+export type ShortcutSetting =
+	'pushToTalkShortcut' | 'impostorRadioShortcut' | 'jackalRadioShortcut' | 'muteShortcut' | 'deafenShortcut';
 
 export interface KeybindsSectionProps {
 	t: TFunction;
@@ -161,11 +162,10 @@ const KeybindsSection: React.FC<KeybindsSectionProps> = function ({ t, settings,
 		{
 			key: 'impostorRadioShortcut',
 			label: t(
-				mod === 'SUPER_NEW_ROLES' || mod === 'NoS'
-					? 'settings.keyboard.impostor_jackal_radio'
-					: 'settings.keyboard.impostor_radio'
+				mod === 'SUPER_NEW_ROLES' ? 'settings.keyboard.impostor_jackal_radio' : 'settings.keyboard.impostor_radio'
 			),
 		},
+		...(mod === 'NoS' ? [{ key: 'jackalRadioShortcut' as const, label: 'ジャッカル無線（NoS）' }] : []),
 		{ key: 'muteShortcut', label: t('settings.keyboard.mute') },
 		{ key: 'deafenShortcut', label: t('settings.keyboard.deafen') },
 	];
@@ -186,7 +186,7 @@ const KeybindsSection: React.FC<KeybindsSectionProps> = function ({ t, settings,
 							<ShortcutField
 								t={t}
 								label={label}
-								value={settings[key]}
+								value={settings[key] ?? (key === 'jackalRadioShortcut' ? 'G' : 'Disabled')}
 								recording={recording === key}
 								onStartRecording={() => setRecording(key)}
 								onStopRecording={() => setRecording((current) => (current === key ? null : current))}

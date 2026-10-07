@@ -162,7 +162,9 @@ export class SnrLiveTracker {
 						hat2Id: metadata?.hat2Id,
 						visor2Id: metadata?.visor2Id,
 					});
-				} else if (metadata?.roleId === role.role.value) {
+					continue;
+				}
+				if (metadata?.roleId === role.role.value) {
 					roles.set(playerId, {
 						...role,
 						isNeutral: metadata.isNeutral,

@@ -148,6 +148,24 @@ export default class GameReader {
 		this.sendIPC = sendIPC;
 	}
 
+	private async openGameProcess(processOpen: ProcessObject): Promise<string> {
+		try {
+			this.pid = processOpen.th32ProcessID;
+			this.amongUs = openProcess(processOpen.th32ProcessID);
+			this.gameAssembly = findModule('GameAssembly.dll', this.amongUs.th32ProcessID);
+			this.gamePath = getProcessPath(this.amongUs.handle);
+			this.loadedMod = this.getInstalledMods(this.gamePath);
+			this.nextModCheck = Date.now() + 2000;
+			await this.initializeoffsets();
+			this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, true);
+			return '';
+		} catch (error) {
+			console.log('ERROR:', error);
+			this.amongUs = null;
+			return String(error) === 'Error: unable to find process' ? Errors.OPEN_AS_ADMINISTRATOR : String(error);
+		}
+	}
+
 	async checkProcessOpen(): Promise<void> {
 		const processesOpen = getProcesses()
 			.filter((p) => p.szExeFile === targetProcessName)
@@ -165,25 +183,8 @@ export default class GameReader {
 		}
 		if ((!this.amongUs || reset) && processesOpen.length > 0) {
 			for (const processOpen of processesOpen.slice(targetProcessIndex, targetProcessIndex + 1)) {
-				try {
-					this.pid = processOpen.th32ProcessID;
-					this.amongUs = openProcess(processOpen.th32ProcessID);
-					this.gameAssembly = findModule('GameAssembly.dll', this.amongUs.th32ProcessID);
-					this.gamePath = getProcessPath(this.amongUs.handle);
-					this.loadedMod = this.getInstalledMods(this.gamePath);
-					this.nextModCheck = Date.now() + 2000;
-					await this.initializeoffsets();
-					this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, true);
-					break;
-				} catch (e) {
-					console.log('ERROR:', e);
-					if (processOpen && String(e) === 'Error: unable to find process') {
-						error = Errors.OPEN_AS_ADMINISTRATOR;
-					} else {
-						error = String(e);
-					}
-					this.amongUs = null;
-				}
+				error = await this.openGameProcess(processOpen);
+				if (!error) break;
 			}
 			if (!this.amongUs && error) {
 				throw error;
@@ -228,21 +229,10 @@ export default class GameReader {
 				['TownOfHost_ForE_EM.dll', 'TOH4E'],
 				['TownOfHost_ForE.dll', 'TOH4E'],
 			] as const) {
-				try {
-					const module = findModule(dll, this.pid);
-					if (
-						module.modBaseAddr &&
-						module.modBaseSize > 0 &&
-						module.th32ProcessID === this.pid &&
-						module.szModule?.toLowerCase() === dll.toLowerCase() &&
-						path.basename(module.szExePath).toLowerCase() === dll.toLowerCase()
-					) {
-						this.loadedMods = [...new Set([...this.loadedMods, module.szExePath || dll])];
-						return modList.find((mod) => mod.id === id)!;
-					}
-				} catch {
-					// 未ロード・プロセス終了時は従来のフォルダ検出へ戻る。
-				}
+				const module = this.getLoadedModModule(dll);
+				if (!module) continue;
+				this.loadedMods = [...new Set([...this.loadedMods, module.szExePath || dll])];
+				return modList.find((mod) => mod.id === id)!;
 			}
 		}
 		for (const file of this.loadedMods) {
@@ -250,6 +240,23 @@ export default class GameReader {
 			if (mod) return mod;
 		}
 		return modList[0];
+	}
+
+	private getLoadedModModule(dll: string): ModuleObject | undefined {
+		try {
+			const module = findModule(dll, this.pid);
+			if (
+				module.modBaseAddr &&
+				module.modBaseSize > 0 &&
+				module.th32ProcessID === this.pid &&
+				module.szModule?.toLowerCase() === dll.toLowerCase() &&
+				path.basename(module.szExePath).toLowerCase() === dll.toLowerCase()
+			)
+				return module;
+		} catch {
+			// 未ロード・プロセス終了時は従来のフォルダ検出へ戻る。
+		}
+		return undefined;
 	}
 
 	private readPluginFiles(filePath: string): string[] {
@@ -302,443 +309,463 @@ export default class GameReader {
 				return String(e);
 			}
 		}
-		if (
-			this.PlayerStruct &&
-			this.offsets &&
-			this.amongUs !== null &&
-			this.gameAssembly !== null &&
-			this.offsets !== undefined
-		) {
-			try {
-				this.loadColors();
+		if (!this.PlayerStruct || !this.offsets || !this.amongUs || !this.gameAssembly) return null;
+		try {
+			this.loadColors();
 
-				let state = GameState.UNKNOWN;
-				const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
-				const meetingHud_cachePtr =
-					meetingHud === 0 ? 0 : this.readMemory<number>('pointer', meetingHud, this.offsets.objectCachePtr);
-				const meetingHudState =
-					meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
+			let state = GameState.UNKNOWN;
+			const meetingHud = this.readMemory<number>('pointer', this.gameAssembly.modBaseAddr, this.offsets.meetingHud);
+			const meetingHud_cachePtr =
+				meetingHud === 0 ? 0 : this.readMemory<number>('pointer', meetingHud, this.offsets.objectCachePtr);
+			const meetingHudState =
+				meetingHud_cachePtr === 0 ? 4 : this.readMemory('int', meetingHud, this.offsets.meetingHudState, 4);
 
-				const innerNetClient = this.readMemory<number>(
+			const innerNetClient = this.readMemory<number>(
+				'ptr',
+				this.gameAssembly.modBaseAddr,
+				this.offsets.innerNetClient.base
+			);
+			if (!innerNetClient) return null;
+
+			const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
+
+			switch (gameState) {
+				case 0:
+					state = GameState.MENU;
+					break;
+				case 1:
+				case 3:
+					state = GameState.LOBBY;
+					break;
+				default:
+					if (meetingHudState < 4) state = GameState.DISCUSSION;
+					else state = GameState.TASKS;
+					break;
+			}
+			// const DEBUG = true;
+			const lobbyCodeInt =
+				state === GameState.MENU
+					? -1
+					: this.readMemory<number>('int32', innerNetClient, this.offsets.innerNetClient.gameId);
+
+			this.gameCode =
+				state === GameState.MENU
+					? ''
+					: lobbyCodeInt === this.lastState.lobbyCodeInt
+						? this.gameCode
+						: this.IntToGameCode(lobbyCodeInt);
+
+			// if (DEBUG) {
+			// 	this.gameCode = 'oof';
+			// }
+
+			const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
+			if (!allPlayersPtr) return null;
+			const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
+			if (!allPlayers) return null;
+
+			const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
+			const playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
+			const players: Player[] = [];
+
+			const hostId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.hostId);
+			const clientId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.clientId);
+			this.isLocalGame = lobbyCodeInt === 32; // is local game
+			let lightRadius = 1;
+			let comsSabotaged = false;
+			let mixupSabotaged = false;
+			const camouflaged = false;
+			let currentCamera = CameraLocation.NONE;
+			let map = MapType.UNKNOWN;
+			let maxPlayers = 10;
+			const closedDoors: number[] = [];
+			let localPlayer = undefined;
+			let localObjectFlags = '';
+			let localObjectDiffs = '';
+			let localPlayerDiffs = '';
+			let innerNetDiffs = '';
+			let airshipMeetingByOutfit = false;
+			let currentOutfits = '';
+
+			if ((this.gameCode || this.isLocalGame) && playerCount) {
+				players.push(...this.readPlayers(playerAddrPtr, playerCount, clientId, hostId, state));
+				localPlayer = players.reduce<Player | undefined>(
+					(local, player) => (player.isLocal ? player : local),
+					undefined
+				);
+
+				this.normalizePlayerColors(players);
+				if (localPlayer) {
+					this.fixPingMessage();
+					lightRadius = this.readMemory<number>('float', localPlayer.objectPtr, this.offsets.lightRadius, -1);
+					({ localObjectFlags, localObjectDiffs, localPlayerDiffs } = this.readLocalDebug(localPlayer));
+				}
+				if (voiceDebugEnabled) {
+					innerNetDiffs = this.readDebugIntDiffs('net', innerNetClient, 0, 220);
+				}
+				const gameOptionsPtr = this.readMemory<number>(
 					'ptr',
 					this.gameAssembly.modBaseAddr,
-					this.offsets.innerNetClient.base
+					this.offsets.gameoptionsData
 				);
-				if (!innerNetClient) return null;
-
-				const gameState = this.readMemory<number>('int', innerNetClient, this.offsets.innerNetClient.gameState);
-
-				switch (gameState) {
-					case 0:
-						state = GameState.MENU;
-						break;
-					case 1:
-					case 3:
-						state = GameState.LOBBY;
-						break;
-					default:
-						if (meetingHudState < 4) state = GameState.DISCUSSION;
-						else state = GameState.TASKS;
-						break;
-				}
-				// const DEBUG = true;
-				const lobbyCodeInt =
-					state === GameState.MENU
-						? -1
-						: this.readMemory<number>('int32', innerNetClient, this.offsets.innerNetClient.gameId);
-
-				this.gameCode =
-					state === GameState.MENU
-						? ''
-						: lobbyCodeInt === this.lastState.lobbyCodeInt
-							? this.gameCode
-							: this.IntToGameCode(lobbyCodeInt);
-
-				// if (DEBUG) {
-				// 	this.gameCode = 'oof';
-				// }
-
-				const allPlayersPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.allPlayersPtr);
-				if (!allPlayersPtr) return null;
-				const allPlayers = this.readMemory<number>('ptr', allPlayersPtr, this.offsets.allPlayers);
-				if (!allPlayers) return null;
-
-				const playerCount = this.readMemory<number>('int' as const, allPlayersPtr, this.offsets.playerCount, 0);
-				let playerAddrPtr = allPlayers + this.offsets.playerAddrPtr;
-				const players = [];
-
-				const hostId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.hostId);
-				const clientId = this.readMemory<number>('uint32', innerNetClient, this.offsets.innerNetClient.clientId);
-				this.isLocalGame = lobbyCodeInt === 32; // is local game
-				let lightRadius = 1;
-				let comsSabotaged = false;
-				let mixupSabotaged = false;
-				const camouflaged = false;
-				let currentCamera = CameraLocation.NONE;
-				let map = MapType.UNKNOWN;
-				let maxPlayers = 10;
-				const closedDoors: number[] = [];
-				let localPlayer = undefined;
-				let localObjectFlags = '';
-				let localObjectDiffs = '';
-				let localPlayerDiffs = '';
-				let innerNetDiffs = '';
-				let airshipMeetingByOutfit = false;
-				let currentOutfits = '';
-
-				if ((this.gameCode || this.isLocalGame) && playerCount) {
-					for (let i = 0; i < Math.min(playerCount, 40); i++) {
-						const { address, last } = this.offsetAddress(playerAddrPtr, this.offsets.player.offsets);
-						playerAddrPtr += this.is_64bit ? 8 : 4;
-						if (address === 0) continue;
-						let player: Player | undefined;
-						try {
-							const playerData = readBuffer(this.amongUs.handle, address + last, this.offsets.player.bufferLength);
-							player = this.parsePlayer(address + last, playerData, clientId);
-						} catch {
-							continue;
-						}
-						if (!player || state === GameState.MENU) {
-							continue;
-						}
-						this.applySnrCosmeticAppearance(player, state);
-
-						if (this.isLocalGame && player.clientId == hostId) {
-							this.gameCode = (player.nameHash % 99999).toString();
-						}
-						if (player.isLocal) {
-							localPlayer = player;
-						}
-
-						players.push(player);
-					}
-					this.normalizePlayerColors(players);
-					if (localPlayer) {
-						this.fixPingMessage();
-						lightRadius = this.readMemory<number>('float', localPlayer.objectPtr, this.offsets.lightRadius, -1);
-						if (voiceDebugEnabled) {
-							localObjectFlags = this.readLocalObjectFlags(localPlayer.objectPtr);
-							localObjectDiffs = this.readDebugIntDiffs('obj', localPlayer.objectPtr, 0, 240);
-							localPlayerDiffs = this.readDebugIntDiffs('plr', localPlayer.ptr, 0, 140);
-						}
-					}
-					if (voiceDebugEnabled) {
-						innerNetDiffs = this.readDebugIntDiffs('net', innerNetClient, 0, 220);
-					}
-					const gameOptionsPtr = this.readMemory<number>(
-						'ptr',
-						this.gameAssembly.modBaseAddr,
-						this.offsets.gameoptionsData
-					);
-					maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
+				maxPlayers = this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MaxPLayers);
+				map = this.normalizeMapType(
+					this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId, MapType.UNKNOWN)
+				);
+				const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
+				if (map === MapType.UNKNOWN && shipPtr) {
 					map = this.normalizeMapType(
-						this.readMemory<number>('byte', gameOptionsPtr, this.offsets.gameOptions_MapId, MapType.UNKNOWN)
+						this.readMemory<number>('byte', shipPtr, this.offsets.shipStatus_map, MapType.UNKNOWN)
 					);
-					const shipPtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets.shipStatus);
-					if (map === MapType.UNKNOWN && shipPtr) {
-						map = this.normalizeMapType(
-							this.readMemory<number>('byte', shipPtr, this.offsets.shipStatus_map, MapType.UNKNOWN)
-						);
-					}
-					if (state === GameState.TASKS) {
-						const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
-						const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
-						const shiftedPlayerCount = shiftedPlayers.length;
-						const mixupThreshold = 1;
-						mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
-						if (voiceDebugEnabled) {
-							currentOutfits = activePlayers.map((player) => `${player.id}:${player.currentOutfit}`).join(',');
-						}
-						airshipMeetingByOutfit =
-							map === MapType.AIRSHIP &&
-							activePlayers.length >= 2 &&
-							activePlayers.every((player) => player.currentOutfit === 1) &&
-							!mixupSabotaged;
-					}
-					if (state === GameState.TASKS) {
-						const systemsPtr = this.readMemory<number>('ptr', shipPtr, this.offsets.shipStatus_systems);
-
-						if (systemsPtr !== 0 && state === GameState.TASKS) {
-							this.readDictionary(systemsPtr, 64, (k, v) => {
-								const key = this.readMemory<number>('int32', k);
-								if (key === 14) {
-									const value = this.readMemory<number>('ptr', v);
-									switch (map) {
-										case MapType.AIRSHIP:
-										case MapType.POLUS:
-										case MapType.THE_SKELD:
-										case MapType.SUBMERGED: {
-											comsSabotaged =
-												this.readMemory<number>('uint32', value, this.offsets!.HudOverrideSystemType_isActive) === 1;
-											break;
-										}
-										case MapType.FUNGLE:
-										case MapType.MIRA_HQ: {
-											comsSabotaged =
-												this.readMemory<number>('uint32', value, this.offsets!.hqHudSystemType_CompletedConsoles) < 2;
-											break;
-										}
-									}
-								} else if (key === 18 && map === MapType.MIRA_HQ) {
-									//SystemTypes Decontamination
-									const value = this.readMemory<number>('ptr', v);
-									const lowerDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorLowerOpen);
-									const upperDoorOpen = this.readMemory<number>('int', value, this.offsets!.deconDoorUpperOpen);
-									if (!lowerDoorOpen) {
-										closedDoors.push(0);
-									}
-									if (!upperDoorOpen) {
-										closedDoors.push(1);
-									}
-								}
-							});
-						}
-
-						const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly.modBaseAddr, this.offsets!.miniGame);
-						const minigameCachePtr = this.readMemory<number>('ptr', minigamePtr, this.offsets!.objectCachePtr);
-						if (minigameCachePtr && minigameCachePtr !== 0 && localPlayer) {
-							if (map === MapType.POLUS || map === MapType.AIRSHIP) {
-								const currentCameraId = this.readMemory<number>(
-									'uint32',
-									minigamePtr,
-									this.offsets!.planetSurveillanceMinigame_currentCamera
-								);
-								const camarasCount = this.readMemory<number>(
-									'uint32',
-									minigamePtr,
-									this.offsets!.planetSurveillanceMinigame_camarasCount
-								);
-
-								if (currentCameraId >= 0 && currentCameraId <= 5 && camarasCount === 6) {
-									currentCamera = currentCameraId as CameraLocation;
-								}
-							} else if (map === MapType.THE_SKELD) {
-								const roomCount = this.readMemory<number>(
-									'uint32',
-									minigamePtr,
-									this.offsets!.surveillanceMinigame_FilteredRoomsCount
-								);
-								if (roomCount === 4) {
-									const dist = Math.sqrt(Math.pow(localPlayer.x - -12.9364, 2) + Math.pow(localPlayer.y - -2.7928, 2));
-									if (dist < 0.6) {
-										currentCamera = CameraLocation.Skeld;
-									}
-								}
-							}
-						}
-						if (map !== MapType.MIRA_HQ) {
-							const allDoors = this.readMemory<number>('ptr', shipPtr, this.offsets.shipstatus_allDoors);
-							const doorCount = Math.min(this.readMemory<number>('int', allDoors, this.offsets.playerCount), 16);
-							for (let doorNr = 0; doorNr < doorCount; doorNr++) {
-								const door = this.readMemory<number>(
-									'ptr',
-									allDoors + this.offsets.playerAddrPtr + doorNr * (this.is_64bit ? 0x8 : 0x4)
-								);
-								const doorOpen = this.readMemory<number>('int', door + this.offsets.door_isOpen) === 1;
-								//	const doorId = this.readMemory<number>('int', door + this.offsets.door_doorId);
-								//console.log(doorId);
-								if (!doorOpen) {
-									closedDoors.push(doorNr);
-								}
-							}
-						}
-					}
-					//	console.log('doorcount: ', doorCount, doorsOpen);
 				}
+				if (state === GameState.TASKS) {
+					({ mixupSabotaged, currentOutfits, airshipMeetingByOutfit } = this.readTaskAppearance(players, map));
+				}
+				if (state === GameState.TASKS) {
+					comsSabotaged = this.readShipSystems(shipPtr, map, closedDoors);
 
-				// if (this.oldGameState === GameState.DISCUSSION && state === GameState.TASKS) {
-				// 	if (impostors === 0 || impostors >= crewmates) {
-				// 		this.exileCausesEnd = true;
-				// 		state = GameState.LOBBY;
-				// 	}
-				// }
-
-				if (
-					this.oldGameState === GameState.MENU &&
-					state === GameState.LOBBY &&
-					this.menuUpdateTimer > 0 &&
-					(this.lastPlayerPtr === allPlayers || !players.find((p) => p.isLocal))
-				) {
-					state = GameState.MENU;
-					this.menuUpdateTimer--;
-				} else {
-					this.menuUpdateTimer = 20;
-					this.lastPlayerPtr = allPlayers;
+					currentCamera = this.readCurrentCamera(map, localPlayer);
+					this.readClosedDoors(shipPtr, map, closedDoors);
 				}
-				const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
-				const snrActive = state === GameState.TASKS || state === GameState.DISCUSSION;
-				if (snrActive && !this.snrInGame) this.snrRound++;
-				this.snrInGame = snrActive;
-				if (this.loadedMod.id === 'SUPER_NEW_ROLES' && !this.is_linux) {
-					const roles = snrActive
-						? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
-								readBuffer(this.amongUs!.handle, address, size)
-							)
-						: new Map();
-					for (const player of players) {
-						player.snrRole = player.disconnected ? undefined : roles.get(player.id);
-						player.snrHat2Id = player.snrRole?.hat2Id;
-						player.snrVisor2Id = player.snrRole?.visor2Id;
-						player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
-					}
-				} else this.snrRoles.reset();
-				if (this.loadedMod.id === 'TOH4E' && !this.is_linux && (state === GameState.LOBBY || snrActive)) {
-					const roles = this.tohRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
-						readBuffer(this.amongUs!.handle, address, size)
-					);
-					for (const player of players) {
-						player.tohRole = player.disconnected ? undefined : roles.get(player.id);
-						player.roleName = player.tohRole?.roleName ? `TOH4E: ${player.tohRole.roleName}` : 'TOH4E役職未取得';
-					}
-				} else this.tohRoles.reset();
-				const nos =
-					this.loadedMod.id === 'NoS' && !this.is_linux && (snrActive || state === GameState.LOBBY)
-						? this.nosSnapshot.update(
-								this.pid,
-								`${lobbyCode}:${this.snrRound}:${snrActive ? 'game' : 'lobby'}`,
-								(address, size) => readBuffer(this.amongUs!.handle, address, size)
-							)
-						: undefined;
-				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosSnapshot.reset();
-				const nosLobbyColors =
-					this.loadedMod.id === 'NoS' && !this.is_linux && state === GameState.LOBBY
-						? this.nosPalette.update(this.pid, (address, size) => readBuffer(this.amongUs!.handle, address, size))
-						: undefined;
-				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
-				if (this.loadedMod.id === 'NoS') {
-					if (this.cosmeticsEnabled) this.nosContents.update(path.dirname(this.gamePath));
-					const data = new Map(nos?.players.map((player) => [player.playerId, player]));
-					for (const player of players) {
-						const published = player.disconnected ? undefined : data.get(player.id);
-						// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
-						player.nosLobbyColor = player.disconnected ? undefined : nosLobbyColors?.[player.id];
-						player.nosPlayer = published;
-						player.nosCosmetics = !this.cosmeticsEnabled
-							? undefined
-							: state === GameState.LOBBY
-								? this.nosContents.lobbyCosmetics(
-										player,
-										player.nosLobbyColor ?? this.playercolors[player.appearanceColorId]?.[0]
-									)
-								: this.nosContents.cosmetics(published);
-						// Vanilla's substitute role is not an authoritative NoS team.
-						player.isImpostor = published?.isImpostor ?? false;
-						player.isThirdParty = published?.isNeutral ?? false;
-						player.roleName = published ? formatNosTeam(published) : 'NoS陣営未取得';
-						if (published) player.appearanceName = published.name;
-					}
-				}
-				const missingNosPlayers = nos
-					? players.filter((player) => !player.disconnected && !nos.players.some((data) => data.playerId === player.id))
-					: [];
-				const newState: AmongUsState = normalizeMeetingState({
-					nosReadStatus:
-						this.loadedMod.id === 'NoS'
-							? {
-									failed: snrActive && (!nos || missingNosPlayers.length > 0),
-									message:
-										snrActive && nos && missingNosPlayers.length > 0
-											? `NoSプレイヤーデータ未取得: PlayerId ${missingNosPlayers.map((player) => player.id).join(', ')}`
-											: this.nosSnapshot.message,
-									schemaVersion: this.nosSnapshot.schemaVersion,
-								}
-							: undefined,
-					nosLoadedContents:
-						this.loadedMod.id === 'NoS' && voiceDebugEnabled
-							? this.nosContents.update(path.dirname(this.gamePath))
-							: undefined,
-					nosLocalMicPosition: nos?.localMicPosition,
-					nosRadios: nos?.radios,
-					lobbyCode: lobbyCode,
-					lobbyCodeInt,
-					players,
-					gameState: lobbyCode === 'MENU' ? GameState.MENU : state,
-					oldGameState: this.oldGameState,
-					isHost: (hostId && clientId && hostId === clientId) as boolean,
-					hostId: hostId,
-					clientId: clientId,
-					comsSabotaged,
-					mixupSabotaged,
-					camouflaged,
-					currentCamera,
-					lightRadius,
-					lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
-					map,
-					mod: this.loadedMod.id,
-					closedDoors,
-					maxPlayers,
-					oldMeetingHud: this.oldMeetingHud,
-					airshipMeetingByOutfit,
-					...(voiceDebugEnabled
-						? {
-								debug: {
-									rawGameState: gameState,
-									meetingHud,
-									meetingHudCachePtr: meetingHud_cachePtr,
-									meetingHudState,
-									onlineScene: this.readMemory<number>(
-										'int',
-										innerNetClient,
-										this.offsets.innerNetClient.onlineScene,
-										-1
-									),
-									mainMenuScene: this.readMemory<number>(
-										'int',
-										innerNetClient,
-										this.offsets.innerNetClient.mainMenuScene,
-										-1
-									),
-									localTaskPtr: localPlayer?.taskPtr || 0,
-									localObjectFlags,
-									initPatternDebug: this.initPatternDebug,
-									airshipMeetingByOutfit,
-									currentOutfits,
-									localObjectDiffs,
-									localPlayerDiffs,
-									innerNetDiffs,
-									localRoleTeam: localPlayer?.roleTeam ?? -1,
-									localRoleLabel: localPlayer?.roleName || 'unknown',
-									localRolePtr: localPlayer?.rolePtr || 0,
-									localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
-									localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
-									colorDebug: this.formatColorDebug(players, localPlayer),
-									sizeDebug: this.formatSizeDebug(players),
-									nosSnapshotStatus: this.loadedMod.id === 'NoS' ? this.nosSnapshot.message : undefined,
-									tohRoleStatus: this.loadedMod.id === 'TOH4E' ? this.tohRoles.message : undefined,
-									snrRoleStatus:
-										this.loadedMod.id === 'SUPER_NEW_ROLES'
-											? snrActive
-												? this.snrRoles.message
-												: '試合開始後にSNR役職を自動取得します。'
-											: undefined,
-								},
-							}
-						: {}),
-				});
-				//	const stateHasChanged = !equal(this.lastState, newState);
-				if (state !== GameState.MENU || this.oldGameState !== GameState.MENU || this.lastState.mod !== newState.mod) {
-					try {
-						this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
-					} catch {
-						process.exit(0);
-					}
-				}
-				this.lastState = newState;
-				this.oldGameState = state;
-				if (state === GameState.MENU) {
-					this.stablePlayerColors = {};
-					this.debugBaselines = {};
-				}
-				this.nativeReadFailureCount = 0;
-			} catch (e) {
-				this.nativeReadFailureCount++;
-				console.error('Failed to read Among Us memory:', e);
-				this.resetAmongUsProcess();
-				this.checkProcessDelay = 0;
-				return this.nativeReadFailureCount >= 3 ? Errors.NATIVE_MEMORY_READ_ERROR : null;
+				//	console.log('doorcount: ', doorCount, doorsOpen);
 			}
+
+			// if (this.oldGameState === GameState.DISCUSSION && state === GameState.TASKS) {
+			// 	if (impostors === 0 || impostors >= crewmates) {
+			// 		this.exileCausesEnd = true;
+			// 		state = GameState.LOBBY;
+			// 	}
+			// }
+
+			if (
+				this.oldGameState === GameState.MENU &&
+				state === GameState.LOBBY &&
+				this.menuUpdateTimer > 0 &&
+				(this.lastPlayerPtr === allPlayers || !players.find((p) => p.isLocal))
+			) {
+				state = GameState.MENU;
+				this.menuUpdateTimer--;
+			} else {
+				this.menuUpdateTimer = 20;
+				this.lastPlayerPtr = allPlayers;
+			}
+			const lobbyCode = state !== GameState.MENU ? this.gameCode || 'MENU' : 'MENU';
+			const snrActive = state === GameState.TASKS || state === GameState.DISCUSSION;
+			if (snrActive && !this.snrInGame) this.snrRound++;
+			this.snrInGame = snrActive;
+			if (this.loadedMod.id === 'SUPER_NEW_ROLES' && !this.is_linux) {
+				const roles = snrActive
+					? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
+							readBuffer(this.amongUs!.handle, address, size)
+						)
+					: new Map();
+				for (const player of players) {
+					player.snrRole = player.disconnected ? undefined : roles.get(player.id);
+					player.snrHat2Id = player.snrRole?.hat2Id;
+					player.snrVisor2Id = player.snrRole?.visor2Id;
+					player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
+				}
+			} else this.snrRoles.reset();
+			if (this.loadedMod.id === 'TOH4E' && !this.is_linux && (state === GameState.LOBBY || snrActive)) {
+				const roles = this.tohRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
+					readBuffer(this.amongUs!.handle, address, size)
+				);
+				for (const player of players) {
+					player.tohRole = player.disconnected ? undefined : roles.get(player.id);
+					player.roleName = player.tohRole?.roleName ? `TOH4E: ${player.tohRole.roleName}` : 'TOH4E役職未取得';
+				}
+			} else this.tohRoles.reset();
+			const nos =
+				this.loadedMod.id === 'NoS' && !this.is_linux && (snrActive || state === GameState.LOBBY)
+					? this.nosSnapshot.update(
+							this.pid,
+							`${lobbyCode}:${this.snrRound}:${snrActive ? 'game' : 'lobby'}`,
+							(address, size) => readBuffer(this.amongUs!.handle, address, size)
+						)
+					: undefined;
+			if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosSnapshot.reset();
+			const nosLobbyColors =
+				this.loadedMod.id === 'NoS' && !this.is_linux && state === GameState.LOBBY
+					? this.nosPalette.update(this.pid, (address, size) => readBuffer(this.amongUs!.handle, address, size))
+					: undefined;
+			if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
+			if (this.loadedMod.id === 'NoS') {
+				if (this.cosmeticsEnabled) this.nosContents.update(path.dirname(this.gamePath));
+				const data = new Map(nos?.players.map((player) => [player.playerId, player]));
+				for (const player of players) {
+					this.applyNosAppearance(
+						player,
+						player.disconnected ? undefined : data.get(player.id),
+						nosLobbyColors?.[player.id],
+						state
+					);
+				}
+			}
+			const missingNosPlayers = nos
+				? players.filter((player) => !player.disconnected && !nos.players.some((data) => data.playerId === player.id))
+				: [];
+			const newState: AmongUsState = normalizeMeetingState({
+				nosReadStatus:
+					this.loadedMod.id === 'NoS'
+						? {
+								failed: snrActive && (!nos || missingNosPlayers.length > 0),
+								message:
+									snrActive && nos && missingNosPlayers.length > 0
+										? `NoSプレイヤーデータ未取得: PlayerId ${missingNosPlayers.map((player) => player.id).join(', ')}`
+										: this.nosSnapshot.message,
+								schemaVersion: this.nosSnapshot.schemaVersion,
+							}
+						: undefined,
+				nosLoadedContents:
+					this.loadedMod.id === 'NoS' && voiceDebugEnabled
+						? this.nosContents.update(path.dirname(this.gamePath))
+						: undefined,
+				nosLocalMicPosition: nos?.localMicPosition,
+				nosRadios: nos?.radios,
+				lobbyCode: lobbyCode,
+				lobbyCodeInt,
+				players,
+				gameState: lobbyCode === 'MENU' ? GameState.MENU : state,
+				oldGameState: this.oldGameState,
+				isHost: (hostId && clientId && hostId === clientId) as boolean,
+				hostId: hostId,
+				clientId: clientId,
+				comsSabotaged,
+				mixupSabotaged,
+				camouflaged,
+				currentCamera,
+				lightRadius,
+				lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
+				map,
+				mod: this.loadedMod.id,
+				closedDoors,
+				maxPlayers,
+				oldMeetingHud: this.oldMeetingHud,
+				airshipMeetingByOutfit,
+				...(voiceDebugEnabled
+					? {
+							debug: {
+								rawGameState: gameState,
+								meetingHud,
+								meetingHudCachePtr: meetingHud_cachePtr,
+								meetingHudState,
+								onlineScene: this.readMemory<number>(
+									'int',
+									innerNetClient,
+									this.offsets.innerNetClient.onlineScene,
+									-1
+								),
+								mainMenuScene: this.readMemory<number>(
+									'int',
+									innerNetClient,
+									this.offsets.innerNetClient.mainMenuScene,
+									-1
+								),
+								localTaskPtr: localPlayer?.taskPtr || 0,
+								localObjectFlags,
+								initPatternDebug: this.initPatternDebug,
+								airshipMeetingByOutfit,
+								currentOutfits,
+								localObjectDiffs,
+								localPlayerDiffs,
+								innerNetDiffs,
+								localRoleTeam: localPlayer?.roleTeam ?? -1,
+								localRoleLabel: localPlayer?.roleName || 'unknown',
+								localRolePtr: localPlayer?.rolePtr || 0,
+								localRoleDiffs: this.readDebugIntDiffs('role', localPlayer?.rolePtr || 0, 0, 160),
+								localRoleSnapshot: this.readDebugIntSnapshot(localPlayer?.rolePtr || 0, 0, 160),
+								colorDebug: this.formatColorDebug(players, localPlayer),
+								sizeDebug: this.formatSizeDebug(players),
+								nosSnapshotStatus: this.loadedMod.id === 'NoS' ? this.nosSnapshot.message : undefined,
+								tohRoleStatus: this.loadedMod.id === 'TOH4E' ? this.tohRoles.message : undefined,
+								snrRoleStatus:
+									this.loadedMod.id === 'SUPER_NEW_ROLES'
+										? snrActive
+											? this.snrRoles.message
+											: '試合開始後にSNR役職を自動取得します。'
+										: undefined,
+							},
+						}
+					: {}),
+			});
+			//	const stateHasChanged = !equal(this.lastState, newState);
+			if (state !== GameState.MENU || this.oldGameState !== GameState.MENU || this.lastState.mod !== newState.mod) {
+				try {
+					this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
+				} catch {
+					process.exit(0);
+				}
+			}
+			this.lastState = newState;
+			this.oldGameState = state;
+			if (state === GameState.MENU) {
+				this.stablePlayerColors = {};
+				this.debugBaselines = {};
+			}
+			this.nativeReadFailureCount = 0;
+		} catch (e) {
+			this.nativeReadFailureCount++;
+			console.error('Failed to read Among Us memory:', e);
+			this.resetAmongUsProcess();
+			this.checkProcessDelay = 0;
+			return this.nativeReadFailureCount >= 3 ? Errors.NATIVE_MEMORY_READ_ERROR : null;
 		}
 		return null;
+	}
+
+	private readTaskAppearance(
+		players: Player[],
+		map: MapType
+	): { mixupSabotaged: boolean; currentOutfits: string; airshipMeetingByOutfit: boolean } {
+		const activePlayers = players.filter((player) => !player.disconnected && !player.bugged);
+		const shiftedPlayers = activePlayers.filter((player) => this.hasDisguisedAppearance(player));
+		const shiftedPlayerCount = shiftedPlayers.length;
+		const mixupThreshold = 1;
+		const mixupSabotaged = shiftedPlayerCount >= mixupThreshold;
+		const currentOutfits = voiceDebugEnabled
+			? activePlayers.map((player) => `${player.id}:${player.currentOutfit}`).join(',')
+			: '';
+		const airshipMeetingByOutfit =
+			map === MapType.AIRSHIP &&
+			activePlayers.length >= 2 &&
+			activePlayers.every((player) => player.currentOutfit === 1) &&
+			!mixupSabotaged;
+		return { mixupSabotaged, currentOutfits, airshipMeetingByOutfit };
+	}
+
+	private readPlayers(
+		playerAddrPtr: number,
+		playerCount: number,
+		clientId: number,
+		hostId: number,
+		state: GameState
+	): Player[] {
+		const offsets = this.offsets!;
+		const players: Player[] = [];
+		for (let i = 0; i < Math.min(playerCount, 40); i++) {
+			const { address, last } = this.offsetAddress(playerAddrPtr, offsets.player.offsets);
+			playerAddrPtr += this.is_64bit ? 8 : 4;
+			if (address === 0) continue;
+			let player: Player | undefined;
+			try {
+				const playerData = readBuffer(this.amongUs!.handle, address + last, offsets.player.bufferLength);
+				player = this.parsePlayer(address + last, playerData, clientId);
+			} catch {
+				continue;
+			}
+			if (!player || state === GameState.MENU) {
+				continue;
+			}
+			this.applySnrCosmeticAppearance(player, state);
+
+			if (this.isLocalGame && player.clientId == hostId) {
+				this.gameCode = (player.nameHash % 99999).toString();
+			}
+
+			players.push(player);
+		}
+		return players;
+	}
+
+	private readShipSystems(shipPtr: number, map: MapType, closedDoors: number[]): boolean {
+		const offsets = this.offsets!;
+		const systemsPtr = this.readMemory<number>('ptr', shipPtr, offsets.shipStatus_systems);
+		if (!systemsPtr) return false;
+		let comsSabotaged = false;
+		this.readDictionary(systemsPtr, 64, (k, v) => {
+			const key = this.readMemory<number>('int32', k);
+			if (key === 14) {
+				comsSabotaged = this.readCommsSabotage(this.readMemory<number>('ptr', v), map);
+				return;
+			}
+			if (key !== 18 || map !== MapType.MIRA_HQ) return;
+			const value = this.readMemory<number>('ptr', v);
+			if (!this.readMemory<number>('int', value, offsets.deconDoorLowerOpen)) closedDoors.push(0);
+			if (!this.readMemory<number>('int', value, offsets.deconDoorUpperOpen)) closedDoors.push(1);
+		});
+		return comsSabotaged;
+	}
+
+	private readCommsSabotage(value: number, map: MapType): boolean {
+		const offsets = this.offsets!;
+		if ([MapType.AIRSHIP, MapType.POLUS, MapType.THE_SKELD, MapType.SUBMERGED].includes(map))
+			return this.readMemory<number>('uint32', value, offsets.HudOverrideSystemType_isActive) === 1;
+		if ([MapType.FUNGLE, MapType.MIRA_HQ].includes(map))
+			return this.readMemory<number>('uint32', value, offsets.hqHudSystemType_CompletedConsoles) < 2;
+		return false;
+	}
+
+	private readCurrentCamera(map: MapType, localPlayer: Player | undefined): CameraLocation {
+		const offsets = this.offsets!;
+		const minigamePtr = this.readMemory<number>('ptr', this.gameAssembly!.modBaseAddr, offsets.miniGame);
+		const cachePtr = this.readMemory<number>('ptr', minigamePtr, offsets.objectCachePtr);
+		if (!cachePtr || !localPlayer) return CameraLocation.NONE;
+		if (map === MapType.POLUS || map === MapType.AIRSHIP) {
+			const id = this.readMemory<number>('uint32', minigamePtr, offsets.planetSurveillanceMinigame_currentCamera);
+			const count = this.readMemory<number>('uint32', minigamePtr, offsets.planetSurveillanceMinigame_camarasCount);
+			return id >= 0 && id <= 5 && count === 6 ? (id as CameraLocation) : CameraLocation.NONE;
+		}
+		if (map !== MapType.THE_SKELD) return CameraLocation.NONE;
+		const count = this.readMemory<number>('uint32', minigamePtr, offsets.surveillanceMinigame_FilteredRoomsCount);
+		if (count !== 4) return CameraLocation.NONE;
+		const distance = Math.sqrt(Math.pow(localPlayer.x - -12.9364, 2) + Math.pow(localPlayer.y - -2.7928, 2));
+		return distance < 0.6 ? CameraLocation.Skeld : CameraLocation.NONE;
+	}
+
+	private readClosedDoors(shipPtr: number, map: MapType, closedDoors: number[]): void {
+		if (map === MapType.MIRA_HQ) return;
+		const offsets = this.offsets!;
+		const allDoors = this.readMemory<number>('ptr', shipPtr, offsets.shipstatus_allDoors);
+		const doorCount = Math.min(this.readMemory<number>('int', allDoors, offsets.playerCount), 16);
+		for (let doorNr = 0; doorNr < doorCount; doorNr++) {
+			const door = this.readMemory<number>(
+				'ptr',
+				allDoors + offsets.playerAddrPtr + doorNr * (this.is_64bit ? 0x8 : 0x4)
+			);
+			const doorOpen = this.readMemory<number>('int', door + offsets.door_isOpen) === 1;
+			//	const doorId = this.readMemory<number>('int', door + offsets.door_doorId);
+			//console.log(doorId);
+			if (!doorOpen) {
+				closedDoors.push(doorNr);
+			}
+		}
+	}
+
+	private applyNosAppearance(
+		player: Player,
+		published: Player['nosPlayer'],
+		lobbyColor: Player['nosLobbyColor'],
+		state: GameState
+	): void {
+		// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
+		player.nosLobbyColor = player.disconnected ? undefined : lobbyColor;
+		player.nosPlayer = published;
+		player.nosCosmetics = !this.cosmeticsEnabled
+			? undefined
+			: state === GameState.LOBBY
+				? this.nosContents.lobbyCosmetics(
+						player,
+						player.nosLobbyColor ?? this.playercolors[player.appearanceColorId]?.[0]
+					)
+				: this.nosContents.cosmetics(published);
+		// Vanilla's substitute role is not an authoritative NoS team.
+		player.isImpostor = published?.isImpostor ?? false;
+		player.isThirdParty = published?.isNeutral ?? false;
+		player.roleName = published ? formatNosTeam(published) : 'NoS陣営未取得';
+		if (published) player.appearanceName = published.name;
+	}
+
+	private readLocalDebug(player: Player): {
+		localObjectFlags: string;
+		localObjectDiffs: string;
+		localPlayerDiffs: string;
+	} {
+		if (!voiceDebugEnabled) return { localObjectFlags: '', localObjectDiffs: '', localPlayerDiffs: '' };
+		return {
+			localObjectFlags: this.readLocalObjectFlags(player.objectPtr),
+			localObjectDiffs: this.readDebugIntDiffs('obj', player.objectPtr, 0, 240),
+			localPlayerDiffs: this.readDebugIntDiffs('plr', player.ptr, 0, 140),
+		};
 	}
 
 	private resetAmongUsProcess(): void {

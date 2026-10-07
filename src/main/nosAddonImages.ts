@@ -70,42 +70,55 @@ export function readNosZipImage(image: NosZipImage): Buffer {
 	}
 }
 
+function registerContents(
+	all: Map<string, NosZipImage>,
+	name: string,
+	entry: NosZipImage,
+	result: Map<string, Map<string, NosZipImage>>
+): void {
+	const contents = JSON.parse(
+		readNosZipImage(entry)
+			.toString('utf8')
+			.replace(/^\uFEFF/, '')
+	);
+	const root = name.slice(0, -'Contents.json'.length);
+	for (const [category, prefix] of [
+		['hats', 'noshat_'],
+		['visors', 'nosvisor_'],
+	]) {
+		if (!Array.isArray(contents[category])) continue;
+		const directory = `${root}${category}/`;
+		// Every costume in a category shares this directory; scan it once.
+		const images = [...all]
+			.filter(([name]) => name.startsWith(directory) && name.endsWith('.png'))
+			.map(([name, image]) => [name.slice(directory.length), image] as const);
+		for (const costume of contents[category]) {
+			if (typeof costume.Author !== 'string' || typeof costume.Name !== 'string') continue;
+			result.set(`${prefix}${costume.Author}_${costume.Name}`, new Map(images));
+		}
+	}
+}
+
+function indexArchive(gameDirectory: string, file: string, result: Map<string, Map<string, NosZipImage>>): void {
+	try {
+		const archive = fs.realpathSync(path.join(gameDirectory, 'Addons', file));
+		if (path.relative(gameDirectory, archive).startsWith('..')) return;
+		const all = entries(archive);
+		for (const [name, entry] of all) {
+			if (!name.endsWith('MoreCosmic/Contents.json') || entry.size > 4 * 1024 * 1024) continue;
+			registerContents(all, name, entry, result);
+		}
+	} catch {
+		/* Ignore an unavailable or unsupported addon; folder cosmetics still work. */
+	}
+}
+
 export function indexNosAddonImages(gameDirectory: string): Map<string, Map<string, NosZipImage>> {
 	const result = new Map<string, Map<string, NosZipImage>>();
 	const directory = path.join(gameDirectory, 'Addons');
 	if (!fs.existsSync(directory)) return result;
 	for (const file of fs.readdirSync(directory)) {
-		if (!file.toLowerCase().endsWith('.zip')) continue;
-		try {
-			const archive = fs.realpathSync(path.join(directory, file));
-			if (path.relative(gameDirectory, archive).startsWith('..')) continue;
-			const all = entries(archive);
-			for (const [name, entry] of all) {
-				if (!name.endsWith('MoreCosmic/Contents.json') || entry.size > 4 * 1024 * 1024) continue;
-				const contents = JSON.parse(
-					readNosZipImage(entry)
-						.toString('utf8')
-						.replace(/^\uFEFF/, '')
-				);
-				const root = name.slice(0, -'Contents.json'.length);
-				for (const [category, prefix] of [
-					['hats', 'noshat_'],
-					['visors', 'nosvisor_'],
-				]) {
-					if (!Array.isArray(contents[category])) continue;
-					for (const costume of contents[category]) {
-						if (typeof costume.Author !== 'string' || typeof costume.Name !== 'string') continue;
-						const files = new Map<string, NosZipImage>();
-						for (const [name, image] of all)
-							if (name.startsWith(`${root}${category}/`) && name.endsWith('.png'))
-								files.set(name.slice(`${root}${category}/`.length), image);
-						result.set(`${prefix}${costume.Author}_${costume.Name}`, files);
-					}
-				}
-			}
-		} catch {
-			/* Ignore an unavailable or unsupported addon; folder cosmetics still work. */
-		}
+		if (file.toLowerCase().endsWith('.zip')) indexArchive(gameDirectory, file, result);
 	}
 	return result;
 }

@@ -27,9 +27,6 @@ internal static class TohRoleLayout
             .Where(s => !s.dictionary.IsNull).ToArray();
         if (sources.Length != 1) throw new InvalidOperationException($"TOH4E PlayerState dictionary: expected one initialized source, found {sources.Length}. MOD未導入または未初期化の可能性があります。");
         var source = sources[0];
-        ClrInstanceField Field(ClrType type, string name) => type.GetFieldByName(name)
-            ?? throw new InvalidOperationException($"Missing TOH4E field {type.Name}.{name}");
-        ulong Offset(ClrInstanceField field) => field.GetAddress(0x1000, false) - 0x1000;
         var dictType = source.dictionary.Type!;
         var entriesField = Field(dictType, "_entries");
         var entries = entriesField.ReadObject(source.dictionary.Address, false);
@@ -44,39 +41,7 @@ internal static class TohRoleLayout
         var canKill = opportunist?.GetStaticFieldByName("CanKill");
         // Read interface inheritance from the actual loaded DLL, without executing MOD code.
         var killerRoles = ReadKillerRoles(source.module.Name!);
-        var manager = source.module.GetTypeByName("TownOfHostForE.Roles.Core.CustomRoleManager");
-        var activeSlot = manager?.GetStaticFieldByName("AllActiveRoles");
-        object? killerLayout = null;
-        if (activeSlot != null && activeSlot.GetAddress(source.module.AppDomain) != 0)
-        {
-            var active = activeSlot.ReadObject(source.module.AppDomain);
-            if (!active.IsNull)
-            {
-                var activeEntriesField = Field(active.Type!, "_entries");
-                var activeEntries = activeEntriesField.ReadObject(active.Address, false);
-                if (activeEntries.IsArray)
-                {
-                    var activeEntryType = activeEntries.Type!.ComponentType!;
-                    var types = new Dictionary<ulong, object>();
-                    foreach (var (name, isKiller) in killerRoles)
-                    {
-                        var type = source.module.GetTypeByName(name);
-                        if (type == null || type.MethodTable == 0) continue;
-                        types[type.MethodTable] = new { isKiller, stateOffset = Offset(Field(type, "MyState")) };
-                    }
-                    killerLayout = new {
-                        dictionarySlot = activeSlot.GetAddress(source.module.AppDomain),
-                        dictionaryType = active.Type!.MethodTable, entriesType = activeEntries.Type.MethodTable,
-                        entriesOffset = Offset(activeEntriesField), countOffset = Offset(Field(active.Type, "_count")),
-                        versionOffset = Offset(Field(active.Type, "_version")),
-                        dataOffset = activeEntries.Type.GetArrayElementAddress(activeEntries.Address, 0) - activeEntries.Address,
-                        stride = activeEntries.Type.ComponentSize,
-                        nextOffset = Field(activeEntryType, "next").Offset, keyOffset = Field(activeEntryType, "key").Offset,
-                        valueOffset = Field(activeEntryType, "value").Offset, types
-                    };
-                }
-            }
-        }
+        var killerLayout = ResolveKillerLayout(source.module, killerRoles);
         return new {
             pid, pointerSize, dictionarySlot = source.slot.GetAddress(source.module.AppDomain),
             dictionaryType = dictType.MethodTable, playerType = source.type.MethodTable,
@@ -90,6 +55,40 @@ internal static class TohRoleLayout
             idOffset = Offset(Field(source.type, "PlayerId")), roleOffset = Offset(role), names, killerLayout,
             opportunistCanKillSlot = canKill?.ElementType == ClrElementType.Boolean
                 ? canKill.GetAddress(source.module.AppDomain) : 0
+        };
+    }
+
+    private static ClrInstanceField Field(ClrType type, string name) => type.GetFieldByName(name)
+        ?? throw new InvalidOperationException($"Missing TOH4E field {type.Name}.{name}");
+    private static ulong Offset(ClrInstanceField field) => field.GetAddress(0x1000, false) - 0x1000;
+
+    private static object? ResolveKillerLayout(ClrModule module, Dictionary<string, bool> killerRoles)
+    {
+        var manager = module.GetTypeByName("TownOfHostForE.Roles.Core.CustomRoleManager");
+        var activeSlot = manager?.GetStaticFieldByName("AllActiveRoles");
+        if (activeSlot == null || activeSlot.GetAddress(module.AppDomain) == 0) return null;
+        var active = activeSlot.ReadObject(module.AppDomain);
+        if (active.IsNull) return null;
+        var activeEntriesField = Field(active.Type!, "_entries");
+        var activeEntries = activeEntriesField.ReadObject(active.Address, false);
+        if (!activeEntries.IsArray) return null;
+        var activeEntryType = activeEntries.Type!.ComponentType!;
+        var types = new Dictionary<ulong, object>();
+        foreach (var (name, isKiller) in killerRoles)
+        {
+            var type = module.GetTypeByName(name);
+            if (type == null || type.MethodTable == 0) continue;
+            types[type.MethodTable] = new { isKiller, stateOffset = Offset(Field(type, "MyState")) };
+        }
+        return new {
+            dictionarySlot = activeSlot.GetAddress(module.AppDomain),
+            dictionaryType = active.Type!.MethodTable, entriesType = activeEntries.Type.MethodTable,
+            entriesOffset = Offset(activeEntriesField), countOffset = Offset(Field(active.Type, "_count")),
+            versionOffset = Offset(Field(active.Type, "_version")),
+            dataOffset = activeEntries.Type.GetArrayElementAddress(activeEntries.Address, 0) - activeEntries.Address,
+            stride = activeEntries.Type.ComponentSize,
+            nextOffset = Field(activeEntryType, "next").Offset, keyOffset = Field(activeEntryType, "key").Offset,
+            valueOffset = Field(activeEntryType, "value").Offset, types
         };
     }
 

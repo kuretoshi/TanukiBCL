@@ -1,3 +1,4 @@
+import { combinations } from './test-cases.mjs';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -214,23 +215,36 @@ assert.equal(
 );
 const radioOnlyLobby = { ...lobby, impostorRadioOnlyMode: true, haunting: true };
 const meetingState = { ...state, gameState: GameState.DISCUSSION };
-const meetingRadio = { impostorRadioClientIds: [other.clientId], activeLobbySettings: { ...lobby, impostorRadioEnabled: true } };
+const meetingRadio = {
+	impostorRadioClientIds: [other.clientId],
+	activeLobbySettings: { ...lobby, impostorRadioEnabled: true },
+};
 assert.equal(
 	spatial({ state: meetingState, ...meetingRadio, other: { ...other, isImpostor: true } }).gain,
 	0,
 	'Crew must not hear an impostor using radio during discussion'
 );
 assert.equal(
-	spatial({ state: meetingState, ...meetingRadio, me: { ...me, isImpostor: true }, other: { ...other, isImpostor: true } }).gain,
+	spatial({
+		state: meetingState,
+		...meetingRadio,
+		me: { ...me, isImpostor: true },
+		other: { ...other, isImpostor: true },
+	}).gain,
 	1,
 	'Impostor teammates should hear meeting radio'
 );
 assert.equal(
-	spatial({ state: meetingState, ...meetingRadio, other: { ...other, isImpostor: true }, impostorRadioClientIds: [] }).gain,
+	spatial({ state: meetingState, ...meetingRadio, other: { ...other, isImpostor: true }, impostorRadioClientIds: [] })
+		.gain,
 	1,
 	'Ordinary meeting speech remains audible when radio is off'
 );
-const jackalMeetingRadio = { state: { ...meetingState, mod: 'NoS' }, impostorRadioClientIds: [other.clientId], activeLobbySettings: { ...lobby, jackalRadioEnabled: true } };
+const jackalMeetingRadio = {
+	state: { ...meetingState, mod: 'NoS' },
+	impostorRadioClientIds: [other.clientId],
+	activeLobbySettings: { ...lobby, jackalRadioEnabled: true },
+};
 assert.equal(
 	spatial({ ...jackalMeetingRadio, nosJackalRadioHearable: true }).gain,
 	1,
@@ -244,12 +258,23 @@ assert.equal(
 const snrJackal = { role: { value: 1, name: 'Jackal' } };
 const snrSidekick = { role: { value: 2, name: 'Sidekick' } };
 assert.equal(
-	spatial({ state: meetingState, me: { ...me, snrRole: snrSidekick }, other: { ...other, snrRole: snrJackal }, impostorRadioClientIds: [other.clientId], activeLobbySettings: { ...lobby, jackalRadioEnabled: true } }).gain,
+	spatial({
+		state: meetingState,
+		me: { ...me, snrRole: snrSidekick },
+		other: { ...other, snrRole: snrJackal },
+		impostorRadioClientIds: [other.clientId],
+		activeLobbySettings: { ...lobby, jackalRadioEnabled: true },
+	}).gain,
 	1,
 	'SNR sidekick should hear its Jackal during discussion'
 );
 assert.equal(
-	spatial({ state: meetingState, other: { ...other, snrRole: snrJackal }, impostorRadioClientIds: [other.clientId], activeLobbySettings: { ...lobby, jackalRadioEnabled: true } }).gain,
+	spatial({
+		state: meetingState,
+		other: { ...other, snrRole: snrJackal },
+		impostorRadioClientIds: [other.clientId],
+		activeLobbySettings: { ...lobby, jackalRadioEnabled: true },
+	}).gain,
 	0,
 	'An outsider must not hear SNR Jackal radio during discussion'
 );
@@ -282,7 +307,9 @@ sendRadioStatus.call(
 	{
 		connection: {
 			playerSocketIds: { 2: 'impostor-peer', 3: 'crew-peer' },
-			sendControlToPeers(targets) { radioTargets = targets; },
+			sendControlToPeers(targets) {
+				radioTargets = targets;
+			},
 		},
 		impostorRadioPressed: true,
 		radioStatusVersion: 1,
@@ -295,7 +322,11 @@ sendRadioStatus.call(
 		],
 	}
 );
-assert.deepEqual([...radioTargets], ['impostor-peer', 'crew-peer'], 'All listeners need the radio state to mute unauthorized audio');
+assert.deepEqual(
+	[...radioTargets],
+	['impostor-peer', 'crew-peer'],
+	'All listeners need the radio state to mute unauthorized audio'
+);
 const getVisibleRadioClientIds = vm.runInNewContext(
 	ts.transpileModule(`({ ${visibleRadioMethod.getText(voiceControllerSource)} })`, {
 		compilerOptions: { target: ts.ScriptTarget.ES2020 },
@@ -307,22 +338,41 @@ const radioView = {
 	canUseRadio: (_state, player) => player.isImpostor === true,
 	areRadioPartners: (_state, local, sender) => local.isImpostor && sender.isImpostor,
 };
-const radioRoster = { players: [{ ...me, isImpostor: false }, { ...other, isImpostor: true }] };
+const radioRoster = {
+	players: [
+		{ ...me, isImpostor: false },
+		{ ...other, isImpostor: true },
+	],
+};
 assert.deepEqual([...getVisibleRadioClientIds.call(radioView, radioRoster)], [], 'Crew must not see the radio mark');
 assert.deepEqual(
-	[...getVisibleRadioClientIds.call(
-		{
-			...radioView,
-			canUseRadio: () => true,
-			areRadioPartners: () => false,
-		},
-		{ players: [{ ...me, isImpostor: false, snrRole: { name: 'Jackal' } }, { ...other, isImpostor: true }] }
-	)],
+	[
+		...getVisibleRadioClientIds.call(
+			{
+				...radioView,
+				canUseRadio: () => true,
+				areRadioPartners: () => false,
+			},
+			{
+				players: [
+					{ ...me, isImpostor: false, snrRole: { name: 'Jackal' } },
+					{ ...other, isImpostor: true },
+				],
+			}
+		),
+	],
 	[],
 	'An unrelated third-party role must not see the impostor radio mark'
 );
 assert.deepEqual(
-	[...getVisibleRadioClientIds.call(radioView, { players: [{ ...me, isImpostor: true }, { ...other, isImpostor: true }] })],
+	[
+		...getVisibleRadioClientIds.call(radioView, {
+			players: [
+				{ ...me, isImpostor: true },
+				{ ...other, isImpostor: true },
+			],
+		}),
+	],
 	[2],
 	'Impostor teammate should see the radio mark'
 );
@@ -332,12 +382,26 @@ const jackalRadioView = {
 	areRadioPartners: (_state, local, sender) => local.jackalTeam === sender.jackalTeam,
 };
 assert.deepEqual(
-	[...getVisibleRadioClientIds.call(jackalRadioView, { players: [{ ...me, jackalTeam: 'A' }, { ...other, jackalTeam: 'A' }] })],
+	[
+		...getVisibleRadioClientIds.call(jackalRadioView, {
+			players: [
+				{ ...me, jackalTeam: 'A' },
+				{ ...other, jackalTeam: 'A' },
+			],
+		}),
+	],
 	[2],
 	'Jackal teammate should see its radio mark'
 );
 assert.deepEqual(
-	[...getVisibleRadioClientIds.call(jackalRadioView, { players: [{ ...me, jackalTeam: 'B' }, { ...other, jackalTeam: 'A' }] })],
+	[
+		...getVisibleRadioClientIds.call(jackalRadioView, {
+			players: [
+				{ ...me, jackalTeam: 'B' },
+				{ ...other, jackalTeam: 'A' },
+			],
+		}),
+	],
 	[],
 	'Another Jackal team must not see the radio mark'
 );
@@ -510,23 +574,26 @@ for (const role of ['Sidekick', 'SidekickWaveCannon']) {
 	);
 }
 const factionRoles = ['Jackal', 'WaveCannonJackal', 'Sidekick', 'SidekickWaveCannon', 'JackalFriends'];
-for (const a of factionRoles)
-	for (const b of factionRoles)
-		for (const jackalTalkInVents of [false, true])
-			for (const sidekickTalkInVents of [false, true]) {
-				const excluded = a === 'JackalFriends' || b === 'JackalFriends';
-				const sidekick = a.startsWith('Sidekick') || b.startsWith('Sidekick');
-				const allowed = !excluded && (sidekick ? sidekickTalkInVents : jackalTalkInVents);
-				assert.equal(
-					spatial({
-						me: { ...me, inVent: true, snrRole: snr(a) },
-						other: { ...other, inVent: true, snrRole: snr(b) },
-						activeLobbySettings: { ...lobby, jackalTalkInVents, sidekickTalkInVents },
-					}).gain,
-					allowed ? 0.5 : 0,
-					`${a} -> ${b}, J=${jackalTalkInVents}, S=${sidekickTalkInVents}`
-				);
-			}
+for (const { a, b, jackalTalkInVents, sidekickTalkInVents } of combinations({
+	a: factionRoles,
+	b: factionRoles,
+	jackalTalkInVents: [false, true],
+	sidekickTalkInVents: [false, true],
+})) {
+	const excluded = a === 'JackalFriends' || b === 'JackalFriends';
+	const sidekick = a.startsWith('Sidekick') || b.startsWith('Sidekick');
+	const allowed = !excluded && (sidekick ? sidekickTalkInVents : jackalTalkInVents);
+	assert.equal(
+		spatial({
+			me: { ...me, inVent: true, snrRole: snr(a) },
+			other: { ...other, inVent: true, snrRole: snr(b) },
+			activeLobbySettings: { ...lobby, jackalTalkInVents, sidekickTalkInVents },
+		}).gain,
+		allowed ? 0.5 : 0,
+		`${a} -> ${b}, J=${jackalTalkInVents}, S=${sidekickTalkInVents}`
+	);
+}
+
 assert.equal(
 	spatial({
 		me: { ...me, snrRole: snr('JackalFriends') },
@@ -779,15 +846,17 @@ const readerSource = ts.createSourceFile(
 );
 const { modList } = await bundle('src/common/Mods.ts');
 let detectModMethod;
+let loadedModMethod;
 function findModDetector(node) {
 	if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'getInstalledMods') detectModMethod = node;
+	if (ts.isMethodDeclaration(node) && node.name.getText(readerSource) === 'getLoadedModModule') loadedModMethod = node;
 	ts.forEachChild(node, findModDetector);
 }
 findModDetector(readerSource);
 let loadedModule;
 let loadedModuleName = 'SuperNewRoles.dll';
-const detectMod = vm.runInNewContext(
-	ts.transpileModule(`({ ${detectModMethod.getText(readerSource)} })`, {
+const modDetector = vm.runInNewContext(
+	ts.transpileModule(`({ ${detectModMethod.getText(readerSource)}, ${loadedModMethod.getText(readerSource)} })`, {
 		compilerOptions: { target: ts.ScriptTarget.ES2020 },
 	}).outputText,
 	{
@@ -800,8 +869,9 @@ const detectMod = vm.runInNewContext(
 			return loadedModule;
 		},
 	}
-).getInstalledMods;
-const modReader = { pid: 42, readPluginFiles: () => [] };
+);
+const detectMod = modDetector.getInstalledMods;
+const modReader = { ...modDetector, pid: 42, readPluginFiles: () => [] };
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
 assert.equal(detectMod.call(modReader, 'game/TOH4E_EM/Among Us.exe').id, 'TOH4E');
 assert.equal(detectMod.call(modReader, 'game/TOH4E-EM/Among Us.exe').id, 'TOH4E');

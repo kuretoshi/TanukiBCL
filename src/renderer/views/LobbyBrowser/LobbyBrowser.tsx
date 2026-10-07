@@ -59,21 +59,12 @@ const servers: {
 };
 
 function sortLobbies(a: PublicLobby, b: PublicLobby) {
-	if (a.gameState === GameState.LOBBY && b.gameState !== GameState.LOBBY) {
-		return -1;
-	} else if (b.gameState === GameState.LOBBY && a.gameState !== GameState.LOBBY) {
-		return 1;
-	} else {
-		if (b.current_players === b.max_players && a.current_players !== a.max_players) {
-			return -1;
-		}
-		if (a.current_players < b.current_players) {
-			return 1;
-		} else if (a.current_players > b.current_players) {
-			return -1;
-		}
-		return 0;
-	}
+	if (a.gameState === GameState.LOBBY && b.gameState !== GameState.LOBBY) return -1;
+	if (b.gameState === GameState.LOBBY && a.gameState !== GameState.LOBBY) return 1;
+	if (b.current_players === b.max_players && a.current_players !== a.max_players) return -1;
+	if (a.current_players < b.current_players) return 1;
+	if (a.current_players > b.current_players) return -1;
+	return 0;
 }
 
 function getModName(mod: string): string {
