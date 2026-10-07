@@ -535,7 +535,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		other: Player,
 		impostorRadioClientId: number,
 		impostorRadioClientIds?: readonly number[],
-		nosJackalRadioHearable = false
+		nosJackalRadioHearable = false,
+		nosImpostorRadioHearable = false
 	): number | null {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
@@ -564,6 +565,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			impostorRadioClientId,
 			impostorRadioClientIds,
 			nosJackalRadioHearable,
+			nosImpostorRadioHearable,
 		});
 
 		if (result.panMaxDistance !== null) {

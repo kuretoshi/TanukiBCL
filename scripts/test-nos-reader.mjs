@@ -125,7 +125,7 @@ try {
 	assert.equal(first.players[0].bodyRateX, 1.25);
 	assert.equal(first.players[0].bodyRateY, 0.75);
 	assert.equal(first.players[0].isJammed, true);
-	assert.deepEqual(first.radios, [{ kind: 2, hearableMask: 0xb, nameLength: 6, name: 'Jackal' }]);
+	assert.deepEqual(first.radios, [{ kind: 1, hearableMask: 0xb, nameLength: 6, name: 'Jackal' }]);
 	const legacyLayout = structuredClone(layout);
 	delete legacyLayout.snapshot.radiosLength;
 	delete legacyLayout.snapshot.radios;

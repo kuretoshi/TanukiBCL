@@ -2,6 +2,12 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.15
+
+- NoSのインポスターラジオも、送信者のRadioData（Kind=0）のHearableMaskにある受信者のPlayerIdビットで受信可否を判定。役職や幽霊状態だけで受信を許可する処理を廃止。
+- NoSのラジオ送信可否はチャンネルの存在と設定で判定し、送信者自身のビットが省略されていても送信可能。Radio表示も送信者のマスクから判定。
+- マスクの未取得・更新待ちでも相手のラジオ送信中状態を保持し、通常の近距離音声へ戻ってしまう経路を防止。
+
 ## v3.2.14
 
 - 通常版からWeb版へNoSのSkin・Hat・Visor・背面画像・体のマスクをPNGとして転送。加工済み画像をハッシュで識別し、通常のプレイヤー情報更新では画像IDだけ送信。

@@ -29,7 +29,7 @@ public static unsafe class TBCLFields
         public float ColorR, ColorG, ColorB;
         public CostumeData Skin, Hat, Visor;
     }
-    public enum RadioKind { Unknown, Impostor, Jackal }
+    public enum RadioKind { Impostor, Jackal, Lovers }
     public struct RadioData {
         public RadioKind Kind;
         public int HearableMask;

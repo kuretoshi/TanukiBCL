@@ -20,6 +20,7 @@ export interface VoiceAudioInput {
 	impostorRadioClientId: number;
 	impostorRadioClientIds?: readonly number[];
 	nosJackalRadioHearable?: boolean;
+	nosImpostorRadioHearable?: boolean;
 	airshipSpawnFallback?: boolean;
 }
 
@@ -83,10 +84,15 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const activeRadioClientIds =
 		input.impostorRadioClientIds ?? (impostorRadioClientId >= 0 ? [impostorRadioClientId] : []);
 	const otherUsingRadio = activeRadioClientIds.includes(other.clientId);
-	const receivingImpostorRadio = !me.isDead && me.isImpostor && other.isImpostor && otherUsingRadio;
+	const receivingImpostorRadio =
+		state.mod !== 'NoS' && !me.isDead && me.isImpostor && other.isImpostor && otherUsingRadio;
 	const jackalRadioEnabled = activeLobbySettings.jackalRadioEnabled === true && !radioOnlyMode;
 	const ghostReceivingRadio =
-		me.isDead && !other.isDead && otherUsingRadio && (other.isImpostor ? radioEnabled : jackalRadioEnabled);
+		state.mod !== 'NoS' &&
+		me.isDead &&
+		!other.isDead &&
+		otherUsingRadio &&
+		(other.isImpostor ? radioEnabled : jackalRadioEnabled);
 	const receivingJackalRadio =
 		!me.isDead &&
 		meJackalTeam &&
@@ -100,8 +106,14 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		!radioOnlyMode &&
 		otherUsingRadio &&
 		input.nosJackalRadioHearable === true;
+	const receivingNosImpostorRadio =
+		state.mod === 'NoS' && radioEnabled && otherUsingRadio && input.nosImpostorRadioHearable === true;
 	const canHearRadio =
-		(receivingImpostorRadio && radioEnabled) || ghostReceivingRadio || receivingJackalRadio || receivingNosJackalRadio;
+		(receivingImpostorRadio && radioEnabled) ||
+		ghostReceivingRadio ||
+		receivingJackalRadio ||
+		receivingNosJackalRadio ||
+		receivingNosImpostorRadio;
 	const snrVentConversation =
 		meJackalTeam &&
 		otherJackalTeam &&
