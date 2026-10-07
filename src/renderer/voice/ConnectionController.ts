@@ -24,6 +24,7 @@ interface MobilePlayerInfo {
 	mobilePlayerInfo: {
 		code: string;
 		askingForHost: boolean;
+		nosCosmeticIds?: string[];
 	};
 }
 
@@ -49,6 +50,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	peerData: [peerId: string, data: Record<string, unknown>];
 	vad: [clientId: number, activity: boolean];
 	mobileDetected: [];
+	mobileCosmeticsRequested: [ids: string[]];
 	lobbyReset: [];
 }
 
@@ -217,7 +219,13 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 				const mobileData = data as unknown as MobilePlayerInfo;
 				if (mobileData.mobilePlayerInfo.code === this.context.lobbyCode && this.context.gameState !== GameState.MENU) {
 					this.mobileRunning = true;
-					this.emit('mobileDetected');
+					const requested = mobileData.mobilePlayerInfo.nosCosmeticIds;
+					if (Array.isArray(requested))
+						this.emit(
+							'mobileCosmeticsRequested',
+							requested.slice(0, 75).filter((id) => typeof id === 'string' && /^[a-f0-9]{64}$/.test(id))
+						);
+					else this.emit('mobileDetected');
 				}
 				return;
 			}

@@ -16,6 +16,7 @@ import SettingsStore from '../settings/SettingsStore';
 import { gameStore } from '../state/gameStore';
 import { AudioController } from './AudioController';
 import { ConnectionController } from './ConnectionController';
+import { MobileCosmetics } from './MobileCosmetics';
 import { defaultLobbySettings, VoiceSnapshot } from './types';
 import { isToh4eHostName } from '../../common/Mods';
 import { isSnrJackalTeam } from '../../common/SnrRole';
@@ -130,6 +131,7 @@ function emptyPrev() {
 export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private readonly audio = new AudioController();
 	private readonly connection = new ConnectionController();
+	private readonly mobileCosmetics = new MobileCosmetics();
 
 	private started = false;
 	private startToken = 0;
@@ -260,6 +262,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.unsubscribers = [];
 
 		this.connection.stop();
+		this.mobileCosmetics.reset();
 		this.audio.stop();
 		this.unwireConnection();
 		this.unwireAudio();
@@ -463,6 +466,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 
 		add(this.connection.on('peerData', (peerId, data) => this.onPeerData(peerId, data)));
+		add(this.connection.on('mobileDetected', () => this.mobileCosmetics.resend()));
+		add(this.connection.on('mobileCosmeticsRequested', (ids) => this.mobileCosmetics.resend(ids)));
 	}
 
 	private onPeerData(peerId: string, data: Record<string, unknown>): void {
@@ -1309,7 +1314,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		if (this.connection.isMobileRunning) {
 			this.connection.signalTo(state.lobbyCode + '_mobile', {
-				gameState: state,
+				...this.mobileCosmetics.frame(state),
 				activeLobbySettings: this.activeLobbySettings,
 			});
 		}
