@@ -173,7 +173,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 	}
 });
 
-type WindowTarget = 'main' | 'lobbies' | 'settings' | 'inquiry' | 'debug';
+type WindowTarget = 'main' | 'lobbies' | 'settings' | 'debug';
 
 function targetWindow(target: WindowTarget = 'main') {
 	switch (target) {
@@ -181,8 +181,6 @@ function targetWindow(target: WindowTarget = 'main') {
 			return global.lobbyBrowser;
 		case 'debug':
 			return global.debugWindow;
-		case 'inquiry':
-			return global.inquiryWindow;
 		case 'settings':
 			return global.settingsWindow;
 		default:

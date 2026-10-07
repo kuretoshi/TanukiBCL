@@ -1,6 +1,6 @@
 import ConnectionIndicator from '../components/ConnectionIndicator';
 import { isLiteRuntime } from '../../common/appVariant';
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import Typography from '@mui/material/Typography';
 import { styled, useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
@@ -37,7 +37,11 @@ const useStyles = () => {
 			transform: 'translateY(-50%)',
 		},
 		root: {
+			height: '100vh',
+			boxSizing: 'border-box',
+			overflowY: 'auto',
 			paddingTop: theme.spacing(3),
+			paddingBottom: '80px',
 		},
 		top: {
 			display: 'flex',
@@ -100,27 +104,20 @@ const useStyles = () => {
 
 const DEFAULT_PLAYER_CONFIG: SocketConfig = { volume: 1, isMuted: false };
 
-const otherPlayersGridWidth = 225;
 const otherPlayersGridGap = 8;
 
 const OtherPlayersGrid = styled(Box)({
 	display: 'grid',
 	gap: otherPlayersGridGap,
-	width: 'fit-content',
+	width: 'calc(100% - 48px)',
 	margin: '4px auto',
+	justifyContent: 'center',
 });
-
-function getPlayersPerRow(playerCount: number): number {
-	if (playerCount <= 9) return 3;
-	return Math.min(12, Math.ceil(Math.sqrt(playerCount)));
-}
-
-function getOtherPlayerAvatarSize(playersPerRow: number): number {
-	return otherPlayersGridWidth / playersPerRow - otherPlayersGridGap;
-}
 
 const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceProps) {
 	const classes = useStyles();
+	const gridRef = useRef<HTMLDivElement>(null);
+	const [gridWidth, setGridWidth] = useState(225);
 	const rawGameState = useContext(GameStateContext);
 	const [settings, setSetting] = useContext(SettingsContext);
 	const { voice, controller } = useVoiceEngine();
@@ -145,9 +142,23 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 	let displayedLobbyCode = lobbyDetected ? gameState.lobbyCode : 'MENU';
 	if (displayedLobbyCode !== 'MENU' && settings.hideCode) displayedLobbyCode = 'LOBBY';
 
-	const otherPlayersPerRow = getPlayersPerRow(otherPlayers.length);
-	const otherPlayerAvatarSize = getOtherPlayerAvatarSize(otherPlayersPerRow);
 	const error = voice.error || initialError;
+	const gridVisible = !!myPlayer && lobbyDetected && !error;
+	useEffect(() => {
+		const grid = gridRef.current;
+		if (!grid) return;
+		const observer = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width));
+		observer.observe(grid);
+		return () => observer.disconnect();
+	}, [gridVisible]);
+	const otherPlayersPerRow = Math.max(
+		1,
+		Math.min(12, Math.max(3, otherPlayers.length), Math.floor((gridWidth + otherPlayersGridGap) / 72))
+	);
+	const otherPlayerAvatarSize = Math.min(
+		100,
+		(gridWidth - otherPlayersGridGap * (otherPlayersPerRow - 1)) / otherPlayersPerRow
+	);
 	const detectedMod =
 		gameState.mod === 'NONE' ? undefined : (modList.find(({ id }) => id === gameState.mod)?.label ?? gameState.mod);
 
@@ -261,7 +272,10 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 						</Box>
 					)}
 					{myPlayer && lobbyDetected && (
-						<OtherPlayersGrid sx={{ gridTemplateColumns: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize}px)` }}>
+						<OtherPlayersGrid
+							ref={gridRef}
+							sx={{ gridTemplateColumns: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize}px)` }}
+						>
 							{otherPlayers.map((player) => {
 								const peer = voice.playerSocketIds[player.clientId];
 								const connected = voice.socketClients[peer]?.clientId === player.clientId || false;
@@ -301,7 +315,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 					)}
 				</>
 			)}
-			{otherPlayers.length <= 6 && <Footer />}
+			<Footer />
 		</Box>
 	);
 };

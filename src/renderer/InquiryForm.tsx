@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { ipcRenderer } from './lib/electron-bridge';
-import { Alert, Button, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Button, IconButton, MenuItem, Select, TextField, Typography } from '@mui/material';
 import Box from '@mui/material/Box';
 import { useTheme, Theme } from '@mui/material/styles';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
-import ContactSupportIcon from '@mui/icons-material/ContactSupport';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SendIcon from '@mui/icons-material/Send';
 import { InquiryAttachment, InquiryTag, IpcHandlerMessages } from '../common/ipc-messages';
@@ -12,7 +11,6 @@ import { InquiryAttachment, InquiryTag, IpcHandlerMessages } from '../common/ipc
 const TEXT = {
 	attachmentSelect: '\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb\u3092\u9078\u629e',
 	body: '\u672c\u6587',
-	cancel: '\u30ad\u30e3\u30f3\u30bb\u30eb',
 	inquiry: '\u554f\u3044\u5408\u308f\u305b',
 	send: '\u9001\u4fe1',
 	sendComplete:
@@ -22,7 +20,6 @@ const TEXT = {
 	tagBug: '\u4e0d\u5177\u5408',
 	tagQuestion: '\u8cea\u554f',
 	tagRequest: '\u8981\u671b',
-	tooltip: '\u554f\u3044\u5408\u308f\u305b\u3092\u9001\u4fe1',
 };
 
 const getStyles = (theme: Theme) => ({
@@ -101,11 +98,13 @@ export const InquiryForm: React.FC = function () {
 
 	return (
 		<>
-			<Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 3, py: 2 }}>
+			<Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 0, py: 2 }}>
+				<Typography variant="h6">{TEXT.inquiry}</Typography>
 				<Box sx={classes.form}>
 					{message && <Alert severity="success">{message}</Alert>}
 					{error && <Alert severity="error">{error}</Alert>}
 					<Select
+						inputProps={{ 'aria-label': TEXT.tag }}
 						value={tag}
 						onChange={(event) => setTag(event.target.value as InquiryTag)}
 						disabled={sending}
@@ -161,14 +160,11 @@ export const InquiryForm: React.FC = function () {
 					display: 'flex',
 					justifyContent: 'flex-end',
 					gap: 1,
-					px: 3,
+					px: 0,
 					py: 2,
 					borderTop: '1px solid rgba(255,255,255,0.08)',
 				}}
 			>
-				<Button onClick={() => window.close()} disabled={sending}>
-					{TEXT.cancel}
-				</Button>
 				<Button
 					variant="contained"
 					color="secondary"
@@ -182,14 +178,3 @@ export const InquiryForm: React.FC = function () {
 		</>
 	);
 };
-
-const InquiryButton: React.FC = function () {
-	return (
-		<Button color="grey" aria-label={TEXT.inquiry} onClick={() => ipcRenderer.send('OPEN_INQUIRY')}>
-			<Tooltip title={TEXT.tooltip} arrow>
-				<ContactSupportIcon htmlColor="white" fontSize="large" />
-			</Tooltip>
-		</Button>
-	);
-};
-export default InquiryButton;

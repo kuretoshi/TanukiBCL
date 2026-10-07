@@ -3,12 +3,14 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import { Tooltip } from '@mui/material';
-import InquiryButton from '../InquiryButton';
 
 const useStyles = () => ({
 	footer: {
-		position: 'absolute',
+		position: 'fixed',
 		bottom: 0,
+		left: 0,
+		zIndex: 3,
+		backgroundColor: '#25232a',
 		width: '100%',
 		display: 'flex',
 		flexDirection: 'column',
@@ -99,7 +101,6 @@ const RawFooter: React.FC = function () {
 						</svg>
 					</Tooltip>
 				</Button>
-				<InquiryButton />
 			</Box>
 		</Box>
 	);

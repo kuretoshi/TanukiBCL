@@ -1,7 +1,7 @@
 appId: net.ottomated.crewlinkkai.lite
 extraMetadata:
   name: bettercrewlinkkailite
-  version: 3.2.16
+  version: 3.2.17
 productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
@@ -13,9 +13,9 @@ files:
       - package.json
       - out
 asarUnpack:
-  - "out/debug-reader/**"
-  - "out/nos-reader/**"
-  - "**/*.node"
+  - 'out/debug-reader/**'
+  - 'out/nos-reader/**'
+  - '**/*.node'
 npmRebuild: false
 
 win:
@@ -32,7 +32,7 @@ nsis:
   include: resources/installer-lite.nsh
 linux:
   target:
-    - "AppImage"
+    - 'AppImage'
   publish:
     - provider: github
       owner: kuretoshi

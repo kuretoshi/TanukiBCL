@@ -83,7 +83,6 @@ declare global {
 	var overlay: BrowserWindow | null;
 	var lobbyBrowser: BrowserWindow | null;
 	var settingsWindow: BrowserWindow | null;
-	var inquiryWindow: BrowserWindow | null;
 	var debugWindow: BrowserWindow | null;
 }
 
@@ -112,7 +111,6 @@ global.mainWindow = null;
 global.overlay = null;
 global.settingsWindow = null;
 global.lobbyBrowser = null;
-global.inquiryWindow = null;
 global.debugWindow = null;
 const store = new Store<ISettings>({ name: getVariantStoreName() });
 let isQuitting = false;
@@ -135,16 +133,8 @@ function closeAppWindows() {
 		/* empty */
 	}
 
-	const windows = [
-		global.debugWindow,
-		global.inquiryWindow,
-		global.settingsWindow,
-		global.lobbyBrowser,
-		global.overlay,
-		global.mainWindow,
-	];
+	const windows = [global.debugWindow, global.settingsWindow, global.lobbyBrowser, global.overlay, global.mainWindow];
 	global.debugWindow = null;
-	global.inquiryWindow = null;
 	global.settingsWindow = null;
 	global.lobbyBrowser = null;
 	global.overlay = null;
@@ -427,56 +417,6 @@ function createDebugWindow() {
 	});
 
 	loadView(window, 'debug');
-	return window;
-}
-
-function createInquiryWindow() {
-	const inquiryWindowState = windowStateKeeper({
-		file: 'inquiry-window-state.json',
-		defaultWidth: 620,
-		defaultHeight: 640,
-	});
-
-	const window = new BrowserWindow({
-		title: isLiteApp ? 'TanukiBCL Lite Inquiry' : 'TanukiBCL Inquiry',
-		width: inquiryWindowState.width,
-		height: inquiryWindowState.height,
-		x: inquiryWindowState.x,
-		y: inquiryWindowState.y,
-		minWidth: 460,
-		minHeight: 480,
-		backgroundColor: '#25232a',
-		resizable: true,
-		frame: false,
-		fullscreenable: false,
-		closable: true,
-		maximizable: true,
-		show: false,
-		webPreferences: {
-			contextIsolation: true,
-			nodeIntegration: false,
-			sandbox: false,
-			preload: preload(),
-		},
-	});
-	inquiryWindowState.manage(window);
-
-	if (devTools) {
-		window.webContents.openDevTools({ mode: 'detach' });
-	}
-
-	window.once('ready-to-show', () => window.show());
-	window.on('close', (event) => {
-		if (!isQuitting) {
-			event.preventDefault();
-			window.hide();
-		}
-	});
-	window.on('closed', () => {
-		global.inquiryWindow = null;
-	});
-
-	loadView(window, 'inquiry');
 	return window;
 }
 
@@ -812,14 +752,6 @@ if (!gotTheLock) {
 			global.debugWindow.focus();
 		}
 		return 'authorized';
-	});
-	ipcMain.on('OPEN_INQUIRY', () => {
-		if (!global.inquiryWindow) global.inquiryWindow = createInquiryWindow();
-		else {
-			if (global.inquiryWindow.isMinimized()) global.inquiryWindow.restore();
-			global.inquiryWindow.show();
-			global.inquiryWindow.focus();
-		}
 	});
 	ipcMain.on(IpcHandlerMessages.OPEN_SETTINGS, () => {
 		if (!global.settingsWindow) {

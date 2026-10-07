@@ -21,9 +21,6 @@ if (typeof window !== 'undefined' && window.location) {
 		case 'debug':
 			void import('./views/DebugWindow');
 			break;
-		case 'inquiry':
-			void import('./views/InquiryWindow');
-			break;
 		case 'settings':
 			void import('./views/SettingsWindow');
 			break;

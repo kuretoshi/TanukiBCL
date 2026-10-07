@@ -15,6 +15,8 @@ import ScienceIcon from '@mui/icons-material/Science';
 import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
 import UpdateSection from './sections/UpdateSection';
 import VideocamIcon from '@mui/icons-material/Videocam';
+import ContactSupportIcon from '@mui/icons-material/ContactSupport';
+import { InquiryForm } from '../InquiryForm';
 import { ILobbySettings } from '../../common/ISettings';
 import { GameState } from '../../common/AmongUsState';
 import { IpcHandlerMessages } from '../../common/ipc-messages';
@@ -32,7 +34,7 @@ import AdvancedSection from './sections/AdvancedSection';
 import StreamingSection from './sections/StreamingSection';
 
 type CategoryId =
-	'general' | 'lobby' | 'players' | 'audio' | 'keybinds' | 'overlay' | 'advanced' | 'streaming' | 'update';
+	'general' | 'lobby' | 'players' | 'audio' | 'keybinds' | 'overlay' | 'advanced' | 'streaming' | 'update' | 'inquiry';
 
 const MY_LOBBY_COMMIT_DELAY = 750;
 const RADIO_ONLY_BACKUP_KEY = 'tanukibcl.impostorRadioOnlyBackup';
@@ -195,6 +197,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 				{ id: 'advanced', label: t('settings.advanced.title'), icon: <ScienceIcon fontSize="small" /> },
 				{ id: 'update', label: 'アップデート', icon: <SystemUpdateIcon fontSize="small" /> },
 				{ id: 'streaming', label: t('settings.streaming.title'), icon: <VideocamIcon fontSize="small" /> },
+				{ id: 'inquiry', label: '問い合わせ', icon: <ContactSupportIcon fontSize="small" /> },
 			] as { id: CategoryId; label: string; icon: React.JSX.Element }[],
 		[t]
 	);
@@ -285,6 +288,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 						<AdvancedSection t={t} settings={settings} setSettings={setSettings} confirm={confirm} />
 					)}
 					{category === 'update' && <UpdateSection />}
+					{category === 'inquiry' && <InquiryForm />}
 					{category === 'streaming' && <StreamingSection t={t} settings={settings} setSettings={setSettings} />}
 				</Box>
 			</Box>
