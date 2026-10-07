@@ -424,14 +424,24 @@ const Canvas = React.memo(function Canvas({
 	const hatImg = useMemo(() => {
 		return {
 			base: getCosmetic(color, isAlive, cosmeticType.base),
-			hat_front: nosCosmetics?.hat ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod)),
+			hat_front:
+				nosCosmetics?.hat ??
+				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod)),
 			hat_back:
-				nosCosmetics?.hatBack ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod)),
-			skin: nosCosmetics?.skin ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod)),
-			visor: nosCosmetics?.visor ?? (!hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod)),
-			hat2_front: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat2, mod),
-			hat2_back: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat2, mod),
-			visor2: !hatsLoaded ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor2, mod),
+				nosCosmetics?.hatBack ??
+				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod)),
+			skin:
+				nosCosmetics?.skin ??
+				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod)),
+			visor:
+				nosCosmetics?.visor ??
+				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod)),
+			hat2_front:
+				!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat2, mod),
+			hat2_back:
+				!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat2, mod),
+			visor2:
+				!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor2, mod),
 			dementions: {
 				hat: nosCosmetics?.hat
 					? { top: '-52%', width: '140%', left: '-18px' }

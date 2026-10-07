@@ -1,4 +1,3 @@
-import { useNosBodyMask } from './lib/nosCosmetics';
 import React from 'react';
 import Box from '@mui/material/Box';
 import MicOff from '@mui/icons-material/MicOff';
@@ -70,7 +69,6 @@ export interface LiteAvatarProps {
 	connectionState?: 'disconnected' | 'novoice' | 'connected';
 	socketConfig?: SocketConfig;
 	showborder?: boolean;
-	showHat?: boolean;
 	lookLeft?: boolean;
 	isUsingRadio?: boolean;
 	onConfigChange?: () => void;
@@ -89,7 +87,6 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 	connectionState,
 	socketConfig,
 	showborder,
-	showHat,
 	isUsingRadio,
 	lookLeft = false,
 	onConfigChange,
@@ -97,9 +94,6 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 	mod,
 }: LiteAvatarProps) {
 	const classes = useStyles();
-	const bodyMask = useNosBodyMask(
-		mod === 'NoS' && isAlive && showHat !== false ? player.nosCosmetics?.bodyMask : undefined
-	);
 	let icon;
 	const hasDisplayOutfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
 	const displayColor = hasDisplayOutfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
@@ -168,18 +162,6 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 						top: 0,
 						width: '81%',
 						zIndex: 1,
-						...(bodyMask
-							? {
-									WebkitMaskImage: `url(${bodyMask})`,
-									maskImage: `url(${bodyMask})`,
-									WebkitMaskSize: '173% auto',
-									maskSize: '173% auto',
-									WebkitMaskPosition: `${size * -0.29}px ${size * -0.3}px`,
-									maskPosition: `${size * -0.29}px ${size * -0.3}px`,
-									WebkitMaskRepeat: 'no-repeat',
-									maskRepeat: 'no-repeat',
-								}
-							: {}),
 						height: '100%',
 						filter: 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35))',
 					}}
@@ -226,34 +208,6 @@ const LiteAvatar: React.FC<LiteAvatarProps> = function ({
 						}}
 					/>
 				</Box>
-				{mod === 'NoS' &&
-					isAlive &&
-					(['hatBack', 'skin', 'hat', 'visor'] as const).map((part, index) => {
-						const src = player.nosCosmetics?.[part];
-						if (!src || (showHat === false && part !== 'skin')) return null;
-						return (
-							<Box
-								component="img"
-								key={src}
-								src={src}
-								alt=""
-								sx={{
-									position: 'absolute',
-									width: '140%',
-									left: '-20%',
-									top: '-30%',
-									zIndex: part === 'hatBack' ? 0 : index + 2,
-									pointerEvents: 'none',
-								}}
-								onError={(event) => {
-									event.currentTarget.style.display = 'none';
-								}}
-								onLoad={(event) => {
-									event.currentTarget.style.display = '';
-								}}
-							/>
-						);
-					})}
 				{isUsingRadio && <Box component="img" src={RadioSVG} sx={classes.radio} />}
 			</Box>
 			{icon}

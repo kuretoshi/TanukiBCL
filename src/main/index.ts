@@ -659,6 +659,7 @@ if (!gotTheLock) {
 	// create main BrowserWindow when electron is ready
 	app.whenReady().then(async () => {
 		protocol.handle('nos-cosmetic', async (request) => {
+			if (isLiteApp) return new Response(null, { status: 404 });
 			const url = new URL(request.url);
 			if (gameReader.loadedMod.id !== 'NoS' || url.host !== 'image') return new Response(null, { status: 404 });
 			gameReader.nosContents.update(joinPath(gameReader.gamePath, '..'));
@@ -668,6 +669,7 @@ if (!gotTheLock) {
 				: new Response(null, { status: 404 });
 		});
 		protocol.handle('snr-cosmetic', async (request) => {
+			if (isLiteApp) return new Response(null, { status: 404 });
 			const url = new URL(request.url);
 			const part = url.host as SnrCosmeticPart;
 			if (!['hat-front', 'hat-back', 'visor', 'skin'].includes(part)) return new Response(null, { status: 404 });

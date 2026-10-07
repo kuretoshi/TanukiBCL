@@ -19,6 +19,8 @@
 		"url": "https://bettercrewlink.app"
 	},
 	"scripts": {
+		"test:snr-cosmetics": "node scripts/test-snr-local-cosmetics.mjs",
+		"test:lite-avatar": "node scripts/test-lite-no-cosmetics.mjs",
 		"debug:password:add": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/set-debug-password.ps1 -Add",
 		"test:nos-cosmetics": "node scripts/test-nos-cosmetics.mjs",
 		"test:debug-auth": "node scripts/test-debug-auth.mjs",

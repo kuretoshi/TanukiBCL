@@ -168,16 +168,16 @@ function requestSnrImageSize(url: string): void {
 	image.src = url;
 }
 
-function getSnrRemoteCosmetic(id: string, type: cosmeticType, color: number): string | undefined {
-	const isVisor = type === cosmeticType.visor;
-	const definition = findSnrDefinition(id, isVisor ? snrVisorDefinitions : snrHatDefinitions);
-	if (!definition) return undefined;
-	const resource = type === cosmeticType.hat_back ? definition.backresource : definition.resource;
-	if (!resource) return undefined;
-	const url = `${SNR_COSMETICS_RAW}${isVisor ? 'Visors' : 'hats'}/${encodeURIComponent(resource)}`;
-	requestSnrImageSize(url);
-	const adaptive = definition.adaptive === true || /_adaptive(?:_|\.)/i.test(resource);
-	return adaptive ? `generate:///hat?color=${color}&url=${encodeURIComponent(url)}` : url;
+function snrLocalUrl(id: string, type: cosmeticType): string {
+	const part =
+		type === cosmeticType.hat_back
+			? 'hat-back'
+			: type === cosmeticType.visor
+				? 'visor'
+				: type === cosmeticType.skin
+					? 'skin'
+					: 'hat-front';
+	return `snr-cosmetic://${part}/${encodeURIComponent(id)}`;
 }
 
 function isSnrLocalAdaptiveHat(id: string): boolean {
@@ -226,8 +226,7 @@ export function getHatDementions(id: string, mod: ModsType, type: cosmeticType =
 		if (type === cosmeticType.visor) {
 			const definition = findSnrDefinition(id, snrVisorDefinitions);
 			const isSnrLayout = definition?.IsSNR === true || definition?.IsSNR === 'true' || definition?.isSNR === true;
-			const resource = definition?.resource;
-			const url = resource ? `${SNR_COSMETICS_RAW}Visors/${encodeURIComponent(resource)}` : '';
+			const url = snrLocalUrl(id, type);
 			const size = url ? snrImageSizes.get(url) : undefined;
 			if (isSnrLayout && size) {
 				// SNRVisorLoadSprite: centered pivot with a fixed 115 pixels-per-unit.
@@ -268,20 +267,17 @@ export function getCosmetic(
 		}
 		return `static:///generated/${isAlive ? `player` : `ghost`}/${color}.png`;
 	} else if (mod === 'SUPER_NEW_ROLES' && id.startsWith('Modded_')) {
-		const remoteCosmetic = getSnrRemoteCosmetic(id, type, color);
-		if (remoteCosmetic) return remoteCosmetic;
-		const part =
-			type === cosmeticType.hat_back
-				? 'hat-back'
-				: type === cosmeticType.visor
-					? 'visor'
-					: type === cosmeticType.skin
-						? 'skin'
-						: 'hat-front';
-		const localCosmetic = `snr-cosmetic://${part}/${encodeURIComponent(id)}`;
-		return (type === cosmeticType.hat || type === cosmeticType.hat_back) && isSnrLocalAdaptiveHat(id)
-			? `${localCosmetic}?adaptive=1&color=${color}`
-			: localCosmetic;
+		const localCosmetic = snrLocalUrl(id, type);
+		if (type === cosmeticType.visor) requestSnrImageSize(localCosmetic);
+		const definition =
+			type === cosmeticType.skin
+				? undefined
+				: findSnrDefinition(id, type === cosmeticType.visor ? snrVisorDefinitions : snrHatDefinitions);
+		const adaptive =
+			definition?.adaptive === true ||
+			/_adaptive(?:_|\.)/i.test(definition?.resource ?? '') ||
+			((type === cosmeticType.hat || type === cosmeticType.hat_back) && isSnrLocalAdaptiveHat(id));
+		return adaptive ? `${localCosmetic}?adaptive=1&color=${color}` : localCosmetic;
 	} else {
 		const modHat = getModHat(color, id, mod, type === cosmeticType.hat_back);
 		if (modHat) return modHat;

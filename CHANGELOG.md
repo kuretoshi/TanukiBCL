@@ -4,7 +4,11 @@ A changelog for BetterCrewLink in case people want to see changes from the new/o
 
 ## v3.2.13
 
-- NoSのロビーで試合用PlayerDataが未取得でも、現在のSkin・Hat・Visor IDとNoSの色からアバター画像を表示。装備変更・解除に追従するよう修正（通常版・Lite版共通）。
+- Lite版からコスチューム画像と体のマスク表示を削除。色を反映したシンプルなアバターを使用し、通常表示でのコスチューム画像の取得も停止。
+
+- SNRのカスタムコスチューム画像を、起動中のゲームフォルダ内のSuperNewRolesNext/CustomCosmeticsから読み取るよう変更。GitHub上の画像を優先せず、外部の帽子一覧の読み込み完了を待たずにローカル画像を表示。
+
+- 通常版でNoSのロビーの試合用PlayerDataが未取得でも、現在のSkin・Hat・Visor IDとNoSの色からアバター画像を表示。装備変更・解除に追従するよう修正。
 
 ## v3.2.12
 

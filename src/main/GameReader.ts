@@ -30,7 +30,7 @@ import path from 'path';
 import { AmongusMod, modList } from '../common/Mods';
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
-import { getVariantStoreName } from '../common/appVariant';
+import { getVariantStoreName, isLiteRuntime } from '../common/appVariant';
 import { getAppArgs } from './args';
 import { readSnrRoles } from './snrRoleReader';
 import { SnrLiveTracker } from './snrLiveTracker';
@@ -135,6 +135,7 @@ export default class GameReader {
 	nativeReadFailureCount = 0;
 	private snrRoles = new SnrLiveTracker(readSnrRoles);
 	nosContents = new NosContentsTracker();
+	private readonly cosmeticsEnabled = !isLiteRuntime();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
 	private tohRoles = new TohLiveTracker(readTohLayout);
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette', this.is_64bit));
@@ -605,15 +606,16 @@ export default class GameReader {
 						: undefined;
 				if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
 				if (this.loadedMod.id === 'NoS') {
-					this.nosContents.update(path.dirname(this.gamePath));
+					if (this.cosmeticsEnabled) this.nosContents.update(path.dirname(this.gamePath));
 					const data = new Map(nos?.players.map((player) => [player.playerId, player]));
 					for (const player of players) {
 						const published = player.disconnected ? undefined : data.get(player.id);
 						// NoS lobby color RPCs index DynamicPalette by player ID, independently of role snapshots.
 						player.nosLobbyColor = player.disconnected ? undefined : nosLobbyColors?.[player.id];
 						player.nosPlayer = published;
-						player.nosCosmetics =
-							state === GameState.LOBBY
+						player.nosCosmetics = !this.cosmeticsEnabled
+							? undefined
+							: state === GameState.LOBBY
 								? this.nosContents.lobbyCosmetics(
 										player,
 										player.nosLobbyColor ?? this.playercolors[player.appearanceColorId]?.[0]
