@@ -42,6 +42,7 @@ import { resolveNosSnapshot } from './nosSnapshotReader';
 import { NosPaletteTracker } from './nosPalette';
 import { TohLiveTracker } from './tohLiveTracker';
 import { readTohLayout } from './tohRoleReader';
+import { withImpostorClassification } from '../common/Impostor';
 
 const settingsStore = new Store<ISettings>({ name: getVariantStoreName() });
 void settingsStore;
@@ -473,6 +474,7 @@ export default class GameReader {
 				for (const player of players) {
 					player.tohRole = player.disconnected ? undefined : roles.get(player.id);
 					player.roleName = player.tohRole?.roleName ? `TOH4E: ${player.tohRole.roleName}` : 'TOH4E役職未取得';
+					Object.assign(player, withImpostorClassification('TOH4E', player));
 				}
 			} else this.tohRoles.reset();
 			const nos =

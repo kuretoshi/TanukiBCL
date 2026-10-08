@@ -18,6 +18,12 @@ import {
 import { HeldNosRadio, resolveNosRadioKind, isNosRadioEnabled } from '../../common/nosRadio';
 import { VoiceState } from '../../common/AmongUsState';
 import { isTohRole, TohRole } from '../../common/TohRole';
+import {
+	isPlayerImpostor,
+	withImpostorClassification,
+	isTohImpostorEntries,
+	TohImpostorEntry,
+} from '../../common/Impostor';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { TypedEmitter } from '../lib/TypedEmitter';
 import SettingsStore from '../settings/SettingsStore';
@@ -162,6 +168,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private lastRadioStatusSentAt = 0;
 	private tohRoleOverride: TohRole | null = null;
 	private tohRoleReceivedAt = 0;
+	private tohImpostors: TohImpostorEntry[] = [];
 	private tohLobbyNames: numberStringMap = {};
 
 	private host: HostInfo = emptyHost();
@@ -176,22 +183,26 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 	/** The same host-derived MOD/role state is used by audio, settings and diagnostics. */
 	getEffectiveGameState(state: AmongUsState): AmongUsState {
-		if (!this.snapshot.toh4eLobby) return state;
+		if (!this.snapshot.toh4eLobby && state.mod !== 'TOH4E') return state;
 		return {
 			...state,
 			mod: 'TOH4E',
 			players: state.players?.map((player) => {
 				const fixedName = this.snapshot.tohGameStartNames[player.clientId];
 				const namedPlayer = fixedName ? { ...player, name: fixedName, appearanceName: fixedName } : player;
-				return player.isLocal && !this.host.isHost
-					? {
-							...namedPlayer,
-							tohRole: this.tohRoleOverride ?? undefined,
-							roleName: this.tohRoleOverride?.roleName
-								? `TOH4E: ${this.tohRoleOverride.roleName}`
-								: 'TOH4E役職未取得（ホストからの受信待ち）',
-						}
-					: namedPlayer;
+				if (this.host.isHost) return withImpostorClassification('TOH4E', namedPlayer);
+				const fresh = this.tohRoleOverride !== null && Date.now() - this.tohRoleReceivedAt <= 5000;
+				const entry = fresh
+					? this.tohImpostors?.find((value) => value.playerId === player.id && value.clientId === player.clientId)
+					: undefined;
+				const role = fresh ? this.tohRoleOverride : null;
+				const effectivePlayer = { ...namedPlayer, tohImpostor: entry?.isImpostor };
+				if (!player.isLocal) return withImpostorClassification('TOH4E', effectivePlayer);
+				return withImpostorClassification('TOH4E', {
+					...effectivePlayer,
+					tohRole: role ?? undefined,
+					roleName: role?.roleName ? `TOH4E: ${role.roleName}` : 'TOH4E役職未取得（ホストからの受信待ち）',
+				});
 			}),
 			...(state.debug && !this.host.isHost
 				? {
@@ -591,8 +602,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION)
 		) {
 			if (data.role !== null && !isTohRole(data.role)) return;
+			if (data.impostors !== undefined && !isTohImpostorEntries(data.impostors)) return;
 			const role = isTohRole(data.role) ? data.role : null;
 			this.tohRoleOverride = role;
+			this.tohImpostors = isTohImpostorEntries(data.impostors) ? data.impostors : [];
 			this.tohRoleReceivedAt = Date.now();
 			this.patch({ tohRole: role, toh4eLobby: true });
 			return;
@@ -773,11 +786,11 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.claimLobbySettingsOwnership(state);
 
 			const activeLobbySettings = this.activeLobbySettings;
-			let maxDistance = activeLobbySettings.visionHearing
-				? myPlayer.isImpostor
-					? activeLobbySettings.maxDistance
-					: state.lightRadius + 0.5
-				: activeLobbySettings.maxDistance;
+			const effectiveState = this.getEffectiveGameState(state);
+			const effectiveMe = effectiveState.players.find((player) => player.isLocal) ?? myPlayer;
+			let maxDistance = activeLobbySettings.maxDistance;
+			if (activeLobbySettings.visionHearing && !isPlayerImpostor(effectiveState.mod, effectiveMe))
+				maxDistance = state.lightRadius + 0.5;
 			if (maxDistance <= 0.6) maxDistance = 1;
 			this.audio.setMaxDistance(maxDistance);
 		}
@@ -901,12 +914,19 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		)
 			return;
 		const players = state.players ?? [];
+		const impostors = players
+			.filter((player) => !player.disconnected)
+			.map((player) => ({
+				playerId: player.id,
+				clientId: player.clientId,
+				isImpostor: isPlayerImpostor('TOH4E', player),
+			}));
 		for (const player of players) {
 			if (player.isLocal || player.disconnected) continue;
 			const peerId = this.connection.playerSocketIds[player.clientId];
 			if (!peerId) continue;
 			const role = player.tohRole ?? null;
-			const signature = `${state.lobbyCode}|${peerId}|${player.id}|${JSON.stringify(role)}`;
+			const signature = `${state.lobbyCode}|${peerId}|${player.id}|${JSON.stringify({ role, impostors })}`;
 			if (
 				signature === this.prev.tohRoleSentSignatures[player.clientId] &&
 				Date.now() - this.prev.tohRoleSentAt[player.clientId] < 1000
@@ -920,6 +940,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					targetClientId: player.clientId,
 					targetPlayerId: player.id,
 					role,
+					impostors,
 				})
 			);
 			if (sent > 0) {
@@ -1291,6 +1312,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private canUseRadio(state: AmongUsState, player: Player): boolean {
+		state = this.getEffectiveGameState(state);
+		player = state.players?.find((value) => value.id === player.id && value.clientId === player.clientId) ?? player;
 		if (state.mod === 'NoS') {
 			const kind = player.isLocal ? this.heldNosRadio.kind : undefined;
 			const radios = this.getNosRadios(state, player);
@@ -1305,7 +1328,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			);
 		}
 		return (
-			player.isImpostor &&
+			isPlayerImpostor(state.mod, player) &&
 			(this.activeLobbySettings.impostorRadioEnabled || this.activeLobbySettings.impostorRadioOnlyMode)
 		);
 	}
@@ -1322,9 +1345,16 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private areRadioTeammates(state: AmongUsState, first: Player, second: Player): boolean {
+		state = this.getEffectiveGameState(state);
+		first = state.players?.find((player) => player.clientId === first.clientId && player.id === first.id) ?? first;
+		second = state.players?.find((player) => player.clientId === second.clientId && player.id === second.id) ?? second;
 		if (state.mod === 'NoS') return this.canNosRadioReach(state, first, second);
 		if (this.isJackalRadioPlayer(state, first)) return this.isJackalRadioPlayer(state, second);
-		return first.isImpostor && second.isImpostor && !this.isJackalRadioPlayer(state, second);
+		return (
+			isPlayerImpostor(state.mod, first) &&
+			isPlayerImpostor(state.mod, second) &&
+			!this.isJackalRadioPlayer(state, second)
+		);
 	}
 
 	getVisibleRadioClientIds(state: AmongUsState): number[] {

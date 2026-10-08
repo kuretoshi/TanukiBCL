@@ -19,6 +19,7 @@ async function bundle(file) {
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { isToh4eHostName } = await bundle('src/common/Mods.ts');
 const { isTohRole } = await bundle('src/common/TohRole.ts');
+const { isPlayerImpostor, withImpostorClassification, isTohImpostorEntries } = await bundle('src/common/Impostor.ts');
 const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.ts');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
 const source = ts.createSourceFile(
@@ -37,9 +38,14 @@ const names = [
 	'getEffectiveGameState',
 	'patch',
 	'handleGameStateTransition',
+	'updateRoleTransition',
 	'wireConnection',
 	'claimLobbySettingsOwnership',
+	'broadcastLobbySettings',
 	'activeLobbySettings',
+	'canUseRadio',
+	'areRadioTeammates',
+	'isJackalRadioPlayer',
 ];
 const methods = controller.members
 	.filter((n) => names.includes(n.name?.getText(source)))
@@ -56,7 +62,7 @@ const connectionSource = ts.createSourceFile(
 );
 const connectionClass = connectionSource.statements.find((n) => ts.isClassDeclaration(n));
 const sends = connectionClass.members
-	.filter((n) => ['sendToPeers', 'broadcast'].includes(n.name?.getText(connectionSource)))
+	.filter((n) => ['sendToPeers', 'sendControlToPeers', 'broadcast'].includes(n.name?.getText(connectionSource)))
 	.map((n) => n.getText(connectionSource))
 	.join('\n');
 let now = 10000;
@@ -68,10 +74,15 @@ function actor(clientId) {
 		GameState,
 		isToh4eHostName,
 		isTohRole,
+		isPlayerImpostor,
+		withImpostorClassification,
+		isTohImpostorEntries,
 		defaultLobbySettings,
 		OVERLAY_VOICE_KEYS: [],
 		Date: { now: () => now },
 		console,
+		packageJson: { version: 'test' },
+		compareAppVersions: () => 0,
 		gameStore: { getSnapshot: () => ({ gameState: state }) },
 		SettingsStore: { store: { myLobbySettings: { ...defaultLobbySettings, tohNeutralKillerHaunting: true } } },
 	};
@@ -88,6 +99,7 @@ function actor(clientId) {
 	c.tohRoleReceivedAt = 0;
 	c.tohLobbyNames = {};
 	c.connectionUnsubscribers = [];
+	c.heldNosRadio = { clear() {} };
 	c.connection = new Connection();
 	c.connection.peers = new Map();
 	c.connection.playerSocketIds = {};
@@ -101,7 +113,7 @@ function actor(clientId) {
 	c.connection.setMobileRunning = () => {};
 	c.connection.joinLobby = () => events.emit('lobbyReset');
 	c.connection.leaveLobby = () => events.emit('lobbyReset');
-	c.audio = { setMaxDistance() {}, removePeer() {} };
+	c.audio = { setMaxDistance() {}, removePeer() {}, setJammed() {} };
 	c.emit = () => {};
 	for (const name of [
 		'unwireConnection',
@@ -111,6 +123,8 @@ function actor(clientId) {
 		'handlePublicLobby',
 		'cleanupImpostorRadio',
 		'updatePeerAudio',
+		'updateVersionWarning',
+		'syncNosRadioReports',
 		'publishMobileAndObs',
 	])
 		c[name] = () => {};
@@ -152,6 +166,7 @@ function game(a, phase = GameState.TASKS, code = 'ABCDEF', hostId = 100) {
 			id: i,
 			clientId: p.clientId,
 			isLocal: p === a,
+			isImpostor: true,
 			name: i === 0 ? 'ホスト\u00a0Town Of Host For E EM v6180.383' : `Player ${i}`,
 			x: i,
 			y: 0,
@@ -255,6 +270,55 @@ host.setState(game(host));
 assert.equal(first.c.snapshot.tohRole.isKiller, true, 'Identical role in next round is resent');
 
 const moved = game(first, GameState.LOBBY, 'ABCDEF', 102);
+// MainRole must exclude vanilla impostor substitutes without breaking actual impostor radio.
+roles[0] = { ...roles[0], roleName: 'Vampire', isKiller: true };
+roles[1] = { ...roles[1], roleName: 'Jackal', isKiller: true };
+roles[2] = { ...roles[2], roleName: 'NormalShapeshifter', isKiller: true };
+host.setState(game(host));
+const effective = first.c.getEffectiveGameState(first.state);
+assert.deepEqual(
+	effective.players.slice(1).map((player) => player.isImpostor),
+	[true, false, true]
+);
+assert.equal(
+	effective.players.filter((player) => player.tohRole).length,
+	1,
+	'Faction sync exposes no other role names'
+);
+first.c.patch({ activeLobbySettings: { ...defaultLobbySettings, impostorRadioEnabled: true } });
+assert.equal(first.c.canUseRadio(first.state, first.state.players[1]), true);
+assert.equal(first.c.canUseRadio(first.state, first.state.players[2]), false);
+assert.equal(first.c.areRadioTeammates(first.state, first.state.players[1], first.state.players[3]), true);
+assert.equal(first.c.areRadioTeammates(first.state, first.state.players[1], first.state.players[2]), false);
+const forged = { ...rolePacket, role: roles[0], impostors: [{ playerId: 2, clientId: 102, isImpostor: true }] };
+first.c.onPeerData('102', forged);
+assert.equal(
+	first.c.getEffectiveGameState(first.state).players[2].isImpostor,
+	false,
+	'Non-host faction packet rejected'
+);
+first.c.onPeerData('100', { ...forged, impostors: [{ playerId: 2, clientId: 102, isImpostor: 'true' }] });
+assert.equal(
+	first.c.getEffectiveGameState(first.state).players[2].isImpostor,
+	false,
+	'Malformed faction packet rejected'
+);
+now += 6000;
+assert.equal(
+	first.c.getEffectiveGameState(first.state).players[3].isImpostor,
+	false,
+	'Expired faction packet grants no radio permission'
+);
+host.setState(game(host));
+// Individual role settings use the existing authenticated host settings transport.
+const individualSettings = { ...defaultLobbySettings, haunting: true, tohGhostRoles: { Jackal: true, Coyote: false } };
+host.c.patch({ activeLobbySettings: individualSettings });
+host.c.broadcastLobbySettings();
+for (const a of clients) {
+	assert.deepEqual(JSON.parse(JSON.stringify(a.c.activeLobbySettings.tohGhostRoles)), individualSettings.tohGhostRoles);
+	a.c.onPeerData('102', { ...individualSettings, tohGhostRoles: { Coyote: true } });
+	assert.equal(a.c.activeLobbySettings.tohGhostRoles.Coyote, false, 'Non-host cannot change individual permissions');
+}
 moved.players[0].name = 'Former host';
 first.setState(moved);
 assert.equal(first.c.snapshot.toh4eLobby, false, 'Host migration clears old detection');

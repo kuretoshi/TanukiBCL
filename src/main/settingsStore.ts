@@ -286,6 +286,7 @@ export const settingsStore = new Store<ISettings>({
 				nosSizeVoiceEffect: { type: 'boolean', default: true },
 				nosFixerJammingVoiceBlock: { type: 'boolean', default: true },
 				tohNeutralKillerHaunting: { type: 'boolean', default: false },
+				tohGhostRoles: { type: 'object', additionalProperties: { type: 'boolean' } },
 				commsSabotage: {
 					type: 'boolean',
 					default: false,

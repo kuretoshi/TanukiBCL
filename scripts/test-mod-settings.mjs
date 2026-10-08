@@ -24,7 +24,7 @@ for (const lite of [false, true]) for (const mod of ['SUPER_NEW_ROLES', 'NoS', '
   const markup = renderToStaticMarkup(React.createElement(LobbySection, { ...props, gameState: { ...props.gameState, mod } }));
   assert.equal(markup.includes('【MOD】SNR設定'), mod === 'SUPER_NEW_ROLES');
   assert.equal(markup.includes('【MOD】NoS設定'), mod === 'NoS');
-  const sharedGhostLabel = translations.settings.lobbysettings.toh_neutral_killer_haunting;
+  const sharedGhostLabel = '幽霊の声が聞こえる役職設定';
   for (const label of labels) assert.equal(markup.includes(label), mod === 'SUPER_NEW_ROLES' || (mod === 'NoS' && label === translations.settings.lobbysettings.nos_neutral_killer_haunting), label);
   assert.equal(markup.includes(sharedGhostLabel), mod === 'TOH4E');
   assert.equal(markup.includes(translations.settings.lobbysettings.toh_section), mod === 'TOH4E');
@@ -38,6 +38,6 @@ for (const hostField of ['name', 'appearanceName']) {
     gameState: { ...props.gameState, mod: 'NONE', isHost: false,
       players: [{ clientId: 1, [hostField]: 'ホスト\u00a0Town Of Host For E EM v6180.383' }] } }));
   assert.ok(markup.includes(translations.settings.lobbysettings.toh_section));
-  assert.ok(markup.includes('第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる'));
+  assert.ok(markup.includes('幽霊の声が聞こえる役職設定'));
 }
 console.log('PASS lobby UI: SNR/NoS detection gates their own sections, new labels, normal editing and Lite host settings');

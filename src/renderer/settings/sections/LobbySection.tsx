@@ -13,6 +13,7 @@ import { defaultLobbySettings } from '../../voice/types';
 import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SliderRow, SwitchRow } from '../SettingsControls';
 import { isLiteRuntime } from '../../../common/appVariant';
 import { displayHostName, isToh4eHostName } from '../../../common/Mods';
+import TohGhostRoleSettings from './TohGhostRoleSettings';
 
 type LobbyTab = 'current' | 'mine';
 
@@ -50,6 +51,18 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 	onRadioOnlyModeChange,
 	confirm,
 }) {
+	const [tohGhostRolesOpen, setTohGhostRolesOpen] = useState(false);
+	if (mod === 'TOH4E' && tohGhostRolesOpen) {
+		return (
+			<TohGhostRoleSettings
+				values={values}
+				disabled={disabled}
+				disabledReason={disabledReason}
+				update={update}
+				onBack={() => setTohGhostRolesOpen(false)}
+			/>
+		);
+	}
 	const radioOnlyMode = values.impostorRadioOnlyMode === true;
 	const voiceSettingDisabled = disabled || radioOnlyMode;
 	const voiceSettingDisabledReason = radioOnlyMode
@@ -168,12 +181,11 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 			)}
 			{mod === 'TOH4E' && (
 				<SettingsSection title={t('settings.lobbysettings.toh_section')}>
-					<SwitchRow
-						label={t('settings.lobbysettings.toh_neutral_killer_haunting')}
-						disabled={disabled}
-						disabledReason={disabledReason}
-						checked={values.tohNeutralKillerHaunting === true}
-						onChange={(checked) => update({ tohNeutralKillerHaunting: checked })}
+					<SettingRow
+						label="幽霊の声が聞こえる役職設定"
+						description="第三陣営・アニマルズの対象役職を個別に設定します。"
+						controlWidth="auto"
+						control={<Button onClick={() => setTohGhostRolesOpen(true)}>設定する →</Button>}
 					/>
 				</SettingsSection>
 			)}

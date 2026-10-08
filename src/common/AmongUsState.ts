@@ -89,6 +89,9 @@ export interface Player {
 	nosPlayer?: NosPlayerData;
 	nosCosmetics?: Partial<Record<'skin' | 'hat' | 'hatBack' | 'visor' | 'bodyMask', string>>;
 	tohRole?: TohRole;
+	vanillaIsImpostor?: boolean;
+	/** Host-confirmed TOH faction flag; never a substitute role name. */
+	tohImpostor?: boolean;
 	nosLobbyColor?: string;
 	isImpostor: boolean;
 	isThirdParty: boolean;
