@@ -2,6 +2,12 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.20
+
+- TOH4E／TOH4E_EMのDLL検出に、実際に使用されるTownOfHostForE_EM.dll・TownOfHostForE.dllを追加。ゲームのフォルダ名にTOH4Eが含まれないホストで認識できない問題を修正。
+- 対象プロセスに読み込まれたDLLの判定を、フォルダ名による推測より優先。plugins内のDLL名はアンダースコア・ハイフン・大文字／小文字の違いに対応。
+- 通常名のゲームフォルダ、4種類のDLL名、対象PIDの一致、別MODとの識別を回帰テスト。起動中のEMをフォルダ名・plugins一覧に頼らずメモリだけで検出することも確認。
+
 ## v3.2.19
 
 - TOH4E／TOH4E_EMのインポスター判定を、本体のisImpostorとDLLのCustomRoleTypeで判定するよう変更。役職名の手書き一覧を廃止し、新しいインポスター役職も自動判別。

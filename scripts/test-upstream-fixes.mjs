@@ -844,7 +844,7 @@ const readerSource = ts.createSourceFile(
 	ts.ScriptTarget.Latest,
 	true
 );
-const { modList } = await bundle('src/common/Mods.ts');
+const { modList, isToh4eDll } = await bundle('src/common/Mods.ts');
 let detectModMethod;
 let loadedModMethod;
 function findModDetector(node) {
@@ -862,8 +862,9 @@ const modDetector = vm.runInNewContext(
 	{
 		modList,
 		path: { basename: (value) => value.split(/[\\/]/).pop() },
+		isToh4eDll,
 		findModule: (name, pid) => {
-			assert.ok(['SuperNewRoles.dll', 'Nebula.dll', 'TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll'].includes(name));
+			assert.ok(['SuperNewRoles.dll', 'Nebula.dll', 'TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll', 'TownOfHostForE.dll', 'TownOfHostForE_EM.dll'].includes(name));
 			assert.equal(pid, 42);
 			if (!loadedModule || name !== loadedModuleName) throw new Error('module not found');
 			return loadedModule;
@@ -893,6 +894,7 @@ loadedModule = {
 	szExePath: 'game/BepInEx/nebula/Nebula.dll',
 };
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NoS');
+assert.equal(detectMod.call(modReader, 'game/TOH4E_EM/Among Us.exe').id, 'NoS', 'Loaded DLL takes precedence over folder hints');
 assert.ok(modReader.loadedMods.includes(loadedModule.szExePath));
 loadedModule.th32ProcessID = 99;
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
@@ -906,7 +908,7 @@ modReader.readPluginFiles = () => ['TheOtherRoles.dll'];
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'THE_OTHER_ROLES');
 modReader.readPluginFiles = () => ['SuperNewRoles.dll'];
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'SUPER_NEW_ROLES');
-for (const dll of ['TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll']) {
+for (const dll of ['TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll', 'TownOfHostForE.dll', 'TownOfHostForE_EM.dll']) {
 	loadedModule = undefined;
 	loadedModuleName = dll;
 	modReader.readPluginFiles = () => [dll];
@@ -922,6 +924,13 @@ for (const dll of ['TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll']) {
 	assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E');
 }
 loadedModule = undefined;
+for (const dll of ['TOWNOFHOSTFORE_EM.DLL', 'TownOfHost-ForE-EM.dll', 'C:\\game\\BepInEx\\plugins\\TownOfHostForE_EM.dll']) {
+	assert.equal(isToh4eDll(dll), true);
+	modReader.readPluginFiles = () => [dll];
+	assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E', 'EM detection does not require a named game folder');
+}
+for (const dll of ['TownOfHost.dll', 'TownOfHostEnhanced.dll', 'TownOfHostForElse.dll', 'TownOfHostForE_EM.dll.bak']) assert.equal(isToh4eDll(dll), false);
+modReader.readPluginFiles = () => [];
 console.log('ok MOD detection: launcher module, Vanilla, late loading and existing folder fallback');
 const modsSource = await readFile('src/common/Mods.ts', 'utf8');
 assert.match(modsSource, /isToh4eHostName/);

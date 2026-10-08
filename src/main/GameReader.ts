@@ -27,7 +27,7 @@ import { RainbowColorId } from '../common/playerColors';
 import { platform } from 'os';
 import fs from 'fs';
 import path from 'path';
-import { AmongusMod, modList } from '../common/Mods';
+import { AmongusMod, modList, isToh4eDll } from '../common/Mods';
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName, isLiteRuntime } from '../common/appVariant';
@@ -218,9 +218,6 @@ export default class GameReader {
 
 	getInstalledMods(filePath: string): AmongusMod {
 		this.loadedMods = this.readPluginFiles(filePath);
-		if (/(^|[\\/])[^\\/]*TOH4E(?:[_-]EM)?[^\\/]*([\\/]|$)/i.test(filePath)) {
-			return modList.find((mod) => mod.id === 'TOH4E')!;
-		}
 		// SNRランチャーやNebulaは通常のpluginsフォルダ外からMODを読み込む。
 		// 接続対象のPIDに実際にロードされたDLLを優先する。
 		if (this.pid > 0) {
@@ -229,6 +226,8 @@ export default class GameReader {
 				['Nebula.dll', 'NoS'],
 				['TownOfHost_ForE_EM.dll', 'TOH4E'],
 				['TownOfHost_ForE.dll', 'TOH4E'],
+				['TownOfHostForE_EM.dll', 'TOH4E'],
+				['TownOfHostForE.dll', 'TOH4E'],
 			] as const) {
 				const module = this.getLoadedModModule(dll);
 				if (!module) continue;
@@ -236,7 +235,11 @@ export default class GameReader {
 				return modList.find((mod) => mod.id === id)!;
 			}
 		}
+		if (/(^|[\\/])[^\\/]*TOH4E(?:[_-]EM)?[^\\/]*([\\/]|$)/i.test(filePath)) {
+			return modList.find((mod) => mod.id === 'TOH4E')!;
+		}
 		for (const file of this.loadedMods) {
+			if (isToh4eDll(file)) return modList.find((mod) => mod.id === 'TOH4E')!;
 			const mod = modList.find((o) => o.dllStartsWith && file.includes(o.dllStartsWith));
 			if (mod) return mod;
 		}
@@ -269,7 +272,7 @@ export default class GameReader {
 			return [];
 		}
 		try {
-			return fs.readdirSync(path.join(dir, 'BepInEx', 'plugins')).filter((file) => file.endsWith('.dll'));
+			return fs.readdirSync(path.join(dir, 'BepInEx', 'plugins')).filter((file) => /\.dll$/i.test(file));
 		} catch (e) {
 			console.log('failed to read plugins directory:', e);
 			return [];

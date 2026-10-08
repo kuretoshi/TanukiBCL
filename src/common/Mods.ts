@@ -64,6 +64,11 @@ export const modList: AmongusMod[] = [
 	},
 ];
 
+export function isToh4eDll(file: string): boolean {
+	const name = file.split(/[\\/]/).pop()?.replace(/[_-]/g, '').toLowerCase();
+	return name === 'townofhostfore.dll' || name === 'townofhostforeem.dll';
+}
+
 export function isToh4eHostName(name: string | undefined): boolean {
 	return /town\s+of\s+host\s+for\s+e\b/i.test(
 		(name ?? '').replace(/<[^>]*>/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '')
