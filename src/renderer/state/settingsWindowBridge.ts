@@ -14,6 +14,7 @@ let lastSentHostId: number | undefined;
 let lastSentTohLobby: boolean | undefined;
 let lastSentTohRole: unknown;
 let lastSentTohNames: unknown;
+let lastSentTohCatalog: unknown;
 
 function sendGameState(): void {
 	const { gameState } = gameStore.getSnapshot();
@@ -22,6 +23,7 @@ function sendGameState(): void {
 	lastSentTohLobby = voice.toh4eLobby;
 	lastSentTohRole = voice.tohRole;
 	lastSentTohNames = voice.tohGameStartNames;
+	lastSentTohCatalog = voice.tohRoleCatalog;
 	ipcRenderer.send(
 		IpcMessages.SEND_TO_SETTINGS,
 		IpcSettingsMessages.NOTIFY_GAME_STATE_CHANGED,
@@ -86,8 +88,13 @@ function onGameStoreChanged(): void {
 function onVoiceChanged(): void {
 	sendDebugVoice();
 	const { activeLobbySettings, hostId } = voiceController.getSnapshot();
-	const { toh4eLobby, tohRole, tohGameStartNames } = voiceController.getSnapshot();
-	if (toh4eLobby !== lastSentTohLobby || tohRole !== lastSentTohRole || tohGameStartNames !== lastSentTohNames)
+	const { toh4eLobby, tohRole, tohGameStartNames, tohRoleCatalog } = voiceController.getSnapshot();
+	if (
+		toh4eLobby !== lastSentTohLobby ||
+		tohRole !== lastSentTohRole ||
+		tohGameStartNames !== lastSentTohNames ||
+		tohRoleCatalog !== lastSentTohCatalog
+	)
 		sendGameState();
 	if (activeLobbySettings !== lastSentActiveLobbySettings) sendActiveLobbySettings();
 	if (hostId !== lastSentHostId) sendHostId();

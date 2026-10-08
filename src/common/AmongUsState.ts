@@ -2,7 +2,7 @@ import { CameraLocation, MapType } from './AmongusMap';
 import { ModsType } from './Mods';
 import type { SnrLiveRole } from './SnrRole';
 import type { NosPlayerData, NosRadioData } from './NosSnapshot';
-import type { TohRole } from './TohRole';
+import type { TohRole, TohRoleDefinition } from './TohRole';
 
 export interface AmongUsState {
 	gameState: GameState;
@@ -23,6 +23,7 @@ export interface AmongUsState {
 	closedDoors: number[];
 	maxPlayers: number;
 	mod: ModsType;
+	tohRoleCatalog?: TohRoleDefinition[];
 	oldMeetingHud: boolean;
 	airshipMeetingByOutfit: boolean;
 	nosReadStatus?: { failed: boolean; message: string; schemaVersion?: number };

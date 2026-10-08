@@ -17,7 +17,7 @@ import {
 } from '../../common/NosSnapshot';
 import { HeldNosRadio, resolveNosRadioKind, isNosRadioEnabled } from '../../common/nosRadio';
 import { VoiceState } from '../../common/AmongUsState';
-import { isTohRole, TohRole } from '../../common/TohRole';
+import { isTohRole, isTohRoleCatalog, TohRole } from '../../common/TohRole';
 import {
 	isPlayerImpostor,
 	withImpostorClassification,
@@ -87,6 +87,7 @@ const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	hostId: 0,
 	toh4eLobby: false,
 	tohRole: null,
+	tohRoleCatalog: [],
 	tohGameStartNames: {},
 	nosRadiosByPlayer: {},
 };
@@ -168,6 +169,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private lastRadioStatusSentAt = 0;
 	private tohRoleOverride: TohRole | null = null;
 	private tohRoleReceivedAt = 0;
+	private tohCatalogReceivedAt = 0;
 	private tohImpostors: TohImpostorEntry[] = [];
 	private tohLobbyNames: numberStringMap = {};
 
@@ -187,6 +189,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		return {
 			...state,
 			mod: 'TOH4E',
+			tohRoleCatalog: this.host.isHost ? state.tohRoleCatalog : this.snapshot.tohRoleCatalog,
 			players: state.players?.map((player) => {
 				const fixedName = this.snapshot.tohGameStartNames[player.clientId];
 				const namedPlayer = fixedName ? { ...player, name: fixedName, appearanceName: fixedName } : player;
@@ -421,7 +424,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.connection.on('disconnected', () => {
 				this.prev.gameInfo = '';
 				this.tohRoleOverride = null;
-				this.patch({ connected: false, tohRole: null, tohGameStartNames: {} });
+				this.patch({ connected: false, tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 			})
 		);
 
@@ -485,7 +488,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.prev.tohRoleSentSignatures = {};
 				if (this.connection.getClient(peerId)?.clientId === this.host.parsedHostId) {
 					this.tohRoleOverride = null;
-					this.patch({ tohRole: null, tohGameStartNames: {} });
+					this.patch({ tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 				}
 				this.audio.removePeer(peerId);
 				const audioConnected = { ...this.snapshot.audioConnected };
@@ -576,9 +579,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				return;
 		}
 		if (data.type === 'toh4e-lobby' && typeof data.enabled === 'boolean') {
+			if (data.roleCatalog !== undefined && !isTohRoleCatalog(data.roleCatalog)) return;
+			this.tohCatalogReceivedAt = Date.now();
+			this.patch({ tohRoleCatalog: data.enabled && isTohRoleCatalog(data.roleCatalog) ? data.roleCatalog : [] });
 			if (!data.enabled) {
 				this.tohRoleOverride = null;
-				this.patch({ tohRole: null, tohGameStartNames: {} });
+				this.patch({ tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 			}
 			this.patch({ toh4eLobby: data.enabled });
 			return;
@@ -758,8 +764,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.prev.tohRosterSentSignature = '';
 			this.tohRoleOverride = null;
 			this.tohLobbyNames = {};
-			this.patch({ toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
+			this.patch({ toh4eLobby: false, tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 		}
+		if (!this.host.isHost && Date.now() - this.tohCatalogReceivedAt > 5000 && this.snapshot.tohRoleCatalog.length)
+			this.patch({ tohRoleCatalog: [] });
 		if (state.gameState === GameState.LOBBY || Date.now() - this.tohRoleReceivedAt > 5000) {
 			this.tohRoleOverride = null;
 			this.patch({ tohRole: null });
@@ -900,10 +908,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private publishToh4eLobby(state: AmongUsState, force = false): void {
 		if (!this.host.isHost || state.gameState === GameState.MENU || state.gameState === GameState.UNKNOWN) return;
 		const enabled = state.mod === 'TOH4E' || this.snapshot.toh4eLobby;
-		const signature = `${state.lobbyCode}|${enabled ? 1 : 0}|${Math.floor(Date.now() / 1000)}`;
+		const roleCatalog = enabled && isTohRoleCatalog(state.tohRoleCatalog) ? state.tohRoleCatalog : [];
+		const signature = `${state.lobbyCode}|${enabled ? 1 : 0}|${JSON.stringify(roleCatalog)}|${Math.floor(Date.now() / 1000)}`;
 		if (!force && signature === this.prev.tohLobbySentSignature) return;
 		this.prev.tohLobbySentSignature = signature;
-		this.connection.broadcast(JSON.stringify({ type: 'toh4e-lobby', lobbyCode: state.lobbyCode, enabled }));
+		this.connection.broadcast(
+			JSON.stringify({ type: 'toh4e-lobby', lobbyCode: state.lobbyCode, enabled, roleCatalog })
+		);
 	}
 
 	private publishToh4eRole(state: AmongUsState): void {
@@ -983,7 +994,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.tohRoleOverride = null;
 				this.prev.tohSession = '';
 				this.tohLobbyNames = {};
-				this.patch({ toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
+				this.patch({ toh4eLobby: false, tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 			}
 		}
 		if (!gameOpen) {
@@ -1087,7 +1098,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.connection.leaveLobby();
 			this.tohRoleOverride = null;
 			this.tohLobbyNames = {};
-			this.patch({ otherDead: {}, toh4eLobby: false, tohRole: null, tohGameStartNames: {} });
+			this.patch({ otherDead: {}, toh4eLobby: false, tohRole: null, tohRoleCatalog: [], tohGameStartNames: {} });
 		}
 	}
 

@@ -18,7 +18,7 @@ async function bundle(file) {
 }
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { isToh4eHostName } = await bundle('src/common/Mods.ts');
-const { isTohRole } = await bundle('src/common/TohRole.ts');
+const { isTohRole, isTohRoleCatalog } = await bundle('src/common/TohRole.ts');
 const { isPlayerImpostor, withImpostorClassification, isTohImpostorEntries } = await bundle('src/common/Impostor.ts');
 const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.ts');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
@@ -74,6 +74,7 @@ function actor(clientId) {
 		GameState,
 		isToh4eHostName,
 		isTohRole,
+		isTohRoleCatalog,
 		isPlayerImpostor,
 		withImpostorClassification,
 		isTohImpostorEntries,
@@ -92,11 +93,12 @@ function actor(clientId) {
 	).outputText;
 	const { Controller, Connection, emptyPrev: prev } = vm.runInNewContext(code, sandbox);
 	const c = new Controller();
-	c.snapshot = { toh4eLobby: false, tohRole: null, tohGameStartNames: {}, otherDead: {}, activeLobbySettings: null };
+	c.snapshot = { toh4eLobby: false, tohRole: null, tohRoleCatalog: [], tohGameStartNames: {}, otherDead: {}, activeLobbySettings: null };
 	c.prev = prev();
 	c.host = { parsedHostId: 100, serverHostId: 100 };
 	c.tohRoleOverride = null;
 	c.tohRoleReceivedAt = 0;
+	c.tohCatalogReceivedAt = 0;
 	c.tohLobbyNames = {};
 	c.connectionUnsubscribers = [];
 	c.heldNosRadio = { clear() {} };
@@ -151,10 +153,16 @@ const roles = [true, false, true].map((isKiller, i) => ({
 	roleName: ['Sheriff', 'Crewmate', 'Opportunist'][i],
 	isKiller,
 	isNeutralKiller: false,
+	customRoleType: ['Crewmate', 'Crewmate', 'Neutral'][i],
 }));
+const catalog = [
+	{ roleId: 1200, roleName: 'FutureNeutral', displayName: '新しい第三陣営', customRoleType: 'Neutral', isKiller: true },
+	{ roleId: 1201, roleName: 'FutureAnimal', displayName: '新しいアニマル', customRoleType: 'Animals', isKiller: true },
+];
 function game(a, phase = GameState.TASKS, code = 'ABCDEF', hostId = 100) {
 	return {
 		mod: a === host ? 'TOH4E' : 'NONE',
+		tohRoleCatalog: a === host ? catalog : undefined,
 		lobbyCode: code,
 		hostId,
 		clientId: a.clientId,
@@ -213,7 +221,8 @@ for (let i = 0; i < clients.length; i++) {
 		maxDistance: 5,
 		impostorRadioClientId: -1,
 	});
-	assert.equal(result.gain, roles[i].isKiller ? 0.4 : 0, 'Host role drives vanilla client ghost audio');
+	assert.equal(result.gain, roles[i].customRoleType === 'Neutral' && roles[i].isKiller ? 0.4 : 0, 'Host faction and IKiller drive vanilla client ghost audio');
+	assert.deepEqual(effective.tohRoleCatalog, catalog, 'Host catalogue reaches vanilla clients');
 }
 assert.equal(packets.filter((p) => p.data.type === 'toh4e-role').length, 3);
 assert.ok(packets.some((p) => p.data.type === 'toh4e-roster'));
@@ -241,6 +250,12 @@ first.c.onPeerData('100', { ...rolePacket, role: { isKiller: true } });
 assert.equal(first.c.snapshot.tohRole.isKiller, true, 'Wrong lobby/player and malformed packet rejected');
 first.c.onPeerData('102', { type: 'toh4e-lobby', lobbyCode: 'ABCDEF', enabled: false });
 assert.equal(first.c.snapshot.toh4eLobby, true);
+const catalogPacket = { type: 'toh4e-lobby', lobbyCode: 'ABCDEF', enabled: true, roleCatalog: catalog };
+first.c.onPeerData('102', { ...catalogPacket, roleCatalog: [] });
+first.c.onPeerData('100', { ...catalogPacket, lobbyCode: 'OTHER', roleCatalog: [] });
+first.c.onPeerData('100', { ...catalogPacket, roleCatalog: [...catalog, catalog[0]] });
+first.c.onPeerData('100', { ...catalogPacket, roleCatalog: [{ ...catalog[0], customRoleType: 'Unknown' }] });
+assert.deepEqual(first.c.snapshot.tohRoleCatalog, catalog, 'Reject non-host, wrong lobby and malformed catalogs');
 
 const unavailable = game(host);
 delete unavailable.players[1].tohRole;
@@ -255,6 +270,7 @@ assert.equal(first.c.snapshot.tohRole.isKiller, true, 'Same socket reconnect res
 now += 6000;
 first.setState(game(first));
 assert.equal(first.c.snapshot.tohRole, null, 'Expired host role cannot keep enabling ghost audio');
+assert.deepEqual(Array.from(first.c.snapshot.tohRoleCatalog), [], 'Expired host catalogue is cleared');
 host.setState(game(host));
 assert.equal(first.c.snapshot.tohRole.isKiller, true, 'Periodic refresh recovers missed role');
 
@@ -271,9 +287,9 @@ assert.equal(first.c.snapshot.tohRole.isKiller, true, 'Identical role in next ro
 
 const moved = game(first, GameState.LOBBY, 'ABCDEF', 102);
 // MainRole must exclude vanilla impostor substitutes without breaking actual impostor radio.
-roles[0] = { ...roles[0], roleName: 'Vampire', isKiller: true };
-roles[1] = { ...roles[1], roleName: 'Jackal', isKiller: true };
-roles[2] = { ...roles[2], roleName: 'NormalShapeshifter', isKiller: true };
+roles[0] = { ...roles[0], roleName: 'FutureImpostor', customRoleType: 'Impostor', isKiller: true };
+roles[1] = { ...roles[1], roleName: 'Jackal', customRoleType: 'Neutral', isKiller: true };
+roles[2] = { ...roles[2], roleName: 'NormalShapeshifter', customRoleType: 'Impostor', isKiller: true };
 host.setState(game(host));
 const effective = first.c.getEffectiveGameState(first.state);
 assert.deepEqual(
@@ -322,10 +338,21 @@ for (const a of clients) {
 moved.players[0].name = 'Former host';
 first.setState(moved);
 assert.equal(first.c.snapshot.toh4eLobby, false, 'Host migration clears old detection');
+assert.deepEqual(Array.from(first.c.snapshot.tohRoleCatalog), [], 'Host migration clears old catalogue');
 first.c.onPeerData('100', rolePacket);
 assert.equal(first.c.snapshot.tohRole, null, 'Former host no longer trusted');
 first.setState({ ...moved, lobbyCode: 'NEXT', gameState: GameState.MENU });
 assert.equal(first.c.snapshot.toh4eLobby, false);
+// Catalogue delivery is independent of match roles, so the settings work before a round starts.
+for (const a of actors) a.setState(game(a, GameState.LOBBY, 'NEWCAT'));
+host.events.emit('peerReady', '101');
+for (const a of clients) {
+	assert.deepEqual(a.c.snapshot.tohRoleCatalog, catalog, 'Lobby receives catalogue before role assignment');
+	assert.equal(a.c.snapshot.tohRole, null);
+}
+catalog.push({ roleId: 1202, roleName: 'AddedAtRuntime', displayName: '追加された役職', customRoleType: 'Neutral', isKiller: true });
+host.setState(game(host, GameState.LOBBY, 'NEWCAT'));
+for (const a of clients) assert.equal(a.c.snapshot.tohRoleCatalog.at(-1).roleName, 'AddedAtRuntime', 'Catalogue changes are sent without recompiling');
 for (const name of [
 	'Name Town Of Host For E EM v6180.383',
 	'Name\u00a0Town\u00a0Of Host For E v1',

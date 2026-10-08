@@ -2,11 +2,11 @@ import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import { app } from 'electron';
 
-export function readTohLayout(pid: number): Promise<unknown> {
+export function readTohLayout(pid: number, is64bit = false): Promise<unknown> {
 	const root = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');
 	return new Promise((resolve, reject) => {
 		execFile(
-			join(root, 'out', 'debug-reader', 'SnrRoleReader.exe'),
+			join(root, 'out', 'debug-reader', ...(is64bit ? ['x64'] : []), 'SnrRoleReader.exe'),
 			[String(pid), '--toh'],
 			{ windowsHide: true, timeout: 45000, maxBuffer: 1024 * 1024 },
 			(error, stdout) => {

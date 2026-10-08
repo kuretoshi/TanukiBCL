@@ -2,7 +2,7 @@ import type { ConnectionQuality } from './connectionQuality';
 import { AudioConnected, ClientBoolMap, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
 import { ILobbySettings } from '../../common/ISettings';
 import type { VoiceDisguiseEffect } from '../voiceEffect';
-import type { TohRole } from '../../common/TohRole';
+import type { TohRole, TohRoleDefinition } from '../../common/TohRole';
 import type { NosRadioData } from '../../common/NosSnapshot';
 
 export interface ExtendedAudioElement extends HTMLAudioElement {
@@ -81,6 +81,7 @@ export interface VoiceSnapshot {
 	hostId: number;
 	toh4eLobby: boolean;
 	tohRole: TohRole | null;
+	tohRoleCatalog: TohRoleDefinition[];
 	tohGameStartNames: numberStringMap;
 	nosRadiosByPlayer: Record<number, { clientId: number; radios: NosRadioData[]; receivedAt: number }>;
 }

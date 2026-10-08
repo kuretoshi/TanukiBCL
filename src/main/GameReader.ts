@@ -138,7 +138,7 @@ export default class GameReader {
 	nosContents = new NosContentsTracker();
 	private readonly cosmeticsEnabled = !isLiteRuntime();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
-	private tohRoles = new TohLiveTracker(readTohLayout);
+	private tohRoles = new TohLiveTracker((pid) => readTohLayout(pid, this.is_64bit));
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette', this.is_64bit));
 	private snrRound = 0;
 	private snrInGame = false;
@@ -540,6 +540,7 @@ export default class GameReader {
 				lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
 				map,
 				mod: this.loadedMod.id,
+				tohRoleCatalog: this.loadedMod.id === 'TOH4E' ? this.tohRoles.roleCatalog : undefined,
 				closedDoors,
 				maxPlayers,
 				oldMeetingHud: this.oldMeetingHud,

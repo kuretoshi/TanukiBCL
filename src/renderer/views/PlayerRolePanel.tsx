@@ -148,6 +148,7 @@ function ModValues({ player, mod }: { player: Player; mod: AmongUsState['mod'] }
 				values={[
 					['RoleId', data?.roleId ?? '未取得'],
 					['RoleName', data?.roleName ?? '未取得'],
+					['CustomRoleType', data?.customRoleType ?? '未取得'],
 					['IKiller', <Flag key="flag8" value={data?.isKiller} />],
 					['IsNeutralKiller', <Flag key="flag9" value={data?.isNeutralKiller} />],
 					...(data?.roleName === 'Opportunist'

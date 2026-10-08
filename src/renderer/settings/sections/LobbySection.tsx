@@ -14,6 +14,7 @@ import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SliderRow, SwitchRo
 import { isLiteRuntime } from '../../../common/appVariant';
 import { displayHostName, isToh4eHostName } from '../../../common/Mods';
 import TohGhostRoleSettings from './TohGhostRoleSettings';
+import { TohRoleDefinition } from '../../../common/TohRole';
 
 type LobbyTab = 'current' | 'mine';
 
@@ -31,6 +32,7 @@ export interface LobbySectionProps {
 }
 
 interface RowsProps {
+	catalog: readonly TohRoleDefinition[];
 	t: TFunction;
 	mod: AmongUsState['mod'];
 	values: ILobbySettings;
@@ -42,6 +44,7 @@ interface RowsProps {
 }
 
 const LobbySettingRows: React.FC<RowsProps> = function ({
+	catalog,
 	t,
 	mod,
 	values,
@@ -55,6 +58,7 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 	if (mod === 'TOH4E' && tohGhostRolesOpen) {
 		return (
 			<TohGhostRoleSettings
+				catalog={catalog}
 				values={values}
 				disabled={disabled}
 				disabledReason={disabledReason}
@@ -345,6 +349,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 							/>
 						</SettingsSection>
 						<LobbySettingRows
+							catalog={gameState?.tohRoleCatalog ?? []}
 							t={t}
 							mod={hostIsToh4e ? 'TOH4E' : gameState?.mod}
 							values={activeLobbySettings}
@@ -364,6 +369,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 						{canEditMine ? t('settings.lobbysettings.mine_notice') : editDisabledReason}
 					</Alert>
 					<LobbySettingRows
+						catalog={gameState?.tohRoleCatalog ?? []}
 						t={t}
 						mod={gameState?.mod}
 						values={myLobbySettings ?? defaultLobbySettings}

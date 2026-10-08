@@ -1,4 +1,4 @@
-import { TohRole } from '../common/TohRole';
+import { TohRole, TohRoleDefinition } from '../common/TohRole';
 import { isTohLayout, readTohRoles, TohLayout } from './tohLiveMemory';
 
 export class TohLiveTracker {
@@ -11,6 +11,9 @@ export class TohLiveTracker {
 	private needsCanKill = false;
 	private needsKiller = false;
 	message = 'TOH4E役職未取得';
+	get roleCatalog(): TohRoleDefinition[] {
+		return this.layout?.roleCatalog ?? [];
+	}
 	constructor(private discover: (pid: number) => Promise<unknown>) {}
 	reset(): void {
 		this.request++;
@@ -32,7 +35,11 @@ export class TohLiveTracker {
 			this.session = session;
 			this.retryAt = 0;
 		}
-		if ((!this.layout || this.needsCanKill || this.needsKiller) && !this.pending && Date.now() >= this.retryAt) {
+		if (
+			(!this.layout || !this.layout.roleCatalog.length || this.needsCanKill || this.needsKiller) &&
+			!this.pending &&
+			Date.now() >= this.retryAt
+		) {
 			this.pending = true;
 			const request = ++this.request;
 			this.message = 'TOH4Eの役職読み取り位置を確認中…';

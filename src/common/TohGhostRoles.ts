@@ -1,109 +1,58 @@
 import { ILobbySettings } from './ISettings';
-import { TohRole } from './TohRole';
+import { TohRole, TohRoleDefinition } from './TohRole';
 
-// TOH4E_EM RoleInfo / IKiller implementations, checked against upstream main.
-// Use enum names rather than numeric IDs, which can differ between DLL versions.
-export const tohGhostRoleGroups: readonly { label: string; roles: readonly (readonly [string, string])[] }[] = [
-	{
-		label: '第三陣営',
-		roles: [
-			['Arsonist', 'アーソニスト'],
-			['BAKURETSUKI', '頭のおかしい爆裂船員'],
-			['DarkGameMaster', '運営者'],
-			['DarkHide', 'ダークハイド'],
-			['Egoist', 'エゴイスト'],
-			['Gizoku', '義賊'],
-			['Jackal', 'ジャッカル'],
-			['Oniichan', 'ヤンデレ'],
-			['Opportunist', 'オポチュニスト'],
-			['OtakuPrincess', '姫'],
-			['OwnerChef', 'オーナーシェフ'],
-			['PlagueDoctor', 'ペスト医師'],
-			['PlatonicLover', '純愛者'],
-			['Renegade', 'レネゲイド'],
-			['Totocalcio', 'トトカルチョ'],
-		],
-	},
-	{
-		label: 'アニマルズ',
-		roles: [
-			['Braki', 'ブラキディオス'],
-			['Chicken', 'チキン'],
-			['Coyote', 'コヨーテ'],
-			['Kraken', 'クラーケン'],
-			['Leopard', 'ヒョウ'],
-			['Nyaoha', 'クサネコ'],
-			['RedPanda', 'レッサーパンダ'],
-		],
-	},
-];
+function tohGhostRoleTeams() {
+	return [
+		{ label: '第三陣営', type: 'Neutral' },
+		{ label: 'アニマルズ', type: 'Animals' },
+	] as const;
+}
 
-export const tohImpostorRoles = new Set([
-	'Impostor',
-	'Shapeshifter',
-	'Phantom',
-	'Viper',
-	'NormalImpostor',
-	'NormalShapeshifter',
-	'NormalPhantom',
-	'NormalViper',
-	'Ambitioner',
-	'AntiAdminer',
-	'BountyHunter',
-	'RemoteCharger',
-	'Cinderella',
-	'CursedWolf',
-	'Detonator',
-	'Eraser',
-	'EvilBalancer',
-	'EvilDiviner',
-	'EvilGuesser',
-	'EvilHacker',
-	'EvilNekomata',
-	'EvilTracker',
-	'EvilWatcher',
-	'FireWorks',
-	'Greedier',
-	'Insider',
-	'JapPup',
-	'Mafia',
-	'Mare',
-	'NekoKabocha',
-	'Penguin',
-	'Puppeteer',
-	'Scavenger',
-	'SerialKiller',
-	'ShapeKiller',
-	'ShapeMaster',
-	'Sniper',
-	'Stealth',
-	'StrayWolf',
-	'SuicideBomber',
-	'Talktive',
-	'Telepathisters',
-	'Teleporter',
-	'TimeThief',
-	'Vampire',
-	'Warlock',
-	'Witch',
-]);
-const individualRoles = new Set<string>(tohGhostRoleGroups.flatMap((group) => group.roles.map(([key]) => key)));
+export function tohGhostRoleGroups(catalog: readonly TohRoleDefinition[]) {
+	return tohGhostRoleTeams().map(({ label, type }) => ({
+		label,
+		type,
+		roles: catalog.filter((role) => role.customRoleType === type && role.isKiller === true),
+	}));
+}
 
 export function tohGhostRoleEnabled(settings: ILobbySettings, key: string): boolean {
 	if (settings.tohGhostRoles !== undefined) return settings.tohGhostRoles[key] === true;
 	return settings.tohNeutralKillerHaunting === true;
 }
 
-export function setTohGhostRole(settings: ILobbySettings, key: string, checked: boolean): Partial<ILobbySettings> {
-	// Snapshot all displayed legacy defaults on the first edit, preserving other toggles.
+export function setTohGhostRole(
+	settings: ILobbySettings,
+	key: string,
+	checked: boolean,
+	catalog: readonly TohRoleDefinition[]
+): Partial<ILobbySettings> {
+	const displayed = tohGhostRoleGroups(catalog).flatMap((group) => group.roles);
+	if (!displayed.some((role) => role.roleName === key)) return {};
 	const roles = Object.fromEntries(
-		tohGhostRoleGroups.flatMap((group) => group.roles.map(([name]) => [name, tohGhostRoleEnabled(settings, name)]))
+		displayed.map((role) => [role.roleName, tohGhostRoleEnabled(settings, role.roleName)])
 	);
-	return { tohGhostRoles: { ...roles, [key]: checked } };
+	return { tohGhostRoles: { ...settings.tohGhostRoles, ...roles, [key]: checked } };
+}
+
+export function setTohGhostRoleGroup(
+	settings: ILobbySettings,
+	type: 'Neutral' | 'Animals',
+	checked: boolean,
+	catalog: readonly TohRoleDefinition[]
+): Partial<ILobbySettings> {
+	const groups = tohGhostRoleGroups(catalog);
+	const selected = groups.find((group) => group.type === type)?.roles ?? [];
+	if (!selected.length) return {};
+	const defaults = Object.fromEntries(
+		groups.flatMap((group) => group.roles).map((role) => [role.roleName, tohGhostRoleEnabled(settings, role.roleName)])
+	);
+	const changed = Object.fromEntries(selected.map((role) => [role.roleName, checked]));
+	return { tohGhostRoles: { ...settings.tohGhostRoles, ...defaults, ...changed } };
 }
 
 export function isTohImpostor(vanillaIsImpostor: boolean, role: TohRole | undefined): boolean {
-	return vanillaIsImpostor === true && !!role?.roleName && tohImpostorRoles.has(role.roleName);
+	return vanillaIsImpostor === true && role?.customRoleType === 'Impostor';
 }
 
 export function canTohHearGhosts(
@@ -112,10 +61,8 @@ export function canTohHearGhosts(
 	vanillaIsImpostor = false
 ): boolean {
 	if (!role?.roleName || role.roleName === 'NotAssigned') return false;
-	const name = role.roleName;
-	if (tohImpostorRoles.has(name)) return isTohImpostor(vanillaIsImpostor, role) && settings.haunting === true;
+	if (role.customRoleType === 'Impostor') return isTohImpostor(vanillaIsImpostor, role) && settings.haunting === true;
+	if (role.customRoleType !== 'Neutral' && role.customRoleType !== 'Animals') return false;
 	if (role.isKiller !== true) return false;
-	// Preserve the old switch for saved settings / older hosts until the first individual edit.
-	if (settings.tohGhostRoles === undefined) return settings.tohNeutralKillerHaunting === true;
-	return individualRoles.has(name) && tohGhostRoleEnabled(settings, name);
+	return tohGhostRoleEnabled(settings, role.roleName);
 }

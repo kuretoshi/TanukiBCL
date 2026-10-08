@@ -14,7 +14,7 @@ internal static class TohRoleLayout
     public static object Resolve(ClrRuntime runtime, int pid, int pointerSize,
         Func<string, Dictionary<string, Dictionary<long,string>>> readEnums)
     {
-        if (pointerSize != 4) throw new InvalidOperationException("TOH4E reader currently supports x86 only");
+        if (pointerSize != 4 && pointerSize != 8) throw new InvalidOperationException("Unsupported TOH4E pointer size");
         var sources = runtime.EnumerateModules()
             // Official TOH4E uses TownOfHost_ForE.dll. TOH4E_EM v6180.383 copies the
             // same assembly to TownOfHostForE_EM.dll and removes the original file.
@@ -42,6 +42,8 @@ internal static class TohRoleLayout
         // Read interface inheritance from the actual loaded DLL, without executing MOD code.
         var killerRoles = ReadKillerRoles(source.module.Name!);
         var killerLayout = ResolveKillerLayout(source.module, killerRoles);
+        var roleCatalog = enums.TryGetValue("TownOfHostForE.Roles.Core.CustomRoleTypes", out var teams)
+            ? TohRoleCatalog.Read(source.module, names, teams, killerRoles) : [];
         return new {
             pid, pointerSize, dictionarySlot = source.slot.GetAddress(source.module.AppDomain),
             dictionaryType = dictType.MethodTable, playerType = source.type.MethodTable,
@@ -52,7 +54,7 @@ internal static class TohRoleLayout
             stride = entries.Type.ComponentSize,
             nextOffset = Field(entryType, "next").Offset, keyOffset = Field(entryType, "key").Offset,
             valueOffset = Field(entryType, "value").Offset,
-            idOffset = Offset(Field(source.type, "PlayerId")), roleOffset = Offset(role), names, killerLayout,
+            idOffset = Offset(Field(source.type, "PlayerId")), roleOffset = Offset(role), names, killerLayout, roleCatalog,
             opportunistCanKillSlot = canKill?.ElementType == ClrElementType.Boolean
                 ? canKill.GetAddress(source.module.AppDomain) : 0
         };
