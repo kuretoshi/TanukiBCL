@@ -1,7 +1,7 @@
 import type { ConnectionQuality } from './connectionQuality';
 import { AudioConnected, ClientBoolMap, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
 import { ILobbySettings } from '../../common/ISettings';
-import type { VoiceDisguiseEffect } from '../voiceEffect';
+import type { VoiceProcessingEffect } from './sourceFilterEffect';
 import type { TohRole, TohRoleDefinition } from '../../common/TohRole';
 import type { NosRadioData } from '../../common/NosSnapshot';
 
@@ -10,7 +10,7 @@ export interface ExtendedAudioElement extends HTMLAudioElement {
 }
 
 export interface PeerAudioNodes {
-	voiceEffect?: VoiceDisguiseEffect;
+	voiceEffect?: VoiceProcessingEffect;
 	voiceEffectConnected: boolean;
 	stream: MediaStream;
 	dummyAudioElement: HTMLAudioElement;
@@ -18,6 +18,8 @@ export interface PeerAudioNodes {
 	pan: PannerNode;
 	reverb: ConvolverNode;
 	radioEcho: RadioEchoNodes;
+	starEcho?: RadioEchoNodes;
+	starEchoConnected?: boolean;
 	muffle: BiquadFilterNode;
 	source: MediaStreamAudioSourceNode;
 	reverbConnected: boolean;

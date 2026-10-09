@@ -7,7 +7,7 @@ import { NosReaderUnexpectedExitError } from './nosSnapshotTracker';
 /** Resolve the NoS layout with a helper matching the game's architecture. */
 export function resolveNosSnapshot(
 	pid: number,
-	command: 'layout' | 'palette' = 'layout',
+	command: 'layout' | 'palette' | 'roles' = 'layout',
 	is64bit = false
 ): Promise<unknown> {
 	const root = app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked');

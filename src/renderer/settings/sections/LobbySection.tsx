@@ -8,6 +8,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { AmongUsState } from '../../../common/AmongUsState';
 import { ILobbySettings } from '../../../common/ISettings';
+import { changeNosFixerMode } from '../../../common/NosFixerSettings';
 import languages from '../../language/languages';
 import { defaultLobbySettings } from '../../voice/types';
 import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SliderRow, SwitchRow } from '../SettingsControls';
@@ -35,6 +36,7 @@ interface RowsProps {
 	catalog: readonly TohRoleDefinition[];
 	t: TFunction;
 	mod: AmongUsState['mod'];
+	uchuAddonDetected: boolean;
 	values: ILobbySettings;
 	disabled: boolean;
 	disabledReason?: string;
@@ -47,6 +49,7 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 	catalog,
 	t,
 	mod,
+	uchuAddonDetected,
 	values,
 	disabled,
 	disabledReason,
@@ -224,12 +227,52 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						onChange={(checked) => update({ nosSizeVoiceEffect: checked })}
 					/>
 					<SwitchRow
+						label={t('settings.lobbysettings.nos_rokurokubi_voice_effect')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosRokurokubiVoiceEffect !== false}
+						onChange={(checked) => update({ nosRokurokubiVoiceEffect: checked })}
+					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_berserker_voice_effect')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosBerserkerVoiceEffect !== false}
+						onChange={(checked) => update({ nosBerserkerVoiceEffect: checked })}
+					/>
+					<SwitchRow
 						label={t('settings.lobbysettings.nos_fixer_jamming_voice_block')}
 						disabled={disabled}
 						disabledReason={disabledReason}
 						checked={values.nosFixerJammingVoiceBlock !== false}
-						onChange={(checked) => update({ nosFixerJammingVoiceBlock: checked })}
+						onChange={(checked) => update(changeNosFixerMode('block', checked))}
 					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.nos_fixer_jamming_lowpass')}
+						description={t('settings.lobbysettings.nos_fixer_jamming_lowpass_description')}
+						disabled={disabled}
+						disabledReason={disabledReason}
+						checked={values.nosFixerJammingLowpass === true && values.nosFixerJammingVoiceBlock === false}
+						onChange={(checked) => update(changeNosFixerMode('lowpass', checked))}
+					/>
+					{uchuAddonDetected && (
+						<>
+							<SwitchRow
+								label={t('settings.lobbysettings.nos_citrus_voice_effect')}
+								disabled={disabled}
+								disabledReason={disabledReason}
+								checked={values.nosCitrusVoiceEffect !== false}
+								onChange={(checked) => update({ nosCitrusVoiceEffect: checked })}
+							/>
+							<SwitchRow
+								label={t('settings.lobbysettings.nos_rainbow_star_echo')}
+								disabled={disabled}
+								disabledReason={disabledReason}
+								checked={values.nosRainbowStarEcho !== false}
+								onChange={(checked) => update({ nosRainbowStarEcho: checked })}
+							/>
+						</>
+					)}
 				</SettingsSection>
 			)}
 
@@ -349,6 +392,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 							/>
 						</SettingsSection>
 						<LobbySettingRows
+							uchuAddonDetected={gameState?.nosAddonIds?.includes('UchuAddon') === true}
 							catalog={gameState?.tohRoleCatalog ?? []}
 							t={t}
 							mod={hostIsToh4e ? 'TOH4E' : gameState?.mod}
@@ -369,6 +413,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 						{canEditMine ? t('settings.lobbysettings.mine_notice') : editDisabledReason}
 					</Alert>
 					<LobbySettingRows
+						uchuAddonDetected={gameState?.nosAddonIds?.includes('UchuAddon') === true}
 						catalog={gameState?.tohRoleCatalog ?? []}
 						t={t}
 						mod={gameState?.mod}

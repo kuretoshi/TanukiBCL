@@ -37,7 +37,7 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	if (
 		v.pid !== pid ||
 		(v.pointerSize !== 4 && v.pointerSize !== 8) ||
-		![20260918, 20260928, 20261005].includes(v.schemaVersion) ||
+		![20260918, 20260928, 20261005, 20261009].includes(v.schemaVersion) ||
 		!Number.isInteger(v.latestSlotAddress) ||
 		v.latestSlotAddress < 0x10000 ||
 		v.latestSlotAddress > Number.MAX_SAFE_INTEGER ||
@@ -53,7 +53,7 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	const costumes = [p.skin, p.hat, p.visor];
 	const costumeCount = costumes.filter((c) => c != null).length;
 	if (costumeCount !== 0 && costumeCount !== 3) return false;
-	if (v.schemaVersion === 20261005 && costumeCount !== 3) return false;
+	if (v.schemaVersion >= 20261005 && costumeCount !== 3) return false;
 	if (
 		!costumes.every(
 			(c) =>
@@ -70,6 +70,11 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	const bodyRateFieldCount = [p.bodyRateX, p.bodyRateY].filter(Number.isInteger).length;
 	if (bodyRateFieldCount === 1) return false;
 	const hasBodyRate = bodyRateFieldCount === 2;
+	const bodyStateCount = [p.bodyType, p.neckLength].filter((value) => value != null).length;
+	if (bodyStateCount !== 0 && bodyStateCount !== 2) return false;
+	if (v.schemaVersion === 20261009 && (bodyStateCount !== 2 || !hasBodyRate)) return false;
+	if (bodyStateCount === 2 && (!validOffset(p.bodyType, 4, p.size) || !validOffset(p.neckLength, 4, p.size)))
+		return false;
 	if (p.isJammed != null && !Number.isInteger(p.isJammed)) return false;
 	const hasIsJammed = Number.isInteger(p.isJammed);
 	const radioFieldCount = [v.snapshot.radiosLength, v.snapshot.radios, v.radioData].filter(
@@ -148,6 +153,10 @@ export function readNosSnapshot(
 		const start = i * p.size;
 		const u8 = (key: PlayerField) => payload[start + p[key]];
 		const f32 = (key: PlayerField) => finite(payload.readFloatLE(start + p[key]));
+		const bodyType = Number.isInteger(p.bodyType) ? payload.readInt32LE(start + p.bodyType) : undefined;
+		const neckLength = Number.isInteger(p.neckLength) ? f32('neckLength') : undefined;
+		if ((bodyType !== undefined && (bodyType < 0 || bodyType > 32)) || (neckLength !== undefined && neckLength < 0))
+			throw new Error('Invalid NoS body state');
 		const bool = (key: PlayerField) => {
 			const value = u8(key);
 			if (value > 1) throw new Error('Invalid NoS flag');
@@ -179,6 +188,7 @@ export function readNosSnapshot(
 			...(Number.isInteger(p.bodyRateX) && Number.isInteger(p.bodyRateY)
 				? { bodyRateX: f32('bodyRateX'), bodyRateY: f32('bodyRateY') }
 				: {}),
+			...(bodyType !== undefined ? { bodyType, neckLength } : {}),
 			colorR: f32('colorR'),
 			colorG: f32('colorG'),
 			colorB: f32('colorB'),

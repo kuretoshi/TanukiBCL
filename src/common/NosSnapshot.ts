@@ -25,6 +25,8 @@ export interface NosPlayerData {
 	speakerPositionY: number;
 	bodyRateX?: number;
 	bodyRateY?: number;
+	bodyType?: number;
+	neckLength?: number;
 	colorR: number;
 	colorG: number;
 	colorB: number;

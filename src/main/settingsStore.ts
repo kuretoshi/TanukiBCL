@@ -284,7 +284,12 @@ export const settingsStore = new Store<ISettings>({
 				nosNeutralKillerHaunting: { type: 'boolean', default: false },
 				nosVoicePositions: { type: 'boolean', default: false },
 				nosSizeVoiceEffect: { type: 'boolean', default: true },
+				nosRokurokubiVoiceEffect: { type: 'boolean', default: true },
+				nosBerserkerVoiceEffect: { type: 'boolean', default: true },
+				nosCitrusVoiceEffect: { type: 'boolean', default: true },
+				nosRainbowStarEcho: { type: 'boolean', default: true },
 				nosFixerJammingVoiceBlock: { type: 'boolean', default: true },
+				nosFixerJammingLowpass: { type: 'boolean', default: false },
 				tohNeutralKillerHaunting: { type: 'boolean', default: false },
 				tohGhostRoles: { type: 'object', additionalProperties: { type: 'boolean' } },
 				commsSabotage: {

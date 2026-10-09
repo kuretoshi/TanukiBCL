@@ -4,7 +4,7 @@ namespace Nebula.Collab;
 
 public static unsafe class TBCLFields
 {
-    public const int Version = 20261005;
+    public const int Version = 20261009;
     private static int nextIndex;
     public static Snapshot* Latest;
     static TBCLFields() { nextIndex = 0; Latest = null; }
@@ -28,6 +28,8 @@ public static unsafe class TBCLFields
         public fixed char Name[32];
         public float ColorR, ColorG, ColorB;
         public CostumeData Skin, Hat, Visor;
+        public int BodyType;
+        public float NeckLength;
     }
     public enum RadioKind { Impostor, Jackal, Lovers }
     public struct RadioData {
@@ -37,10 +39,10 @@ public static unsafe class TBCLFields
         public fixed char Name[32];
     }
     public static void Initialize() { _ = typeof(Snapshot).TypeHandle; _ = typeof(PlayerData).TypeHandle; _ = typeof(RadioData).TypeHandle; }
-    public static void Publish(bool neutral = true, bool empty = false) {
+    public static void Publish(bool neutral = true, bool empty = false, int bodyType = 3, float neckLength = 5) {
         var player = (PlayerData*)Marshal.AllocHGlobal(sizeof(PlayerData));
         *player = new PlayerData { PlayerId = 3, IsNeutral = neutral, IsImpostor = !neutral, IsKiller = true, IsJammed = neutral,
-            SpeakerPositionX = 2.5f, SpeakerPositionY = -1.25f, BodyRateX = 1.25f, BodyRateY = .75f,
+            SpeakerPositionX = 2.5f, SpeakerPositionY = -1.25f, BodyRateX = 1.25f, BodyRateY = .75f, BodyType = bodyType, NeckLength = neckLength,
             ColorR = .25f, ColorG = .5f, ColorB = .75f, NameLength = 3 };
         var name = "テスト"; for (int i = 0; i < name.Length; i++) player->Name[i] = name[i];
         player->Skin.NameLength = 4;

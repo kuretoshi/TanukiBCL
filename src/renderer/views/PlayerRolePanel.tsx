@@ -41,6 +41,15 @@ function PlayerAppearance({ player, mod }: { player: Player; mod: AmongUsState['
 							? ([
 									['BodyRateX', numberLabel(player.nosPlayer?.bodyRateX)],
 									['BodyRateY', numberLabel(player.nosPlayer?.bodyRateY)],
+									['BodyType (TBCL)', player.nosPlayer?.bodyType ?? '未取得'],
+									['NeckLength', numberLabel(player.nosPlayer?.neckLength)],
+									[
+										'首伸長中',
+										<Flag
+											key="neck"
+											value={player.nosPlayer?.bodyType === undefined ? undefined : player.nosPlayer.bodyType === 3}
+										/>,
+									],
 								] as [string, React.ReactNode][])
 							: []),
 						...(player.snrRole?.jumbo
@@ -131,6 +140,17 @@ function ModValues({ player, mod }: { player: Player; mod: AmongUsState['mod'] }
 		return (
 			<Values
 				values={[
+					['RoleName', player.nosRole?.displayName ?? player.nosRole?.roleName ?? '未取得'],
+					['RoleId', player.nosRole?.roleId ?? '未取得'],
+					['InternalName', player.nosRole?.roleName ?? '未取得'],
+					['RuntimeClass', player.nosRole?.runtimeClass ?? '未取得'],
+					['RainbowStar', <Flag key="rainbow-star" value={player.nosRole?.isRainbowStar ?? undefined} />],
+					...(player.nosRole?.roleName === 'berserker'
+						? ([
+								['BodyType', player.nosRole.bodyType ?? '未取得'],
+								['IsBerserking', <Flag key="berserker" value={player.nosRole.isBerserking} />],
+							] as [string, React.ReactNode][])
+						: []),
 					['IsImpostor', <Flag key="flag2" value={data?.isImpostor} />],
 					['IsCrewmate', <Flag key="flag3" value={data?.isCrewmate} />],
 					['IsNeutral', <Flag key="flag4" value={data?.isNeutral} />],
@@ -190,9 +210,14 @@ export default function PlayerRolePanel({
 	const players = gameState.players ?? [];
 	const search = query.trim().toLocaleLowerCase();
 	const filtered = players.filter((player) =>
-		[player.name, String(player.id), player.roleName, player.snrRole?.role.name, player.tohRole?.roleName].some(
-			(value) => value?.toLocaleLowerCase().includes(search)
-		)
+		[
+			player.name,
+			String(player.id),
+			player.roleName,
+			player.nosRole?.roleName,
+			player.snrRole?.role.name,
+			player.tohRole?.roleName,
+		].some((value) => value?.toLocaleLowerCase().includes(search))
 	);
 	const mod = gameState.mod;
 	const isNosMissing = (player: Player) => mod === 'NoS' && !player.nosPlayer;
@@ -213,7 +238,7 @@ export default function PlayerRolePanel({
 			)}
 			{mod === 'NoS' && (
 				<Alert severity="info" sx={{ mb: 1 }}>
-					NoSが公開する情報は陣営・判定値です。TBCLFieldsには役職名が含まれないため、個別の役職名は表示できません。
+					{gameState.debug?.nosRoleStatus || '試合開始後にNoS役職を自動取得します。'}
 				</Alert>
 			)}
 			<TextField
@@ -278,7 +303,7 @@ export default function PlayerRolePanel({
 								</IconButton>
 							</Box>
 							<Typography variant="body2" sx={{ mt: 0.5, color: 'primary.main', overflowWrap: 'anywhere' }}>
-								{mod === 'NoS' ? '陣営' : '役職'}: {player.roleName || '未取得'}
+								{mod === 'NoS' && !player.nosRole ? '陣営' : '役職'}: {player.roleName || '未取得'}
 							</Typography>
 						</Box>
 						<Collapse in={!isCollapsed(player)} id={`player-details-${player.id}-${player.clientId}`} unmountOnExit>

@@ -96,10 +96,18 @@ try {
 	await published;
 	const layout = response.metadata;
 	assert.ok(isNosLayout(layout, child.pid), JSON.stringify(response));
-	assert.equal(layout.schemaVersion, 20261005);
+	assert.equal(layout.schemaVersion, 20261009);
 	assert.equal(layout.playerData.skin.capacity, 128);
-	assert.equal(layout.playerData.size, 880);
-	const legacyPlayer = { ...layout.playerData, size: 104, skin: null, hat: null, visor: null };
+	assert.equal(layout.playerData.size, 888);
+	const legacyPlayer = {
+		...layout.playerData,
+		size: 104,
+		skin: null,
+		hat: null,
+		visor: null,
+		bodyType: undefined,
+		neckLength: undefined,
+	};
 	const legacy = { ...layout, schemaVersion: 20260928, playerData: legacyPlayer };
 	assert.ok(isNosLayout(legacy, child.pid));
 	assert.equal(readNosSnapshot(legacy, read).players[0].name, 'テスト');
@@ -124,9 +132,46 @@ try {
 	assert.equal(first.players[0].colorB, 0.75);
 	assert.equal(first.players[0].bodyRateX, 1.25);
 	assert.equal(first.players[0].bodyRateY, 0.75);
+	assert.equal(first.players[0].bodyType, 3);
+	assert.equal(first.players[0].neckLength, 5);
+	for (const field of ['bodyType', 'neckLength']) {
+		assert.equal(
+			isNosLayout({ ...layout, playerData: { ...layout.playerData, [field]: undefined } }, child.pid),
+			false
+		);
+		assert.equal(
+			isNosLayout({ ...layout, playerData: { ...layout.playerData, [field]: layout.playerData.size } }, child.pid),
+			false
+		);
+	}
+	const header = read(first.publication, layout.snapshot.players + layout.pointerSize);
+	const playerAddress =
+		layout.pointerSize === 8
+			? Number(header.readBigUInt64LE(layout.snapshot.players))
+			: header.readUInt32LE(layout.snapshot.players);
+	for (const [field, value] of [
+		['bodyType', -1],
+		['bodyType', 33],
+		['neckLength', -1],
+		['neckLength', NaN],
+		['neckLength', Infinity],
+	]) {
+		const corruptRead = (address, size) => {
+			const buffer = Buffer.from(read(address, size));
+			if (address === playerAddress) {
+				if (field === 'bodyType') buffer.writeInt32LE(value, layout.playerData[field]);
+				else buffer.writeFloatLE(value, layout.playerData[field]);
+			}
+			return buffer;
+		};
+		assert.throws(() => readNosSnapshot(layout, corruptRead), /Invalid NoS (body state|float)/);
+	}
 	assert.equal(first.players[0].isJammed, true);
 	assert.deepEqual(first.radios, [{ kind: 1, hearableMask: 0xb, nameLength: 6, name: 'Jackal' }]);
 	const legacyLayout = structuredClone(layout);
+	legacyLayout.schemaVersion = 20261005;
+	delete legacyLayout.playerData.bodyType;
+	delete legacyLayout.playerData.neckLength;
 	delete legacyLayout.snapshot.radiosLength;
 	delete legacyLayout.snapshot.radios;
 	delete legacyLayout.radioData;
@@ -140,6 +185,23 @@ try {
 		child.stdin.write(value + '\n');
 		await reply;
 	};
+	const readStar = () => JSON.parse(execFileSync(
+		resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['roles', String(child.pid)],
+		{ windowsHide: true, timeout: 45000, encoding: 'utf8' }
+	)).metadata[0].role.isRainbowStar;
+	assert.equal(readStar(), false, 'No Star modifier means no echo');
+	for (const [value, expected] of [['star-on', true], ['star-yellow', false], ['star-unknown', null], ['star-clear', false]]) {
+		await command(value);
+		assert.equal(readStar(), expected, `Managed Star state: ${value}`);
+	}
+	await command('neck');
+	assert.equal(live().players[0].neckLength, 12);
+	assert.equal(live().players[0].bodyType, 3);
+	await command('normal');
+	assert.equal(live().players[0].neckLength, 0);
+	assert.equal(live().players[0].bodyType, 0);
+	await command('berserk');
+	assert.equal(live().players[0].bodyType, 2);
 	await command('color');
 	assert.equal(readNosPalette(palette, read)[3], '#ff4000', 'Lobby color changes remain live');
 	await command('gc');

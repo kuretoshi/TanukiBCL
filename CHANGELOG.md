@@ -2,6 +2,16 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.21
+
+- NoS v3.5.3.6のTBCLFields（Version 20261009）に対応。BodyType・NeckLengthを読み取り、役職情報とともにデバッグ画面へ表示。
+- 体のサイズによる声の加工をソース・フィルター方式へ変更。BodyRateYでピッチ、BodyRateXでフォルマントを制御し、デストロイヤーで潰れる際の声も連続的に変化。
+- バーサーカーの暴走中は歪みと短い残響、ろくろ首の首伸長中は長さに応じた高い声を適用。
+- UchuAddonのシトラスによる柑橘変身中は高い犯人風の声、虹色スターには薄いエコーを適用。会議中も継続。
+- NoSロビー設定に役職エフェクトのON/OFFを追加。シトラス・スターの項目はUchuAddon認識時のみ表示。
+- フィクサー妨害時のローパス設定を追加。妨害された人が聞く全員の声と、他の人が聞く妨害された人の声に適用。音声遮断設定とは排他的に切り替え。
+- ネスト深さを最大3段に整理し、読み取り・音声処理・設定表示の回帰テストを追加。
+
 ## v3.2.20
 
 - TOH4E／TOH4E_EMのDLL検出に、実際に使用されるTownOfHostForE_EM.dll・TownOfHostForE.dllを追加。ゲームのフォルダ名にTOH4Eが含まれないホストで認識できない問題を修正。

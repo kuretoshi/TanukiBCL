@@ -61,7 +61,12 @@ export interface ILobbySettings {
 	nosNeutralKillerHaunting: boolean;
 	nosVoicePositions: boolean;
 	nosSizeVoiceEffect: boolean;
+	nosBerserkerVoiceEffect: boolean;
+	nosRokurokubiVoiceEffect: boolean;
+	nosCitrusVoiceEffect: boolean;
+	nosRainbowStarEcho: boolean;
 	nosFixerJammingVoiceBlock: boolean;
+	nosFixerJammingLowpass: boolean;
 	tohNeutralKillerHaunting: boolean;
 	tohGhostRoles?: Record<string, boolean>;
 	hearImpostorsInVents: boolean;

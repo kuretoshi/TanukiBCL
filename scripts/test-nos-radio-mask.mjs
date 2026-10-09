@@ -10,6 +10,7 @@ async function bundle(entry) {
 }
 const nos = await bundle('src/common/NosSnapshot.ts');
 const policy = await bundle('src/common/nosRadio.ts');
+const impostor = await bundle('src/common/Impostor.ts');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { defaultLobbySettings } = await bundle('src/renderer/voice/types.ts');
@@ -32,6 +33,7 @@ const source = ts.createSourceFile(
 	true
 );
 const names = [
+	'getEffectiveGameState',
 	'getNosRadios',
 	'senderNosRadioKind',
 	'setImpostorRadio',
@@ -63,6 +65,7 @@ const controller = vm.runInNewContext(
 	{
 		...nos,
 		...policy,
+		...impostor,
 		radioOnAudio: { play: () => Promise.resolve() },
 		GameState,
 		gameStore: { getSnapshot: () => ({ gameState: state }) },

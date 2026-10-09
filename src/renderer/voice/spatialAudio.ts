@@ -306,6 +306,14 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	} else if (!muffleEnabled) {
 		result.muffle = false;
 	}
+	if (
+		state.mod === 'NoS' &&
+		activeLobbySettings.nosFixerJammingLowpass === true &&
+		activeLobbySettings.nosFixerJammingVoiceBlock === false &&
+		(me.nosPlayer?.isJammed === true || other.nosPlayer?.isJammed === true)
+	) {
+		result.muffle = { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 };
+	}
 
 	if (!settings.enableSpatialAudio || skipDistanceCheck) {
 		panPos = [0, 0];

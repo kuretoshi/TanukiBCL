@@ -1,4 +1,4 @@
-﻿using Microsoft.Diagnostics.Runtime;
+using Microsoft.Diagnostics.Runtime;
 using Microsoft.Win32.SafeHandles;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -17,6 +17,7 @@ internal static class Program
     const string RadioDataTypeName = "Nebula.Collab.TBCLFields+RadioData";
     const int ExpectedSchemaVersion = 20260918;
     const int CostumeSchemaVersion = 20261005;
+    const int BodySchemaVersion = 20261009;
     const int PlayersCapacity = 24;
     const int RadiosCapacity = 8;
     const int NameCapacity = 32;
@@ -40,6 +41,12 @@ internal static class Program
 
             switch (command)
             {
+                case "roles":
+                {
+                    var metadata = NosRoles.Read(pid);
+                    Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, metadata }, jsonOptions));
+                    break;
+                }
                 case "palette":
                 {
                     var metadata = ResolvePalette(pid);
@@ -215,6 +222,8 @@ internal static class Program
             SpeakerPositionY = RequiredField(playerData, "SpeakerPositionY").Offset,
             BodyRateX = playerData.GetFieldByName("BodyRateX")?.Offset,
             BodyRateY = playerData.GetFieldByName("BodyRateY")?.Offset,
+            BodyType = playerData.GetFieldByName("BodyType")?.Offset,
+            NeckLength = playerData.GetFieldByName("NeckLength")?.Offset,
             IsJammed = playerData.GetFieldByName("IsJammed")?.Offset,
             NameLength = RequiredField(playerData, "NameLength").Offset,
             Name = RequiredField(playerData, "Name").Offset,
@@ -231,6 +240,8 @@ internal static class Program
 			playerLayout.ColorB + sizeof(float),
 			(playerLayout.BodyRateX ?? 0) + sizeof(float),
 			(playerLayout.BodyRateY ?? 0) + sizeof(float),
+            (playerLayout.BodyType ?? 0) + sizeof(int),
+            (playerLayout.NeckLength ?? 0) + sizeof(float),
 			(playerLayout.IsJammed ?? 0) + sizeof(byte),
             playerLayout.Skin is { } skin ? skin.Offset + skin.Size : 0,
             playerLayout.Hat is { } hat ? hat.Offset + hat.Size : 0,
@@ -387,6 +398,10 @@ internal static class Program
 			isJammed = layout.IsJammed is int offset ? Bool(offset) : (bool?)null,
             speakerPositionX = F32(layout.SpeakerPositionX),
             speakerPositionY = F32(layout.SpeakerPositionY),
+            bodyRateX = layout.BodyRateX is int bx ? F32(bx) : (float?)null,
+            bodyRateY = layout.BodyRateY is int by ? F32(by) : (float?)null,
+            bodyType = layout.BodyType is int bt ? BitConverter.ToInt32(bytes,start+bt) : (int?)null,
+            neckLength = layout.NeckLength is int nl ? F32(nl) : (float?)null,
             name,
             colorR = F32(layout.ColorR),
             colorG = F32(layout.ColorG),
@@ -448,9 +463,11 @@ internal static class Program
             throw new InvalidOperationException("The Among Us process has restarted. Run resolve again.");
         if (metadata.PointerSize is not (4 or 8))
             throw new InvalidOperationException("Invalid pointer size in metadata");
-        if (metadata.SchemaVersion != ExpectedSchemaVersion && metadata.SchemaVersion != 20260928 && metadata.SchemaVersion != CostumeSchemaVersion)
+        if (metadata.SchemaVersion != ExpectedSchemaVersion && metadata.SchemaVersion != 20260928 && metadata.SchemaVersion != CostumeSchemaVersion && metadata.SchemaVersion != BodySchemaVersion)
             throw new InvalidOperationException($"Unsupported TBCL schema version {metadata.SchemaVersion}");
 
+        if (metadata.SchemaVersion == BodySchemaVersion && (metadata.PlayerData.BodyType is null || metadata.PlayerData.NeckLength is null))
+            throw new InvalidOperationException("Missing NoS body state fields");
         ValidateLayout(metadata.Snapshot, metadata.PlayerData, metadata.RadioData, metadata.PointerSize);
     }
 
@@ -471,6 +488,9 @@ internal static class Program
         foreach (var costume in costumes) {
             if (costume is not null && (costume.Offset < 0 || costume.Capacity <= 0 || costume.Capacity > 1024 || costume.NameLength < 0 || costume.NameLength >= costume.Size || costume.Name < 0 || costume.Name + costume.Capacity * 2 > costume.Size || costume.Offset + costume.Size > player.Size)) throw new InvalidOperationException("Invalid costume layout");
         }
+        if ((player.BodyType is null) != (player.NeckLength is null)) throw new InvalidOperationException("Incomplete NoS body state layout");
+        foreach (int? offset in new int?[] {player.BodyRateX,player.BodyRateY,player.BodyType,player.NeckLength})
+            if (offset is int fieldOffset && (fieldOffset < 0 || fieldOffset+4 > player.Size)) throw new InvalidOperationException("Invalid NoS body field offset");
         int[] playerOffsets =
         [
             player.PlayerId, player.IsKiller, player.IsImpostor, player.IsCrewmate,
@@ -609,6 +629,8 @@ internal static class Program
         public int SpeakerPositionY { get; set; }
 		public int? BodyRateX { get; set; }
 		public int? BodyRateY { get; set; }
+        public int? BodyType { get; set; }
+        public int? NeckLength { get; set; }
         public int? IsJammed { get; set; }
         public int NameLength { get; set; }
         public int Name { get; set; }

@@ -3,6 +3,7 @@ import { ModsType } from './Mods';
 import type { SnrLiveRole } from './SnrRole';
 import type { NosPlayerData, NosRadioData } from './NosSnapshot';
 import type { TohRole, TohRoleDefinition } from './TohRole';
+import type { NosRole } from './NosRole';
 
 export interface AmongUsState {
 	gameState: GameState;
@@ -23,6 +24,7 @@ export interface AmongUsState {
 	closedDoors: number[];
 	maxPlayers: number;
 	mod: ModsType;
+	nosAddonIds?: string[];
 	tohRoleCatalog?: TohRoleDefinition[];
 	oldMeetingHud: boolean;
 	airshipMeetingByOutfit: boolean;
@@ -54,6 +56,7 @@ export interface AmongUsState {
 		sizeDebug: string;
 		snrRoleStatus?: string;
 		nosSnapshotStatus?: string;
+		nosRoleStatus?: string;
 		tohRoleStatus?: string;
 	};
 }
@@ -88,6 +91,7 @@ export interface Player {
 	snrHat2Id?: string;
 	snrVisor2Id?: string;
 	nosPlayer?: NosPlayerData;
+	nosRole?: NosRole;
 	nosCosmetics?: Partial<Record<'skin' | 'hat' | 'hatBack' | 'visor' | 'bodyMask', string>>;
 	tohRole?: TohRole;
 	vanillaIsImpostor?: boolean;

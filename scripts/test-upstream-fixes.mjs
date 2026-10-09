@@ -66,33 +66,34 @@ const nosVoiceState = { ...state, mod: 'NoS' };
 const nosSizedPlayer = (x, y) => ({ ...other, appearanceName: other.name, nosPlayer: { bodyRateX: x, bodyRateY: y } });
 assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 1)), null);
 assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(0.1, 0.1)), {
-	strength: 100,
-	direction: 'up',
-	toneRate: 0.1,
-	directPitch: true,
+	strength: 0,
+	sourceFilter: { pitch: 2, formant: 1.7, squash: 0 },
 });
 assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(5, 5)), {
-	strength: 100,
-	direction: 'down',
-	jumbo: true,
-	toneRate: 5,
+	strength: 0,
+	sourceFilter: { pitch: 0.4, formant: 0.55, squash: 0 },
 });
 assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 0.5)), {
-	strength: 50,
-	direction: 'up',
-	squash: 0.5,
+	strength: 0,
+	sourceFilter: { pitch: 1.125, formant: 1, squash: 0.5 },
 });
 assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 0)), {
-	strength: 100,
-	direction: 'up',
-	squash: 1,
+	strength: 0,
+	sourceFilter: { pitch: 1.25, formant: 1, squash: 1 },
 });
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(0.5, 1)), { strength: 0, toneRate: 0.5 });
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(2, 1)), { strength: 0, toneRate: 2 });
-assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(0.95, 0.5)).squash, undefined);
-assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 0.1)).squash, 0.9);
-assert.ok(rule(nosVoiceState, lobby, me, nosSizedPlayer(0.5, 0.5)).strength > 0);
-assert.ok(rule(nosVoiceState, lobby, me, nosSizedPlayer(2, 2)).strength > 0);
+for (const y of [0.97, 0.75, 0.5, 0.25, 0]) {
+	const fx = rule(nosVoiceState, lobby, me, nosSizedPlayer(1, y)).sourceFilter;
+	assert.ok(fx.pitch >= 1 && fx.pitch <= 1.25);
+	assert.equal(fx.formant, 1);
+	assert.ok(fx.squash >= 0 && fx.squash <= 1);
+}
+for (const y of [0, 0.5, 1, 2, 5]) {
+	const narrow = rule(nosVoiceState, lobby, me, nosSizedPlayer(0.5, y)).sourceFilter;
+	const wide = rule(nosVoiceState, lobby, me, nosSizedPlayer(2, y)).sourceFilter;
+	assert.equal(narrow.pitch, wide.pitch);
+	assert.equal(narrow.squash, wide.squash);
+	assert.ok(narrow.formant > wide.formant);
+}
 assert.equal(rule(nosVoiceState, { ...lobby, nosSizeVoiceEffect: false }, me, nosSizedPlayer(2, 2)), null);
 assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(NaN, 1)), null);
 assert.equal(rule({ ...nosVoiceState, gameState: GameState.DISCUSSION }, lobby, me, nosSizedPlayer(5, 5)), null);
@@ -130,6 +131,20 @@ assert.equal(
 	1
 );
 assert.equal(spatial({ other: { ...other, nosPlayer: { isJammed: true } } }).gain, 1);
+const fixerLowpass = { ...lobby, nosFixerJammingVoiceBlock: false, nosFixerJammingLowpass: true };
+for (const gameState of [GameState.TASKS, GameState.DISCUSSION]) {
+	for (const jamMe of [false, true]) for (const jamOther of [false, true]) {
+		const result = spatial({ state: { ...nosVoice, gameState }, activeLobbySettings: fixerLowpass,
+			me: { ...me, nosPlayer: { isJammed: jamMe } }, other: { ...other, nosPlayer: { isJammed: jamOther } } });
+		assert.equal(result.gain, 1, 'low-pass mode preserves audible voice');
+		assert.deepEqual(result.muffle, jamMe || jamOther
+			? { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 } : false);
+	}
+}
+assert.equal(spatial({ state: nosVoice, activeLobbySettings: { ...fixerLowpass, nosFixerJammingVoiceBlock: true },
+	other: { ...other, nosPlayer: { isJammed: true } } }).gain, 0, 'blocking wins for inconsistent imported settings');
+assert.equal(spatial({ activeLobbySettings: fixerLowpass,
+	other: { ...other, nosPlayer: { isJammed: true } } }).muffle, false, 'NoS-only filter');
 assert.equal(spatial({ other: { ...other, x: 50 } }).gain, 0);
 assert.equal(
 	spatial({ state: { ...state, map: MapType.AIRSHIP, airshipMeetingByOutfit: true }, other: { ...other, x: 50 } }).gain,
@@ -443,7 +458,20 @@ const snr = (name, jumbo, metadata = {}) => ({
 });
 const jumboLobby = { ...lobby, snrJumboVoice: true, voiceEffectEnabled: false };
 const jumboPlayer = { ...other, appearanceName: 'B', snrRole: snr('Jackal', { currentSize: 2, maxSize: 4 }) };
-assert.deepEqual(rule(state, jumboLobby, me, jumboPlayer), { strength: 50, direction: 'down', jumbo: true });
+assert.deepEqual(rule(state, jumboLobby, me, jumboPlayer), {
+	strength: 0,
+	sourceFilter: { pitch: 0.7, formant: 0.775, squash: 0 },
+});
+for (const currentSize of [0.001, 1, 4, 8]) {
+	const growth = Math.min(1, currentSize / 4);
+	assert.deepEqual(
+		rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal', { currentSize, maxSize: 4 }) }),
+		{
+			strength: 0,
+			sourceFilter: { pitch: 1 - growth * 0.6, formant: 1 - growth * 0.45, squash: 0 },
+		}
+	);
+}
 for (const currentSize of [0, -1, NaN]) {
 	assert.equal(
 		rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal', { currentSize, maxSize: 4 }) }),
@@ -725,8 +753,18 @@ console.log('ok meeting reset: canonical appearance, stable identity, normal voi
 
 class Node {
 	connections = new Set();
-	gain = { value: 1 };
-	frequency = { value: 0 };
+	gain = {
+		value: 1,
+		setTargetAtTime(value) {
+			this.value = value;
+		},
+	};
+	frequency = {
+		value: 0,
+		setTargetAtTime(value) {
+			this.value = value;
+		},
+	};
 	Q = { value: 0 };
 	delayTime = { value: 0 };
 	positionX = { setValueAtTime() {} };
@@ -750,9 +788,16 @@ const context = {
 	currentTime: 0,
 	sampleRate: 8000,
 	closed: false,
-	createGain: () => new Node(),
+	createGain: () => Object.assign(new Node(), { context }),
 	createBiquadFilter: () => new Node(),
 	createDelay: () => new Node(),
+	createWaveShaper: () => new Node(),
+	createConvolver: () => new Node(),
+	createDynamicsCompressor: () =>
+		Object.assign(
+			new Node(),
+			Object.fromEntries(['threshold', 'knee', 'ratio', 'attack', 'release'].map((name) => [name, { value: 0 }]))
+		),
 	createBufferSource: () => new Node(),
 	createBuffer: (_, length) => ({ getChannelData: () => new Float32Array(length) }),
 };
@@ -836,7 +881,110 @@ assert.equal(
 	0,
 	'Airship spawn grace period must expire even while meetingHudState remains 4'
 );
-console.log('ok audio graph: effects release, route restoration and independent peer cleanup');
+globalThis.AudioWorkletNode = class extends Node {
+	parameters = new Map(['pitch', 'formant', 'squash'].map((name) => [name, { value: 0 }]));
+	port = {
+		postMessage(message) {
+			this.message = message;
+		},
+		close() {
+			this.closed = true;
+		},
+	};
+};
+const sizePeer = peer();
+audio.peers.set('size-test', sizePeer);
+audio.sourceFilterReady = true;
+audio.applyVoiceAudio('size-test', state, settings, lobby, me, other, -1);
+const oldDisguise = sizePeer.voiceEffect;
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
+assert.equal(sizePeer.voiceEffect.kind, 'source-filter');
+assert.ok(oldDisguise.delayModA.stopped);
+assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
+assert.equal(sizePeer.voiceEffect.node.parameters.get('pitch').value, 1.125);
+const sourceFilter = sizePeer.voiceEffect;
+audio.applyVoiceAudio('size-test', state, settings, lobby, me, other, -1);
+assert.equal(sourceFilter.node.port.message, 'stop');
+assert.equal(sourceFilter.node.port.closed, true);
+assert.ok(!('kind' in sizePeer.voiceEffect));
+assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
+audio.applyVoiceAudio(
+	'size-test',
+	{ ...nosVoiceState, gameState: GameState.DISCUSSION },
+	settings,
+	lobby,
+	me,
+	nosSizedPlayer(1, 0.5),
+	-1
+);
+assert.equal(sizePeer.voiceEffect, undefined);
+assert.ok(sizePeer.gain.connections.has(audio.masterGain));
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
+const previousSource = sizePeer.voiceEffect;
+const ragingPlayer = {
+	...other,
+	appearanceName: other.name,
+	nosRole: { roleName: 'berserker' },
+	nosPlayer: { bodyType: 2, neckLength: 0, bodyRateX: 1, bodyRateY: 1 },
+};
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, ragingPlayer, -1);
+assert.equal(sizePeer.voiceEffect.kind, 'berserker');
+assert.equal(previousSource.node.port.message, 'stop');
+assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
+const ragingEffect = sizePeer.voiceEffect;
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, { ...ragingPlayer, isDead: true }, -1);
+assert.equal(sizePeer.voiceEffect, undefined);
+assert.ok(ragingEffect.nodes.every((node) => node.connections.size === 0));
+assert.ok(sizePeer.gain.connections.has(audio.masterGain));
+audio.sourceFilterReady = false;
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
+assert.equal(sizePeer.voiceEffect, undefined);
+assert.ok(sizePeer.gain.connections.has(audio.masterGain));
+audio.removePeer('size-test');
+const starPeer = peer();
+const fixerPeer = peer();
+audio.peers.set('fixer-test', fixerPeer);
+const jammedSpeaker = { ...other, appearanceName: other.name, nosPlayer: { isJammed: true } };
+audio.applyVoiceAudio('fixer-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, fixerLowpass, me, jammedSpeaker, -1);
+assert.equal(fixerPeer.muffleConnected, true);
+assert.equal(fixerPeer.muffle.type, 'lowpass');
+assert.equal(fixerPeer.muffle.frequency.value, 1200);
+assert.ok(fixerPeer.gain.connections.has(fixerPeer.muffle));
+audio.applyVoiceAudio('fixer-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, fixerLowpass, me,
+	{ ...jammedSpeaker, nosPlayer: { isJammed: false } }, -1);
+assert.equal(fixerPeer.muffleConnected, false);
+assert.equal(fixerPeer.muffle.connections.size, 0);
+assert.ok(fixerPeer.gain.connections.has(audio.masterGain));
+audio.removePeer('fixer-test');
+audio.peers.set('star-test', starPeer);
+const rainbowPlayer = { ...other, appearanceName: other.name, nosRole: { isRainbowStar: true } };
+audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me, rainbowPlayer, -1);
+assert.equal(starPeer.starEchoConnected, true);
+assert.equal(starPeer.starEcho.delay.delayTime.value, 0.075);
+assert.equal(starPeer.starEcho.wet.gain.value, 0.08);
+assert.ok(starPeer.gain.connections.has(starPeer.starEcho.input));
+assert.ok(starPeer.starEcho.output.connections.has(audio.masterGain));
+audio.applyVoiceAudio('star-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, lobby, me, rainbowPlayer, -1);
+assert.equal(starPeer.starEchoConnected, true);
+const starEcho = starPeer.starEcho;
+for (const isRainbowStar of [false, undefined, null]) {
+	audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me,
+		{ ...rainbowPlayer, nosRole: { isRainbowStar } }, -1);
+	assert.equal(starPeer.starEchoConnected, false);
+	assert.equal(starEcho.output.connections.size, 0);
+	assert.ok(starPeer.gain.connections.has(audio.masterGain));
+}
+audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me,
+	{ ...rainbowPlayer, nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } }, -1);
+assert.equal(starPeer.starEchoConnected, true);
+assert.equal(starPeer.voiceEffectConnected, true);
+assert.ok(starPeer.voiceEffect.output.connections.has(starEcho.input));
+audio.removePeer('star-test');
+assert.ok(Object.values(starEcho).every(node => node.connections.size === 0));
+console.log(
+	'ok audio graph: effects release, source/filter mode switches, unavailable-worklet fallback and independent peer cleanup'
+);
 
 const readerSource = ts.createSourceFile(
 	'GameReader.ts',
@@ -861,10 +1009,23 @@ const modDetector = vm.runInNewContext(
 	}).outputText,
 	{
 		modList,
-		path: { basename: (value) => value.split(/[\\/]/).pop() },
+		path: {
+			basename: (value) => value.split(/[\\/]/).pop(),
+			dirname: (value) => value.split(/[\\/]/).slice(0, -1).join('/'),
+		},
+		readNosAddonIds: () => [],
 		isToh4eDll,
 		findModule: (name, pid) => {
-			assert.ok(['SuperNewRoles.dll', 'Nebula.dll', 'TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll', 'TownOfHostForE.dll', 'TownOfHostForE_EM.dll'].includes(name));
+			assert.ok(
+				[
+					'SuperNewRoles.dll',
+					'Nebula.dll',
+					'TownOfHost_ForE.dll',
+					'TownOfHost_ForE_EM.dll',
+					'TownOfHostForE.dll',
+					'TownOfHostForE_EM.dll',
+				].includes(name)
+			);
 			assert.equal(pid, 42);
 			if (!loadedModule || name !== loadedModuleName) throw new Error('module not found');
 			return loadedModule;
@@ -894,7 +1055,11 @@ loadedModule = {
 	szExePath: 'game/BepInEx/nebula/Nebula.dll',
 };
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NoS');
-assert.equal(detectMod.call(modReader, 'game/TOH4E_EM/Among Us.exe').id, 'NoS', 'Loaded DLL takes precedence over folder hints');
+assert.equal(
+	detectMod.call(modReader, 'game/TOH4E_EM/Among Us.exe').id,
+	'NoS',
+	'Loaded DLL takes precedence over folder hints'
+);
 assert.ok(modReader.loadedMods.includes(loadedModule.szExePath));
 loadedModule.th32ProcessID = 99;
 assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'NONE');
@@ -924,12 +1089,21 @@ for (const dll of ['TownOfHost_ForE.dll', 'TownOfHost_ForE_EM.dll', 'TownOfHostF
 	assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E');
 }
 loadedModule = undefined;
-for (const dll of ['TOWNOFHOSTFORE_EM.DLL', 'TownOfHost-ForE-EM.dll', 'C:\\game\\BepInEx\\plugins\\TownOfHostForE_EM.dll']) {
+for (const dll of [
+	'TOWNOFHOSTFORE_EM.DLL',
+	'TownOfHost-ForE-EM.dll',
+	'C:\\game\\BepInEx\\plugins\\TownOfHostForE_EM.dll',
+]) {
 	assert.equal(isToh4eDll(dll), true);
 	modReader.readPluginFiles = () => [dll];
-	assert.equal(detectMod.call(modReader, 'game/Among Us.exe').id, 'TOH4E', 'EM detection does not require a named game folder');
+	assert.equal(
+		detectMod.call(modReader, 'game/Among Us.exe').id,
+		'TOH4E',
+		'EM detection does not require a named game folder'
+	);
 }
-for (const dll of ['TownOfHost.dll', 'TownOfHostEnhanced.dll', 'TownOfHostForElse.dll', 'TownOfHostForE_EM.dll.bak']) assert.equal(isToh4eDll(dll), false);
+for (const dll of ['TownOfHost.dll', 'TownOfHostEnhanced.dll', 'TownOfHostForElse.dll', 'TownOfHostForE_EM.dll.bak'])
+	assert.equal(isToh4eDll(dll), false);
 modReader.readPluginFiles = () => [];
 console.log('ok MOD detection: launcher module, Vanilla, late loading and existing folder fallback');
 const modsSource = await readFile('src/common/Mods.ts', 'utf8');
@@ -966,6 +1140,7 @@ const switchingReader = {
 	tohRoles: { reset() {} },
 	nosSnapshot: { reset() {} },
 	nosPalette: { reset() {} },
+	nosRoles: { reset() {} },
 	snrCosmeticAppearances: new Map(),
 	nextModCheck: 0,
 	gamePath: 'game/Among Us.exe',
@@ -1004,6 +1179,7 @@ reconnectReader.snrRoles = {
 };
 reconnectReader.nosSnapshot = { reset() {} };
 reconnectReader.nosPalette = { reset() {} };
+reconnectReader.nosRoles = { reset() {} };
 reconnectReader.tohRoles = { reset() {} };
 const reconnectEvents = [];
 Object.assign(reconnectReader, {

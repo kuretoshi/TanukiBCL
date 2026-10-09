@@ -36,6 +36,9 @@ import { readSnrRoles } from './snrRoleReader';
 import { SnrLiveTracker } from './snrLiveTracker';
 import { formatSnrRole } from '../common/SnrRole';
 import { formatNosTeam } from '../common/NosSnapshot';
+import { formatNosRole, type NosRole } from '../common/NosRole';
+import { NosRoleTracker } from './nosRoleTracker';
+import { readNosAddonIds } from './nosAddonImages';
 import { NosContentsTracker } from './nosContents';
 import { NosSnapshotTracker } from './nosSnapshotTracker';
 import { resolveNosSnapshot } from './nosSnapshotReader';
@@ -124,6 +127,7 @@ export default class GameReader {
 	pid = -1;
 	loadedMod = modList[0];
 	loadedMods: string[] = [];
+	nosAddonIds: string[] = [];
 	private nextModCheck = 0;
 	broadcastVersion = -1;
 	offsetsVersion = -1;
@@ -138,6 +142,7 @@ export default class GameReader {
 	nosContents = new NosContentsTracker();
 	private readonly cosmeticsEnabled = !isLiteRuntime();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
+	private nosRoles = new NosRoleTracker((pid) => resolveNosSnapshot(pid, 'roles', this.is_64bit));
 	private tohRoles = new TohLiveTracker((pid) => readTohLayout(pid, this.is_64bit));
 	private nosPalette = new NosPaletteTracker((pid) => resolveNosSnapshot(pid, 'palette', this.is_64bit));
 	private snrRound = 0;
@@ -179,6 +184,7 @@ export default class GameReader {
 			this.snrRoles.reset();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
+			this.nosRoles.reset();
 			this.nosPalette.reset();
 			this.snrCosmeticAppearances.clear();
 		}
@@ -194,6 +200,7 @@ export default class GameReader {
 			this.snrRoles.reset();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
+			this.nosRoles.reset();
 			this.nosPalette.reset();
 			this.amongUs = null;
 			this.loadedMod = modList[0];
@@ -217,6 +224,7 @@ export default class GameReader {
 	}
 
 	getInstalledMods(filePath: string): AmongusMod {
+		this.nosAddonIds = readNosAddonIds(path.dirname(filePath));
 		this.loadedMods = this.readPluginFiles(filePath);
 		// SNRランチャーやNebulaは通常のpluginsフォルダ外からMODを読み込む。
 		// 接続対象のPIDに実際にロードされたDLLを優先する。
@@ -506,6 +514,15 @@ export default class GameReader {
 					);
 				}
 			}
+			if (this.loadedMod.id === 'NoS' && !this.is_linux && snrActive) {
+				const publishedBody = this.nosSnapshot.schemaVersion === 20261009;
+				const roles = this.nosRoles.update(
+					this.pid,
+					`${lobbyCode}:${this.snrRound}`,
+					publishedBody ? undefined : (address, size) => readBuffer(this.amongUs!.handle, address, size)
+				);
+				this.applyNosRoles(players, roles, publishedBody);
+			} else this.nosRoles.reset();
 			const missingNosPlayers = nos
 				? players.filter((player) => !player.disconnected && !nos.players.some((data) => data.playerId === player.id))
 				: [];
@@ -543,6 +560,7 @@ export default class GameReader {
 				lightRadiusChanged: lightRadius != this.lastState?.lightRadius,
 				map,
 				mod: this.loadedMod.id,
+				nosAddonIds: this.loadedMod.id === 'NoS' ? this.nosAddonIds : undefined,
 				tohRoleCatalog: this.loadedMod.id === 'TOH4E' ? this.tohRoles.roleCatalog : undefined,
 				closedDoors,
 				maxPlayers,
@@ -583,6 +601,7 @@ export default class GameReader {
 								colorDebug: this.formatColorDebug(players, localPlayer),
 								sizeDebug: this.formatSizeDebug(players),
 								nosSnapshotStatus: this.loadedMod.id === 'NoS' ? this.nosSnapshot.message : undefined,
+								nosRoleStatus: this.loadedMod.id === 'NoS' ? this.nosRoles.message : undefined,
 								tohRoleStatus: this.loadedMod.id === 'TOH4E' ? this.tohRoles.message : undefined,
 								snrRoleStatus:
 									this.loadedMod.id === 'SUPER_NEW_ROLES'
@@ -737,6 +756,22 @@ export default class GameReader {
 		}
 	}
 
+	private applyNosRoles(players: Player[], roles: ReadonlyMap<number, NosRole>, publishedBody: boolean): void {
+		for (const player of players) {
+			const role = player.disconnected ? undefined : roles.get(player.id);
+			const bodyType = player.nosPlayer?.bodyType;
+			player.nosRole =
+				role && publishedBody
+					? {
+							...role,
+							bodyType,
+							isBerserking: role.roleName === 'berserker' && bodyType !== undefined ? bodyType === 2 : undefined,
+						}
+					: role;
+			if (player.nosRole) player.roleName = formatNosRole(player.nosRole);
+		}
+	}
+
 	private applyNosAppearance(
 		player: Player,
 		published: Player['nosPlayer'],
@@ -778,6 +813,7 @@ export default class GameReader {
 		this.snrRoles.reset();
 		this.tohRoles.reset();
 		this.nosSnapshot.reset();
+		this.nosRoles.reset();
 		this.nosPalette.reset();
 		this.snrInGame = false;
 		this.amongUs = null;

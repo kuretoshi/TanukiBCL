@@ -122,3 +122,33 @@ export function indexNosAddonImages(gameDirectory: string): Map<string, Map<stri
 	}
 	return result;
 }
+
+/** Identify installed NoS addons by addon.meta, independent of ZIP filenames. */
+export function readNosAddonIds(gameDirectory: string): string[] {
+	const result = new Set<string>();
+	try {
+		for (const file of fs.readdirSync(path.join(gameDirectory, 'Addons'))) {
+			if (!file.toLowerCase().endsWith('.zip')) continue;
+			collectNosAddonIds(gameDirectory, file, result);
+		}
+	} catch {
+		/* The addon folder is optional. */
+	}
+	return [...result].sort();
+}
+
+function collectNosAddonIds(gameDirectory: string, file: string, result: Set<string>): void {
+	try {
+		const archive = fs.realpathSync(path.join(gameDirectory, 'Addons', file));
+		if (path.relative(gameDirectory, archive).startsWith('..')) return;
+		for (const [name, entry] of entries(archive)) {
+			if ((!name.endsWith('/addon.meta') && name !== 'addon.meta') || entry.size > 65536) continue;
+			// NoS metadata can contain non-JSON True/False literals.
+			const text = readNosZipImage(entry).toString('utf8');
+			const id = /"Id"\s*:\s*"([A-Za-z0-9_.-]{1,128})"/.exec(text)?.[1];
+			if (id) result.add(id);
+		}
+	} catch {
+		/* Ignore unreadable addons. */
+	}
+}
