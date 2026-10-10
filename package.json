@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.21",
+	"version": "3.2.22",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",

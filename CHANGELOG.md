@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.22
+
+- NoSのデータが未取得のまま試合が始まった場合、ロビー中の再取得待ち時間を引き継がず、読み取り位置をすぐに再取得するよう修正。
+- NoSの読み取り位置を取得できなかった際の再試行間隔を1〜3秒に短縮。従来の最大30秒待ちを解消。
+
 ## v3.2.21
 
 - NoS v3.5.3.6のTBCLFields（Version 20261009）に対応。BodyType・NeckLengthを読み取り、役職情報とともにデバッグ画面へ表示。

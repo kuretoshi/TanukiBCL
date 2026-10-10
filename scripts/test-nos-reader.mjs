@@ -250,13 +250,43 @@ try {
 		await new Promise((resolve) => setImmediate(resolve));
 		retrying.update(child.pid, 'lobby', read);
 		assert.equal(attempts, 1, 'Do not create snapshots repeatedly while initialization is pending');
-		time += 5000;
+		time += 999;
+		retrying.update(child.pid, 'lobby', read);
+		assert.equal(attempts, 1, 'Wait for the short retry deadline');
+		time += 1;
 		retrying.update(child.pid, 'lobby', read);
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(attempts, 2, 'Retry initialization in the same lobby');
 		retrying.update(child.pid, 'lobby', read);
 		await command('team');
 		assert.equal(retrying.update(child.pid, 'lobby', read).players[0].colorB, 0.75);
+		let failedAttempts = 0;
+		const gameStart = new NosSnapshotTracker(async () => {
+			failedAttempts++;
+			throw new Error('NoS data pending');
+		});
+		gameStart.update(child.pid, 'lobby', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		time += 1;
+		gameStart.update(child.pid, 'round', read);
+		assert.equal(failedAttempts, 2, 'Entering a round bypasses the lobby retry wait');
+		await new Promise((resolve) => setImmediate(resolve));
+		time += 999;
+		gameStart.update(child.pid, 'round', read);
+		assert.equal(failedAttempts, 2);
+		time += 1;
+		gameStart.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		time += 2000;
+		gameStart.update(child.pid, 'round', read);
+		await new Promise((resolve) => setImmediate(resolve));
+		time += 2999;
+		gameStart.update(child.pid, 'round', read);
+		assert.equal(failedAttempts, 4, 'Repeated failures never wait more than three seconds');
+		time += 1;
+		gameStart.update(child.pid, 'round', read);
+		assert.equal(failedAttempts, 5);
+		await new Promise((resolve) => setImmediate(resolve));
 	} finally {
 		Date.now = now;
 	}
@@ -314,11 +344,11 @@ try {
 		await new Promise((resolve) => setImmediate(resolve));
 		terminated.update(child.pid, 'round', read);
 		assert.equal(terminatedAttempts, 1);
-		time += 5000;
+		time += 1000;
 		terminated.update(child.pid, 'round', read);
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(terminatedAttempts, 2, 'Retry a terminated helper in the same round');
-		time += 9999;
+		time += 1999;
 		terminated.update(child.pid, 'round', read);
 		assert.equal(terminatedAttempts, 2, 'Back off after repeated helper failures');
 		time += 1;

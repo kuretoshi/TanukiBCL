@@ -22,13 +22,16 @@ function readFailureReason(error: unknown): string {
 }
 
 export class NosSnapshotTracker {
+	private static readonly initialRetryDelay = 1000;
+	private static readonly maxRetryDelay = 3000;
 	private pid = -1;
 	private layout?: NosLayout;
 	private request = 0;
 	private pending = false;
 	private retryAt = 0;
 	private failureSince?: number;
-	private retryDelay = 5000;
+	private retryDelay = NosSnapshotTracker.initialRetryDelay;
+	private retrySession = '';
 	private observedSession = '';
 	private publication = 0;
 	private publishedAt = 0;
@@ -48,7 +51,8 @@ export class NosSnapshotTracker {
 		this.pending = false;
 		this.retryAt = 0;
 		this.failureSince = undefined;
-		this.retryDelay = 5000;
+		this.retryDelay = NosSnapshotTracker.initialRetryDelay;
+		this.retrySession = '';
 		this.observedSession = '';
 		this.publication = 0;
 		this.publishedAt = 0;
@@ -77,6 +81,11 @@ export class NosSnapshotTracker {
 			this.reset();
 			this.pid = pid;
 		}
+		if (session !== this.retrySession) {
+			this.retrySession = session;
+			this.retryDelay = NosSnapshotTracker.initialRetryDelay;
+			if (!this.layout) this.retryAt = 0;
+		}
 		if (!this.layout && !this.pending && Date.now() >= this.retryAt) {
 			this.pending = true;
 			const request = ++this.request;
@@ -95,7 +104,7 @@ export class NosSnapshotTracker {
 						this.lastFailure = `NoS未取得: ${reason}`;
 						this.message = `NoS未取得: ${reason}（${this.retryDelay / 1000}秒後に自動再取得）`;
 						this.retryAt = Date.now() + this.retryDelay;
-						this.retryDelay = Math.min(this.retryDelay * 2, 30000);
+						this.retryDelay = Math.min(this.retryDelay * 2, NosSnapshotTracker.maxRetryDelay);
 					}
 				})
 				.finally(() => {
@@ -122,7 +131,7 @@ export class NosSnapshotTracker {
 				return undefined;
 			}
 			this.failureSince = undefined;
-			this.retryDelay = 5000;
+			this.retryDelay = NosSnapshotTracker.initialRetryDelay;
 			this.lastFailure = undefined;
 			this.message = 'NoSスナップショットを自動更新中';
 			return snapshot;
