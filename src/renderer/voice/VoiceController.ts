@@ -1,3 +1,5 @@
+import { HostVoiceAdmission } from '../HostVoiceAdmission';
+import { RemoteVoiceRoleInput, voiceRoleIdentity } from '../../common/RemoteVoiceRole';
 import packageJson from '../../../package.json';
 import { compareAppVersions, mismatchedAppVersions, requiredAppVersion } from '../../common/appVersion';
 import { AmongUsState, ClientBoolMap, GameState, numberStringMap, Player } from '../../common/AmongUsState';
@@ -69,6 +71,8 @@ const OVERLAY_VOICE_KEYS: (keyof VoiceSnapshot)[] = [
 ];
 
 const EMPTY_SNAPSHOT: VoiceSnapshot = {
+	remoteVoiceCode: '',
+	remoteVoiceConnected: false,
 	connected: false,
 	error: '',
 	versionWarning: '',
@@ -144,6 +148,10 @@ function emptyPrev() {
 }
 
 export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
+	private readonly remoteVoice = new RemoteVoiceRoleInput();
+	private readonly hostVoiceAdmission = new HostVoiceAdmission();
+	private remoteSourceSentAt = 0;
+	private remoteVoiceTimer?: ReturnType<typeof setInterval>;
 	private readonly audio = new AudioController();
 	private readonly connection = new ConnectionController();
 	private readonly mobileCosmetics = new MobileCosmetics();
@@ -287,6 +295,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		for (const unsubscribe of this.unsubscribers) unsubscribe();
 		this.unsubscribers = [];
 
+		this.disableRemoteVoice();
 		this.connection.stop();
 		this.mobileCosmetics.reset();
 		this.audio.stop();
@@ -313,6 +322,74 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.snapshot = preserveError && lastError ? { ...EMPTY_SNAPSHOT, error: lastError } : EMPTY_SNAPSHOT;
 		this.emit('change');
 	}
+
+	enableRemoteVoice = (): void => {
+		const state = gameStore.getSnapshot().gameState;
+		const identity = voiceRoleIdentity(
+			state,
+			state?.players.find((p) => p.isLocal)
+		);
+		if (!identity) return;
+		this.disableRemoteVoice();
+		this.remoteVoice.enable(identity, crypto.randomUUID().replace(/-/g, '').slice(0, 12));
+		this.audio.setRemoteVoiceInput(true);
+		this.patch({ remoteVoiceCode: this.remoteVoice.code, remoteVoiceConnected: false });
+		this.remoteVoiceTimer = setInterval(() => {
+			const game = gameStore.getSnapshot().gameState;
+			this.remoteVoice.sync(
+				voiceRoleIdentity(
+					game,
+					game?.players.find((p) => p.isLocal)
+				)
+			);
+			if (!this.remoteVoice.code) {
+				this.disableRemoteVoice();
+				return;
+			}
+			this.patch({ remoteVoiceConnected: this.snapshot.connected && this.remoteVoice.connected });
+			if (this.remoteVoice.pairedPeer && Date.now() - this.remoteSourceSentAt >= 750) {
+				this.remoteSourceSentAt = Date.now();
+				const me = game?.players.find((p) => p.isLocal);
+				if (me)
+					this.connection.signalTo(game.lobbyCode, {
+						type: 'nos-voice-source',
+						lobbyCode: game.lobbyCode,
+						playerId: me.id,
+						clientId: me.clientId,
+						peerId: this.remoteVoice.pairedPeer,
+					});
+			}
+		}, 250);
+	};
+
+	disableRemoteVoice = (): void => {
+		const revocation = this.remoteVoice.revocation;
+		if (revocation) {
+			this.connection.signalTo(this.remoteVoice.pairedPeer, { type: 'nos-voice-role', ack: revocation });
+			const player = gameStore.getSnapshot().gameState?.players.find((p) => p.isLocal);
+			if (player)
+				this.connection.emitId(
+					player.id,
+					player.clientId,
+					player.friendCode,
+					player.playerUid,
+					player.playerIdentifier
+				);
+			if (this.connection.ownSocketId)
+				this.connection.signalTo(revocation.lobbyCode, {
+					type: 'nos-voice-source',
+					lobbyCode: revocation.lobbyCode,
+					playerId: revocation.playerId,
+					clientId: revocation.clientId,
+					peerId: this.connection.ownSocketId,
+				});
+		}
+		if (this.remoteVoiceTimer) clearInterval(this.remoteVoiceTimer);
+		this.remoteVoiceTimer = undefined;
+		this.remoteVoice.clear();
+		this.audio.setRemoteVoiceInput(false);
+		this.patch({ remoteVoiceCode: '', remoteVoiceConnected: false });
+	};
 
 	toggleMute = (): void => this.audio.toggleMute();
 
@@ -405,6 +482,11 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			})
 		);
 
+		add(
+			this.audio.on('voiceRoleSample', (rms, active) => {
+				if (!this.remoteVoice.code) ipcRenderer.send(IpcMessages.NOS_VOICE_ROLE_SAMPLE, rms, active);
+			})
+		);
 		add(this.audio.on('error', (error) => this.patch({ error })));
 	}
 
@@ -524,6 +606,35 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 
 		add(this.connection.on('peerData', (peerId, data) => this.onPeerData(peerId, data)));
+		add(
+			this.connection.on('voiceRoleControl', (from, client, data) => {
+				const state = gameStore.getSnapshot().gameState;
+				if (data.type === 'nos-host-voice') {
+					if (!this.hostVoiceAdmission.accept(from, client, data, state)) return;
+					ipcRenderer.send('NOS_HOST_VOICE_SAMPLE', data.playerId, data.rms, data.active);
+					this.connection.signalTo(from, { type: 'nos-host-voice-ack' });
+					return;
+				}
+				const player = state?.players.find((p) => p.isLocal);
+				this.remoteVoice.sync(voiceRoleIdentity(state, player));
+				if (!this.remoteVoice.code) return;
+				if (data.release && this.remoteVoice.release(from, client, data.release)) {
+					this.disableRemoteVoice();
+					return;
+				}
+				if (data.request) {
+					const ack = this.remoteVoice.request(from, client, data.request, crypto.randomUUID().replace(/-/g, ''));
+					if (ack) this.connection.signalTo(from, { type: 'nos-voice-role', ack });
+					return;
+				}
+				if (!data.sample || !player || player.isDead) return;
+				const sample = this.remoteVoice.sample(from, client, data.sample);
+				if (!sample) return;
+				const jammed =
+					this.activeLobbySettings.nosFixerJammingVoiceBlock !== false && player.nosPlayer?.isJammed === true;
+				ipcRenderer.send(IpcMessages.NOS_VOICE_ROLE_SAMPLE, sample.rms, sample.active && !jammed);
+			})
+		);
 		add(this.connection.on('mobileDetected', () => this.mobileCosmetics.resend()));
 		add(this.connection.on('mobileCosmeticsRequested', (ids) => this.mobileCosmetics.resend(ids)));
 	}
@@ -747,6 +858,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 	private onGameState(state: AmongUsState): void {
 		if (!state) return;
+		this.audio.updateGameState(state);
 		const myPlayer = state.players?.find((player) => player.isLocal);
 		this.audio.setJammed(
 			state.mod === 'NoS' &&
@@ -1420,6 +1532,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				(this.playerConfigs[player.playerConfigId] ?? this.playerConfigs[player.nameHash])?.isMuted
 			) {
 				gain = 0;
+				this.audio.stopPeerDeathEcho(peerId);
 			}
 
 			if (gain > 0) {

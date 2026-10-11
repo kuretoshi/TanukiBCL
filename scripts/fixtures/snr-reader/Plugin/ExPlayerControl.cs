@@ -1,6 +1,7 @@
 namespace SuperNewRoles.Modules;
 
 public enum RoleId { Jackal = 11, Frankenstein = 137 }
+public enum FinalStatus { Alive, Push }
 [Flags]
 public enum ModifierRoleId { None = 0, JumboModifier = 16, TestModifier = 32 }
 
@@ -11,6 +12,9 @@ public sealed class ExPlayerControl
     static ExPlayerControl() => _exPlayerControlsArray = new ExPlayerControl[256];
 
     public byte PlayerId { get; private set; }
+    public object Player { get; } = new();
+    private FinalStatus? _finalStatus;
+    public FinalStatus FinalStatus { get => _finalStatus ?? FinalStatus.Alive; private set => _finalStatus = value; }
     public RoleId Role { get; private set; }
     public ModifierRoleId ModifierRole { get; private set; }
     public object roleBase { get; } = new();
@@ -34,6 +38,13 @@ public sealed class ExPlayerControl
     {
         switch (command)
         {
+            case "push":
+                _exPlayerControlsArray[3].FinalStatus = FinalStatus.Push;
+                SuperNewRoles.CustomObject.PushedPlayerDeadbody.Start(_exPlayerControlsArray[3].Player);
+                break;
+            case "push-end":
+                SuperNewRoles.CustomObject.PushedPlayerDeadbody.End();
+                break;
             case "grow":
                 ((SuperNewRoles.Roles.Modifiers.JumboAbility)_exPlayerControlsArray[3]._playerAbilities[0])._currentSize = 4f;
                 break;

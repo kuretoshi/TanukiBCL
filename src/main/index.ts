@@ -2,7 +2,7 @@ import electronUpdater from 'electron-updater';
 import { verifyDebugPassword } from './debugAuth';
 import { verifyRemoteDebugPassword } from './remoteDebugAuth';
 import { setVoiceDebugEnabled } from './GameReader';
-import { app, BrowserWindow, ipcMain, session, net, protocol, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, session, net, protocol, dialog, screen } from 'electron';
 import { copyFile } from 'node:fs/promises';
 import windowStateKeeper from 'electron-window-state';
 import { platform } from 'os';
@@ -20,6 +20,7 @@ import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 import { gameReader } from './hook';
+import { registerNosVoiceRoleBridge } from './nosVoiceRoleBridge';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
 import { findSnrCosmeticFile, SnrCosmeticPart } from './snrCosmetics';
@@ -40,7 +41,7 @@ const appVersion: string = rawAppVersion;
 const displayAppVersion: string = rawAppVersion === '3.1.6-20' ? '3.1.6-2' : rawAppVersion;
 const isLiteApp =
 	process.env.BETTERCREWLINK_LITE === '1' || /lite/i.test(process.execPath) || /lite/i.test(app.getName());
-const devTools = !isLiteApp && (isDevelopment || args.dev === 1);
+const devTools = !isLiteApp && args.devtools !== false && (isDevelopment || args.dev === 1);
 const appDisplayName = isLiteApp ? 'タヌキのベタクルLite' : 'タヌキのベタクル';
 const internalAppName = isLiteApp ? 'TanukiBCLLite' : 'TanukiBCL';
 app.setName(appDisplayName);
@@ -246,7 +247,10 @@ function createMainWindow() {
 		frame: false,
 		fullscreenable: false,
 		maximizable: true,
+		show: false,
 		webPreferences: {
+			// Voice-role heartbeats must stay at 50ms while the game has focus.
+			backgroundThrottling: false,
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: false,
@@ -255,6 +259,18 @@ function createMainWindow() {
 	});
 	mainWindowState.manage(window);
 	registerWindowLogging(window, 'main');
+	window.once('ready-to-show', () => {
+		if (args['center-window'] === true) {
+			const area = screen.getPrimaryDisplay().workArea;
+			const [width, height] = window.getSize();
+			window.setPosition(
+				area.x + Math.round((area.width - width) / 2),
+				area.y + Math.round((area.height - height) / 2)
+			);
+		}
+		window.show();
+		window.focus();
+	});
 
 	if (devTools) {
 		//Force devtools into detached mode otherwise they are unusable
@@ -652,6 +668,12 @@ if (!gotTheLock) {
 
 		initializeIpcListeners();
 		initializeIpcHandlers();
+		const nosVoiceRoleSender = registerNosVoiceRoleBridge(
+			ipcMain,
+			() => ({ pid: gameReader.pid, state: gameReader.lastState }),
+			(senderId) => global.mainWindow?.webContents.id === senderId
+		);
+		app.once('will-quit', () => nosVoiceRoleSender?.close());
 		initSettingsIpc();
 		global.mainWindow = createMainWindow();
 		if (isDevelopment && (voiceDebugEnabled || isDebugLoggingEnabled())) global.debugWindow = createDebugWindow();

@@ -1,7 +1,7 @@
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
-import { IpcRendererMessages } from '../../common/ipc-messages';
+import { IpcMessages, IpcRendererMessages } from '../../common/ipc-messages';
 import { pushToTalkOptions } from '../../common/pushToTalkOptions';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { TypedEmitter } from '../lib/TypedEmitter';
@@ -10,6 +10,7 @@ import SettingsStore from '../settings/SettingsStore';
 import { calculateVoiceAudio } from './spatialAudio';
 import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { createBerserkerEffect } from './berserkerEffect';
+import { createBibiriEcho, updateBibiriEcho, disconnectBibiriEcho, stopBibiriEcho } from './bibiriEcho';
 import { selectVoiceEffect, shouldApplyRainbowStarEcho, type VoiceEffectSetting } from './voiceEffectRules';
 import { createVoiceDisguiseEffect, updateVoiceDisguiseEffect } from '../voiceEffect';
 
@@ -28,6 +29,7 @@ interface VadNode {
 }
 
 interface AudioControllerEvents extends Record<string, unknown[]> {
+	voiceRoleSample: [rms: number, active: boolean];
 	talking: [boolean];
 	muteStateChanged: [muted: boolean, deafened: boolean];
 	peerAudioReady: [peerId: string];
@@ -53,6 +55,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private inputSource?: MediaStreamAudioSourceNode;
 	private inputDestination?: MediaStreamAudioDestinationNode;
 	private audioListener?: VadNode;
+	private remoteVoiceInput = false;
+	private voiceRoleAnalyser?: AnalyserNode;
+	private voiceRoleTimer?: ReturnType<typeof setInterval>;
 	private convolverBuffer: AudioBuffer | null = null;
 	private peers = new Map<string, PeerAudioNodes>();
 	private ipcHandlers: [string, (...args: unknown[]) => void][] = [];
@@ -184,6 +189,35 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const source = context.createMediaStreamSource(inputStream);
 		this.inputSource = source;
+		const voiceRoleAnalyser = context.createAnalyser();
+		voiceRoleAnalyser.fftSize = 2048;
+		voiceRoleAnalyser.smoothingTimeConstant = 0;
+		source.connect(voiceRoleAnalyser);
+		this.voiceRoleAnalyser = voiceRoleAnalyser;
+		const voiceRoleSamples = new Float32Array(voiceRoleAnalyser.fftSize);
+		this.voiceRoleTimer = setInterval(() => {
+			if (
+				this.lastGameState?.mod !== 'NoS' ||
+				(this.lastGameState.gameState !== GameState.TASKS &&
+					this.lastGameState.gameState !== GameState.DISCUSSION &&
+					this.lastGameState.gameState !== GameState.LOBBY)
+			)
+				return;
+			voiceRoleAnalyser.getFloatTimeDomainData(voiceRoleSamples);
+			let sum = 0;
+			for (const sample of voiceRoleSamples) sum += sample * sample;
+			const track = this.inputStream?.getAudioTracks()[0];
+			const active =
+				!!track &&
+				track.enabled &&
+				track.readyState === 'live' &&
+				!track.muted &&
+				!this.mutedState &&
+				!this.remoteVoiceInput &&
+				!this.deafenedState &&
+				!this.jammedState;
+			this.emit('voiceRoleSample', Math.min(1, Math.sqrt(sum / voiceRoleSamples.length)), active);
+		}, 50);
 
 		if (settings.microphoneGainEnabled || settings.micSensitivityEnabled) {
 			const microphoneGain = context.createGain();
@@ -221,6 +255,11 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private teardownInputChain(): void {
+		if (this.voiceRoleTimer) clearInterval(this.voiceRoleTimer);
+		this.voiceRoleTimer = undefined;
+		this.voiceRoleAnalyser?.disconnect();
+		this.voiceRoleAnalyser = undefined;
+		this.emit('voiceRoleSample', 0, false);
 		this.audioListener?.destroy();
 		this.audioListener = undefined;
 
@@ -344,7 +383,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		add(IpcRendererMessages.TOGGLE_MUTE, () => this.toggleMute());
 		add(IpcRendererMessages.PUSH_TO_TALK, (_: unknown, pressing: boolean) => {
 			if (this.pushToTalkMode === pushToTalkOptions.VOICE) return;
-			if (this.deafenedState || this.mutedState || this.jammedState) return;
+			if (this.remoteVoiceInput || this.deafenedState || this.mutedState || this.jammedState) return;
 			const track = this.inputStream?.getAudioTracks()[0];
 			if (!track) return;
 			track.enabled = this.pushToTalkMode === pushToTalkOptions.PUSH_TO_TALK ? pressing : !pressing;
@@ -358,16 +397,22 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.ipcHandlers = [];
 	}
 
+	setRemoteVoiceInput(enabled: boolean): void {
+		this.remoteVoiceInput = enabled;
+		this.applyTrackEnabled();
+	}
+
 	private applyTrackEnabled(): void {
 		const track = this.inputStream?.getAudioTracks()[0];
 		if (!track) return;
 		track.enabled =
+			!this.remoteVoiceInput &&
 			!this.deafenedState &&
 			!this.mutedState &&
 			!this.jammedState &&
 			this.pushToTalkMode !== pushToTalkOptions.PUSH_TO_TALK;
 		const outboundTrack = this.stream?.getAudioTracks()[0];
-		if (outboundTrack && outboundTrack !== track) outboundTrack.enabled = !this.jammedState;
+		if (outboundTrack && outboundTrack !== track) outboundTrack.enabled = !this.remoteVoiceInput && !this.jammedState;
 	}
 
 	setJammed(jammed: boolean): void {
@@ -393,6 +438,10 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	toggleDeafen(): void {
 		this.deafenedState = !this.deafenedState;
+		if (this.deafenedState)
+			for (const peer of this.peers.values()) {
+				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
+			}
 		this.applyTrackEnabled();
 		this.emit('muteStateChanged', this.mutedState, this.deafenedState);
 	}
@@ -460,6 +509,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		gain.connect(masterGain);
 
 		this.peers.set(peerId, {
+			bibiriEcho: createBibiriEcho(context, gain, masterGain),
 			voiceEffectConnected: false,
 			stream,
 			dummyAudioElement,
@@ -491,6 +541,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		peer.muffle?.disconnect();
 		disconnectRadioEcho(peer.radioEcho);
 		if (peer.starEcho) disconnectRadioEcho(peer.starEcho);
+		if (peer.bibiriEcho) disconnectBibiriEcho(peer.bibiriEcho);
 	}
 
 	private teardownAudioElement(element: HTMLAudioElement): void {
@@ -530,14 +581,37 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		for (const [peerId, peer] of this.peers) {
 			if (!peerIds.includes(peerId)) {
 				peer.gain.gain.value = 0;
+				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
 				this.clearVoiceEffect(peer);
 			}
+		}
+	}
+
+	updateGameState(state: AmongUsState): void {
+		if (state.mod !== 'NoS' || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION)) {
+			for (const peer of this.peers.values())
+				if (peer.bibiriEcho) updateBibiriEcho(peer.bibiriEcho, false, false, undefined);
+		}
+		if (this.lastGameState !== state) {
+			const previousState = this.lastGameState;
+			this.lastGameState = state;
+			if (state.map !== MapType.AIRSHIP || state.gameState !== GameState.TASKS) this.airshipSpawnUntil = 0;
+			else if (
+				(previousState?.gameState !== GameState.TASKS && state.oldGameState === GameState.DISCUSSION) ||
+				(previousState?.debug?.meetingHudState !== 4 && state.debug?.meetingHudState === 4)
+			)
+				this.airshipSpawnUntil = Date.now() + 15000;
 		}
 	}
 
 	setPeerGain(peerId: string, gain: number): void {
 		const peer = this.peers.get(peerId);
 		if (peer) peer.gain.gain.value = gain;
+	}
+
+	stopPeerDeathEcho(peerId: string): void {
+		const echo = this.peers.get(peerId)?.bibiriEcho;
+		if (echo) stopBibiriEcho(echo);
 	}
 
 	/**
@@ -558,18 +632,17 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
+		if (peer.bibiriEcho)
+			updateBibiriEcho(
+				peer.bibiriEcho,
+				state.mod === 'NoS' &&
+					!other.disconnected &&
+					(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
+				other.isDead,
+				state.nosBibiriEchoes?.find((e) => e.playerId === other.id)?.unixMs
+			);
 
 		const { pan, muffle } = peer;
-		if (this.lastGameState !== state) {
-			const previousState = this.lastGameState;
-			this.lastGameState = state;
-			if (state.map !== MapType.AIRSHIP || state.gameState !== GameState.TASKS) this.airshipSpawnUntil = 0;
-			else if (
-				(previousState?.gameState !== GameState.TASKS && state.oldGameState === GameState.DISCUSSION) ||
-				(previousState?.debug?.meetingHudState !== 4 && state.debug?.meetingHudState === 4)
-			)
-				this.airshipSpawnUntil = Date.now() + 15000;
-		}
 		const result = calculateVoiceAudio({
 			airshipSpawnFallback:
 				state.map === MapType.AIRSHIP && state.gameState === GameState.TASKS && Date.now() < this.airshipSpawnUntil,
@@ -585,9 +658,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			nosImpostorRadioHearable,
 		});
 
-		if (result.panMaxDistance !== null) {
-			pan.maxDistance = result.panMaxDistance;
-		}
+		// Restore the ordinary attenuation radius when a megaphone charge ends.
+		pan.maxDistance = result.panMaxDistance ?? this.maxDistance;
 
 		if (result.muffle) {
 			muffle.type = result.muffle.type;
@@ -696,6 +768,8 @@ function rebuildEffectChain(
 		}
 	}
 	peer.starEcho?.output.disconnect();
+	// Chain rebuilds disconnect gain, including this live audio tap.
+	if (peer.bibiriEcho) peer.gain.connect(peer.bibiriEcho.input);
 
 	const chain: AudioNode[] = [peer.gain];
 	if (wantVoiceEffect && peer.voiceEffect) {

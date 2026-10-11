@@ -4,6 +4,7 @@ import type { PitchShiftDirection } from '../voiceEffect';
 import type { SourceFilterParameters } from './sourceFilterEffect';
 import { hasSnrJumbo, isSnrJackalTeam } from '../../common/SnrRole';
 import { MapType } from '../../common/AmongusMap';
+import { chargingMegaphone } from './megaphoneVoice';
 
 export interface VoiceEffectSetting {
 	strength: number;
@@ -40,6 +41,18 @@ export function selectVoiceEffect(
 	radioClientIds?: readonly number[]
 ): VoiceEffectSetting | null {
 	if (other.isDead || other.disconnected || other.bugged || other.isDummy) return null;
+	const megaphone = chargingMegaphone(state, other);
+	if (megaphone && megaphone.voiceEffect !== false) {
+		const wave = Math.sin((Date.now() / 1000) * Math.PI * 8);
+		return {
+			strength: 0,
+			sourceFilter: {
+				pitch: 0.85 + wave * (0.12 + megaphone.energy * 0.2),
+				formant: 0.75 + wave * 0.12,
+				squash: 0.65,
+			},
+		};
+	}
 	// Citrus changes the actual outfit at meeting start, rather than BodyType.
 	// Keep the disguise throughout tasks and meetings while that outfit is visible.
 	if (

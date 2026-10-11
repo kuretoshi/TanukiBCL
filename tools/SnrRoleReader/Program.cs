@@ -12,6 +12,10 @@ try
     using var process = Process.GetProcessById(pid);
     if (process.ProcessName != "Among Us") throw new InvalidOperationException("Among Us process required");
     long started = process.StartTime.ToUniversalTime().Ticks;
+    if (args.Length > 1 && args[1] == "--push-watch") {
+        SnrPushWatcher.Run(pid, started, args.Length > 2 ? int.Parse(args[2]) : null, ReadEnums);
+        return;
+    }
     using var target = DataTarget.CreateSnapshotAndAttach(pid);
     var info = target.ClrVersions.FirstOrDefault() ?? throw new InvalidOperationException("CoreCLR not found");
     using var runtime = info.CreateRuntime();

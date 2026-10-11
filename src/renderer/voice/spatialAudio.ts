@@ -5,6 +5,7 @@ import { poseCollide } from '../../common/ColliderMap';
 import { isSnrJackal, isSnrSidekick, isSnrNeutralKiller } from '../../common/SnrRole';
 import { canTohHearGhosts } from '../../common/TohGhostRoles';
 import { withImpostorClassification } from '../../common/Impostor';
+import { chargingMegaphone, megaphoneGain, portableMegaphoneExtraRange } from './megaphoneVoice';
 
 export interface MuffleSetting {
 	type: BiquadFilterType;
@@ -65,21 +66,42 @@ function cameraPanPosition(state: AmongUsState, other: Player): [number, number]
 }
 
 export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
-	const { state, settings, activeLobbySettings, maxDistance, impostorRadioClientId } = input;
+	const { state, settings, activeLobbySettings, impostorRadioClientId } = input;
 	const useNosPositions = state.mod === 'NoS' && activeLobbySettings.nosVoicePositions === true;
 	const localPlayer = withImpostorClassification(state.mod, input.me);
 	const remotePlayer = withImpostorClassification(state.mod, input.other);
+	const falling = (player: Player) =>
+		state.mod === 'SUPER_NEW_ROLES' &&
+		state.gameState === GameState.TASKS &&
+		player.snrPushedFalling === true &&
+		player.isDead &&
+		!player.disconnected &&
+		!player.isDummy;
+	const localVoicePlayer = falling(localPlayer)
+		? { ...localPlayer, ...localPlayer.snrPushOrigin, isDead: false }
+		: localPlayer;
+	const remoteVoicePlayer = falling(remotePlayer)
+		? { ...remotePlayer, ...remotePlayer.snrPushOrigin, isDead: false }
+		: remotePlayer;
 	const me =
-		useNosPositions && state.nosLocalMicPosition ? { ...localPlayer, ...state.nosLocalMicPosition } : localPlayer;
+		useNosPositions && state.nosLocalMicPosition
+			? { ...localVoicePlayer, ...state.nosLocalMicPosition }
+			: localVoicePlayer;
 	const other =
-		useNosPositions && remotePlayer.nosPlayer
-			? { ...remotePlayer, x: remotePlayer.nosPlayer.speakerPositionX, y: remotePlayer.nosPlayer.speakerPositionY }
-			: remotePlayer;
+		useNosPositions && remoteVoicePlayer.nosPlayer
+			? {
+					...remoteVoicePlayer,
+					x: remoteVoicePlayer.nosPlayer.speakerPositionX,
+					y: remoteVoicePlayer.nosPlayer.speakerPositionY,
+				}
+			: remoteVoicePlayer;
 
+	const extraRange = me.isDead ? 0 : portableMegaphoneExtraRange(state, other);
+	const maxDistance = input.maxDistance + extraRange;
 	const result: VoiceAudioResult = {
 		gain: 0,
 		panPosition: null,
-		panMaxDistance: null,
+		panMaxDistance: extraRange > 0 ? maxDistance : null,
 		muffle: null,
 		reverb: null,
 		radioEcho: false,
@@ -96,6 +118,22 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	}
 
 	let panPos: [number, number] = [other.x - me.x, other.y - me.y];
+	const megaphone = chargingMegaphone(state, other);
+	if (megaphone && !me.isDead && !activeLobbySettings.deadOnly) {
+		const commsBlocked = activeLobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor;
+		const jammedLowpass =
+			activeLobbySettings.nosFixerJammingLowpass === true &&
+			activeLobbySettings.nosFixerJammingVoiceBlock === false &&
+			(me.nosPlayer?.isJammed === true || other.nosPlayer?.isJammed === true);
+		return {
+			gain: commsBlocked ? 0 : megaphoneGain(megaphone.range, other.x - me.x, other.y - me.y),
+			panPosition: settings.enableSpatialAudio ? panPos : [0, 0],
+			panMaxDistance: megaphone.range,
+			muffle: jammedLowpass ? { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 } : false,
+			reverb: false,
+			radioEcho: false,
+		};
+	}
 	let endGain = 0;
 	let wallCheckEnabled = false;
 	let skipDistanceCheck = false;
@@ -259,6 +297,7 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	if (!other.isDead || state.gameState !== GameState.TASKS || !canHearGhosts || me.isDead) {
 		result.reverb = false;
 	}
+	if (falling(remotePlayer) && !meetingFallback) result.reverb = true;
 
 	if (activeLobbySettings.deadOnly) {
 		panPos = [0, 0];

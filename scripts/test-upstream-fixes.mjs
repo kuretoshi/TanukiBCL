@@ -133,18 +133,35 @@ assert.equal(
 assert.equal(spatial({ other: { ...other, nosPlayer: { isJammed: true } } }).gain, 1);
 const fixerLowpass = { ...lobby, nosFixerJammingVoiceBlock: false, nosFixerJammingLowpass: true };
 for (const gameState of [GameState.TASKS, GameState.DISCUSSION]) {
-	for (const jamMe of [false, true]) for (const jamOther of [false, true]) {
-		const result = spatial({ state: { ...nosVoice, gameState }, activeLobbySettings: fixerLowpass,
-			me: { ...me, nosPlayer: { isJammed: jamMe } }, other: { ...other, nosPlayer: { isJammed: jamOther } } });
-		assert.equal(result.gain, 1, 'low-pass mode preserves audible voice');
-		assert.deepEqual(result.muffle, jamMe || jamOther
-			? { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 } : false);
-	}
+	for (const jamMe of [false, true])
+		for (const jamOther of [false, true]) {
+			const result = spatial({
+				state: { ...nosVoice, gameState },
+				activeLobbySettings: fixerLowpass,
+				me: { ...me, nosPlayer: { isJammed: jamMe } },
+				other: { ...other, nosPlayer: { isJammed: jamOther } },
+			});
+			assert.equal(result.gain, 1, 'low-pass mode preserves audible voice');
+			assert.deepEqual(
+				result.muffle,
+				jamMe || jamOther ? { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 } : false
+			);
+		}
 }
-assert.equal(spatial({ state: nosVoice, activeLobbySettings: { ...fixerLowpass, nosFixerJammingVoiceBlock: true },
-	other: { ...other, nosPlayer: { isJammed: true } } }).gain, 0, 'blocking wins for inconsistent imported settings');
-assert.equal(spatial({ activeLobbySettings: fixerLowpass,
-	other: { ...other, nosPlayer: { isJammed: true } } }).muffle, false, 'NoS-only filter');
+assert.equal(
+	spatial({
+		state: nosVoice,
+		activeLobbySettings: { ...fixerLowpass, nosFixerJammingVoiceBlock: true },
+		other: { ...other, nosPlayer: { isJammed: true } },
+	}).gain,
+	0,
+	'blocking wins for inconsistent imported settings'
+);
+assert.equal(
+	spatial({ activeLobbySettings: fixerLowpass, other: { ...other, nosPlayer: { isJammed: true } } }).muffle,
+	false,
+	'NoS-only filter'
+);
 assert.equal(spatial({ other: { ...other, x: 50 } }).gain, 0);
 assert.equal(
 	spatial({ state: { ...state, map: MapType.AIRSHIP, airshipMeetingByOutfit: true }, other: { ...other, x: 50 } }).gain,
@@ -857,6 +874,7 @@ const airshipTasks = {
 };
 const distantGhost = { ...other, isDead: true, x: 20 };
 const hauntedRadioLobby = { ...lobby, impostorRadioOnlyMode: true, haunting: true, voiceEffectEnabled: false };
+audio.updateGameState(airshipTasks);
 audio.applyVoiceAudio(
 	'second',
 	airshipTasks,
@@ -946,13 +964,28 @@ const starPeer = peer();
 const fixerPeer = peer();
 audio.peers.set('fixer-test', fixerPeer);
 const jammedSpeaker = { ...other, appearanceName: other.name, nosPlayer: { isJammed: true } };
-audio.applyVoiceAudio('fixer-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, fixerLowpass, me, jammedSpeaker, -1);
+audio.applyVoiceAudio(
+	'fixer-test',
+	{ ...nosVoiceState, gameState: GameState.DISCUSSION },
+	settings,
+	fixerLowpass,
+	me,
+	jammedSpeaker,
+	-1
+);
 assert.equal(fixerPeer.muffleConnected, true);
 assert.equal(fixerPeer.muffle.type, 'lowpass');
 assert.equal(fixerPeer.muffle.frequency.value, 1200);
 assert.ok(fixerPeer.gain.connections.has(fixerPeer.muffle));
-audio.applyVoiceAudio('fixer-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, fixerLowpass, me,
-	{ ...jammedSpeaker, nosPlayer: { isJammed: false } }, -1);
+audio.applyVoiceAudio(
+	'fixer-test',
+	{ ...nosVoiceState, gameState: GameState.DISCUSSION },
+	settings,
+	fixerLowpass,
+	me,
+	{ ...jammedSpeaker, nosPlayer: { isJammed: false } },
+	-1
+);
 assert.equal(fixerPeer.muffleConnected, false);
 assert.equal(fixerPeer.muffle.connections.size, 0);
 assert.ok(fixerPeer.gain.connections.has(audio.masterGain));
@@ -965,23 +998,45 @@ assert.equal(starPeer.starEcho.delay.delayTime.value, 0.075);
 assert.equal(starPeer.starEcho.wet.gain.value, 0.08);
 assert.ok(starPeer.gain.connections.has(starPeer.starEcho.input));
 assert.ok(starPeer.starEcho.output.connections.has(audio.masterGain));
-audio.applyVoiceAudio('star-test', { ...nosVoiceState, gameState: GameState.DISCUSSION }, settings, lobby, me, rainbowPlayer, -1);
+audio.applyVoiceAudio(
+	'star-test',
+	{ ...nosVoiceState, gameState: GameState.DISCUSSION },
+	settings,
+	lobby,
+	me,
+	rainbowPlayer,
+	-1
+);
 assert.equal(starPeer.starEchoConnected, true);
 const starEcho = starPeer.starEcho;
 for (const isRainbowStar of [false, undefined, null]) {
-	audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me,
-		{ ...rainbowPlayer, nosRole: { isRainbowStar } }, -1);
+	audio.applyVoiceAudio(
+		'star-test',
+		nosVoiceState,
+		settings,
+		lobby,
+		me,
+		{ ...rainbowPlayer, nosRole: { isRainbowStar } },
+		-1
+	);
 	assert.equal(starPeer.starEchoConnected, false);
 	assert.equal(starEcho.output.connections.size, 0);
 	assert.ok(starPeer.gain.connections.has(audio.masterGain));
 }
-audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me,
-	{ ...rainbowPlayer, nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } }, -1);
+audio.applyVoiceAudio(
+	'star-test',
+	nosVoiceState,
+	settings,
+	lobby,
+	me,
+	{ ...rainbowPlayer, nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } },
+	-1
+);
 assert.equal(starPeer.starEchoConnected, true);
 assert.equal(starPeer.voiceEffectConnected, true);
 assert.ok(starPeer.voiceEffect.output.connections.has(starEcho.input));
 audio.removePeer('star-test');
-assert.ok(Object.values(starEcho).every(node => node.connections.size === 0));
+assert.ok(Object.values(starEcho).every((node) => node.connections.size === 0));
 console.log(
 	'ok audio graph: effects release, source/filter mode switches, unavailable-worklet fallback and independent peer cleanup'
 );
@@ -1137,6 +1192,8 @@ const switchingReader = {
 	loadedMod: modList.find((m) => m.id === 'SUPER_NEW_ROLES'),
 	loadedMods: ['old.dll'],
 	snrRoles: { reset() {} },
+	snrPush: { reset() {} },
+	snrVoiceOrigins: new Map(),
 	tohRoles: { reset() {} },
 	nosSnapshot: { reset() {} },
 	nosPalette: { reset() {} },
@@ -1181,6 +1238,8 @@ reconnectReader.nosSnapshot = { reset() {} };
 reconnectReader.nosPalette = { reset() {} };
 reconnectReader.nosRoles = { reset() {} };
 reconnectReader.tohRoles = { reset() {} };
+reconnectReader.snrPush = { reset() {} };
+reconnectReader.snrVoiceOrigins = new Map();
 const reconnectEvents = [];
 Object.assign(reconnectReader, {
 	amongUs: {},

@@ -1,3 +1,4 @@
+import { VoiceRoleSources } from '../../common/VoiceRoleSource';
 import { ConnectionQuality, ConnectionQualitySampler } from './connectionQuality';
 import io, { Socket } from 'socket.io-client';
 import { Client, GameState, SocketClientMap, numberStringMap } from '../../common/AmongUsState';
@@ -49,6 +50,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	serverQuality: [quality: ConnectionQuality | undefined];
 	peerData: [peerId: string, data: Record<string, unknown>];
 	vad: [clientId: number, activity: boolean];
+	voiceRoleControl: [from: string, client: Client | undefined, data: Record<string, unknown>];
 	mobileDetected: [];
 	mobileCosmeticsRequested: [ids: string[]];
 	lobbyReset: [];
@@ -69,6 +71,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 	private peerConnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private peerRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private peerRetryAttempts = new Map<string, number>();
+	private readonly voiceRoleSources = new VoiceRoleSources();
 	private clients: SocketClientMap = {};
 	private mobileBeaconTimer?: ReturnType<typeof setTimeout>;
 	private mobileRunning = false;
@@ -102,13 +105,16 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 	get socketClients(): SocketClientMap {
 		return this.clients;
 	}
+	get ownSocketId(): string | undefined {
+		return this.socket?.id;
+	}
 
 	get playerSocketIds(): numberStringMap {
 		const map: numberStringMap = {};
 		for (const socketId of Object.keys(this.clients)) {
 			map[this.clients[socketId].clientId] = socketId;
 		}
-		return map;
+		return this.voiceRoleSources.apply(map, this.clients);
 	}
 
 	get isMobileRunning(): boolean {
@@ -134,6 +140,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		socket.on('error', (error: SocketError) => {
 			if (error.message) this.emit('error', error.message);
 			console.error('socketIO error:', error);
+			this.voiceRoleSources.clear();
 			this.currentLobby = 'MENU';
 		});
 
@@ -199,6 +206,15 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		});
 
 		socket.on('signal', ({ data, from, client }: { data: SignalData; from: string; client: Client }) => {
+			if ((data as { type?: string }).type === 'nos-voice-source') {
+				if (this.voiceRoleSources.receive(client, data, this.context.lobbyCode, this.clients))
+					this.emit('socketClients', this.clients);
+				return;
+			}
+			if (['nos-voice-role', 'nos-host-voice'].includes((data as { type: string }).type)) {
+				this.emit('voiceRoleControl', from, client, data as unknown as Record<string, unknown>);
+				return;
+			}
 			if (
 				(data as { type?: string }).type === 'bcl-control' &&
 				typeof (data as { payload?: unknown }).payload === 'string' &&
@@ -266,6 +282,7 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 			this.removeAllListeners();
 			return;
 		}
+		this.voiceRoleSources.clear();
 		this.started = false;
 
 		if (this.mobileBeaconTimer) {
@@ -334,11 +351,13 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		this.socket.emit('leave');
 		this.socket.emit('id', playerId, clientId, friendCode, playerUid, playerIdentifier);
 		this.socket.emit('join', lobbyCode, playerId, clientId, isHost);
+		this.voiceRoleSources.clear();
 		this.currentLobby = lobbyCode;
 		this.emit('lobbyReset');
 	}
 
 	leaveLobby(): void {
+		this.voiceRoleSources.clear();
 		this.currentLobby = 'MENU';
 		this.socket?.emit('leave');
 		this.destroyAllPeers();
@@ -500,12 +519,13 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		connectionId: string | undefined = initiator ? crypto.randomUUID() : undefined
 	): PeerConnection {
 		this.destroyPeer(peer);
-		// A player refreshing gets a new socket ID. Retire the old socket's retries too.
+		// Retire refreshed sockets, retaining an explicitly paired phone across PC reconnects.
 		const clients = { ...this.clients };
-		for (const [otherPeer, otherClient] of Object.entries(this.clients)) {
-			if (otherPeer !== peer && otherClient.clientId === client.clientId) delete clients[otherPeer];
+		const preferred = this.voiceRoleSources.apply({}, clients)[client.clientId];
+		for (const [oldPeer, oldClient] of Object.entries(clients)) {
+			if (oldPeer !== peer && oldClient.clientId === client.clientId && oldPeer !== preferred) delete clients[oldPeer];
 		}
-		this.setClients(clients);
+		this.setClients({ ...clients, [peer]: client });
 
 		const config = SettingsStore.store.natFix ? DEFAULT_ICE_CONFIG_TURN : this.iceConfig;
 		const connection = new PeerConnection({

@@ -4,6 +4,7 @@ import type { SnrLiveRole } from './SnrRole';
 import type { NosPlayerData, NosRadioData } from './NosSnapshot';
 import type { TohRole, TohRoleDefinition } from './TohRole';
 import type { NosRole } from './NosRole';
+import type { MegaphoneState } from './MegaphoneState';
 
 export interface AmongUsState {
 	gameState: GameState;
@@ -32,6 +33,9 @@ export interface AmongUsState {
 	nosLoadedContents?: { path: string; status: string; data?: unknown };
 	nosLocalMicPosition?: { x: number; y: number };
 	nosRadios?: NosRadioData[];
+	nosMegaphones?: MegaphoneState[];
+	nosPortableMegaphones?: { playerId: number; extraRange: number }[];
+	nosBibiriEchoes?: { playerId: number; unixMs: number }[];
 	debug?: {
 		rawGameState: number;
 		meetingHud: number;
@@ -88,6 +92,9 @@ export interface Player {
 	roleTeam: number;
 	roleName: string;
 	snrRole?: SnrLiveRole;
+	/** True only while SNR's pushed-player animation is alive. */
+	snrPushedFalling?: boolean;
+	snrPushOrigin?: { x: number; y: number };
 	snrHat2Id?: string;
 	snrVisor2Id?: string;
 	nosPlayer?: NosPlayerData;

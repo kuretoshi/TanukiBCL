@@ -1,5 +1,8 @@
 import { app } from 'electron';
 import { normalizeMeetingState } from '../common/meetingState';
+import { readMegaphoneState } from './megaphoneState';
+import { readPortableMegaphoneState } from './portableMegaphoneState';
+import { readBibiriEchoState } from './bibiriEchoState';
 import { GameInfo } from '../common/GameInfo';
 import memoryjs from 'memoryjs';
 import type { DataType, ModuleObject, ProcessObject } from 'memoryjs';
@@ -34,6 +37,7 @@ import { getVariantStoreName, isLiteRuntime } from '../common/appVariant';
 import { getAppArgs } from './args';
 import { readSnrRoles } from './snrRoleReader';
 import { SnrLiveTracker } from './snrLiveTracker';
+import { SnrPushTracker } from './snrPushTracker';
 import { formatSnrRole } from '../common/SnrRole';
 import { formatNosTeam } from '../common/NosSnapshot';
 import { formatNosRole, type NosRole } from '../common/NosRole';
@@ -139,6 +143,8 @@ export default class GameReader {
 	debugBaselines: Record<string, Record<number, number>> = {};
 	nativeReadFailureCount = 0;
 	private snrRoles = new SnrLiveTracker((pid) => readSnrRoles(pid, this.is_64bit));
+	private snrPush = new SnrPushTracker();
+	private snrVoiceOrigins = new Map<number, { x: number; y: number }>();
 	nosContents = new NosContentsTracker();
 	private readonly cosmeticsEnabled = !isLiteRuntime();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
@@ -182,6 +188,8 @@ export default class GameReader {
 		const reset = this.amongUs && processesOpen.filter((o) => o.th32ProcessID === this.pid).length === 0;
 		if (!this.amongUs || reset) {
 			this.snrRoles.reset();
+			this.snrPush.reset();
+			this.snrVoiceOrigins.clear();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
 			this.nosRoles.reset();
@@ -198,6 +206,8 @@ export default class GameReader {
 			}
 		} else if (this.amongUs && (processesOpen.length === 0 || reset)) {
 			this.snrRoles.reset();
+			this.snrPush.reset();
+			this.snrVoiceOrigins.clear();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
 			this.nosRoles.reset();
@@ -466,18 +476,26 @@ export default class GameReader {
 			if (snrActive && !this.snrInGame) this.snrRound++;
 			this.snrInGame = snrActive;
 			if (this.loadedMod.id === 'SUPER_NEW_ROLES' && !this.is_linux) {
+				const falling = state === GameState.TASKS ? this.snrPush.update(this.pid, this.is_64bit) : [];
+				if (state !== GameState.TASKS) this.snrPush.reset();
+				if (state !== GameState.TASKS) this.snrVoiceOrigins.clear();
 				const roles = snrActive
 					? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
 							readBuffer(this.amongUs!.handle, address, size)
 						)
 					: new Map();
 				for (const player of players) {
+					this.applySnrPushState(player, falling);
 					player.snrRole = player.disconnected ? undefined : roles.get(player.id);
 					player.snrHat2Id = player.snrRole?.hat2Id;
 					player.snrVisor2Id = player.snrRole?.visor2Id;
 					player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
 				}
-			} else this.snrRoles.reset();
+			} else {
+				this.snrRoles.reset();
+				this.snrPush.reset();
+				this.snrVoiceOrigins.clear();
+			}
 			if (this.loadedMod.id === 'TOH4E' && !this.is_linux && (state === GameState.LOBBY || snrActive)) {
 				const roles = this.tohRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
 					readBuffer(this.amongUs!.handle, address, size)
@@ -544,6 +562,14 @@ export default class GameReader {
 						: undefined,
 				nosLocalMicPosition: nos?.localMicPosition,
 				nosRadios: nos?.radios,
+				nosBibiriEchoes:
+					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
+						? readBibiriEchoState(this.pid)
+						: undefined,
+				nosMegaphones:
+					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readMegaphoneState(this.pid) : undefined,
+				nosPortableMegaphones:
+					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readPortableMegaphoneState(this.pid) : undefined,
 				lobbyCode: lobbyCode,
 				lobbyCodeInt,
 				players,
@@ -756,6 +782,12 @@ export default class GameReader {
 		}
 	}
 
+	private applySnrPushState(player: Player, falling: readonly number[]): void {
+		player.snrPushedFalling = !player.disconnected && falling.includes(player.id);
+		if (!player.isDead && !player.disconnected) this.snrVoiceOrigins.set(player.id, { x: player.x, y: player.y });
+		player.snrPushOrigin = player.snrPushedFalling ? this.snrVoiceOrigins.get(player.id) : undefined;
+	}
+
 	private applyNosRoles(players: Player[], roles: ReadonlyMap<number, NosRole>, publishedBody: boolean): void {
 		for (const player of players) {
 			const role = player.disconnected ? undefined : roles.get(player.id);
@@ -811,6 +843,8 @@ export default class GameReader {
 
 	private resetAmongUsProcess(): void {
 		this.snrRoles.reset();
+		this.snrPush.reset();
+		this.snrVoiceOrigins.clear();
 		this.tohRoles.reset();
 		this.nosSnapshot.reset();
 		this.nosRoles.reset();

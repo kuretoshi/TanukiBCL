@@ -10,6 +10,7 @@ export interface ExtendedAudioElement extends HTMLAudioElement {
 }
 
 export interface PeerAudioNodes {
+	bibiriEcho?: ReturnType<typeof import('./bibiriEcho').createBibiriEcho>;
 	voiceEffect?: VoiceProcessingEffect;
 	voiceEffectConnected: boolean;
 	stream: MediaStream;
@@ -64,6 +65,8 @@ export const DEFAULT_ICE_CONFIG_TURN: RTCConfiguration = {
 export { defaultLobbySettings } from '../../common/defaultLobbySettings';
 
 export interface VoiceSnapshot {
+	remoteVoiceCode: string;
+	remoteVoiceConnected: boolean;
 	versionWarning: string;
 	connected: boolean;
 	error: string;

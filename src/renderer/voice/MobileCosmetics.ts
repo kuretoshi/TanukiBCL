@@ -2,7 +2,7 @@ import { AmongUsState, Player } from '../../common/AmongUsState';
 
 type Parts = NonNullable<Player['nosCosmetics']>;
 type Asset = { id: string; png: string };
-type MobileFrame = { gameState: AmongUsState; nosCosmeticAssets?: Record<string, string> };
+type MobileFrame = { gameState: AmongUsState; nosCosmeticAssets?: Record<string, string>; nosVoiceFrameTime?: number };
 const MAX_IMAGE_BYTES = 192 * 1024;
 const MAX_CACHE_BYTES = 8 * 1024 * 1024;
 
@@ -43,6 +43,7 @@ export class MobileCosmetics {
 		const players = state.players.map((player) => this.webPlayer(player, state.mod === 'NoS', active));
 		return {
 			gameState: { ...state, players, nosLoadedContents: undefined },
+			nosVoiceFrameTime: state.mod === 'NoS' ? Date.now() : undefined,
 			nosCosmeticAssets: this.nextAssets(active),
 		};
 	}

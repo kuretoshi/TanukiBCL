@@ -2,6 +2,7 @@ import type { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
 
 // Renderer --> Main (send/on)
 export enum IpcMessages {
+	NOS_VOICE_ROLE_SAMPLE = 'NOS_VOICE_ROLE_SAMPLE',
 	SHOW_ERROR_DIALOG = 'SHOW_ERROR_DIALOG',
 	OPEN_AMONG_US_GAME = 'OPEN_AMONG_US_GAME',
 	REQUEST_PLATFORMS_AVAILABLE = 'REQUEST_PLATFORMS_AVAILABLE',
