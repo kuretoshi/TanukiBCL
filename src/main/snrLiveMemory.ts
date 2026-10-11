@@ -22,7 +22,7 @@ interface NumberField {
 
 export interface SnrLiveLayout {
 	pid: number;
-	pointerSize: 4;
+	pointerSize: 4 | 8;
 	arraySlot: number;
 	arrayType: number;
 	playerType: number;
@@ -35,7 +35,11 @@ export interface SnrLiveLayout {
 export function isSnrLiveLayout(value: unknown, pid: number): value is SnrLiveLayout {
 	if (!value || typeof value !== 'object') return false;
 	const v = value as SnrLiveLayout;
-	const pointer = (n: number) => Number.isInteger(n) && n >= 0x10000 && n <= 0xfffffffc && n % 4 === 0;
+	const pointer = (n: number) =>
+		Number.isSafeInteger(n) &&
+		n >= 0x10000 &&
+		(v.pointerSize === 8 || n <= 0xfffffffc) &&
+		n % v.pointerSize === 0;
 	const field = (f: NumberField | null, required = false) =>
 		f == null
 			? !required
@@ -48,12 +52,14 @@ export function isSnrLiveLayout(value: unknown, pid: number): value is SnrLiveLa
 					(typeof f.names === 'object' && Object.values(f.names).every((n) => typeof n === 'string')));
 	return (
 		v.pid === pid &&
-		v.pointerSize === 4 &&
+		(v.pointerSize === 4 || v.pointerSize === 8) &&
 		pointer(v.arraySlot) &&
 		pointer(v.arrayType) &&
 		pointer(v.playerType) &&
-		v.arrayLengthOffset === 4 &&
-		v.arrayDataOffset === 8 &&
+		v.arrayLengthOffset === v.pointerSize &&
+		v.arrayDataOffset >= v.pointerSize + 4 &&
+		v.arrayDataOffset <= 32 &&
+		v.arrayDataOffset % v.pointerSize === 0 &&
 		(v.jumbo == null ||
 			(['abilityType', 'dataType', 'listType', 'itemsType'].every((key) =>
 				pointer(v.jumbo![key as keyof JumboLayout])
@@ -75,9 +81,15 @@ export function readSnrLiveRoles(
 	layout: SnrLiveLayout,
 	read: (address: number, size: number) => Buffer
 ): Map<number, SnrLiveRole> {
-	const pointer = (address: number) => read(address, 4).readUInt32LE(0);
+	const pointer = (address: number) => {
+		const bytes = read(address, layout.pointerSize);
+		return layout.pointerSize === 8 ? Number(bytes.readBigUInt64LE(0)) : bytes.readUInt32LE(0);
+	};
 	const validPointer = (address: number) =>
-		Number.isInteger(address) && address >= 0x10000 && address <= 0xfffffffc && address % 4 === 0;
+		Number.isSafeInteger(address) &&
+		address >= 0x10000 &&
+		(layout.pointerSize === 8 || address <= 0xfffffffc) &&
+		address % layout.pointerSize === 0;
 	const readJumbo = (player: number): SnrLiveRole['jumbo'] => {
 		const j = layout.jumbo;
 		if (!j) return undefined;
@@ -85,12 +97,18 @@ export function readSnrLiveRoles(
 			const list = pointer(player + j.abilitiesOffset);
 			if (!validPointer(list) || pointer(list) !== j.listType) return undefined;
 			const items = pointer(list + j.itemsOffset);
-			const count = pointer(list + j.countOffset);
-			if (!validPointer(items) || pointer(items) !== j.itemsType || count > 512 || count > pointer(items + 4))
+			const count = read(list + j.countOffset, 4).readUInt32LE(0);
+			if (
+				!validPointer(items) ||
+				pointer(items) !== j.itemsType ||
+				count > 512 ||
+				count > read(items + layout.arrayLengthOffset, 4).readUInt32LE(0)
+			)
 				return undefined;
-			const entries = read(items + 8, count * 4);
+			const entries = read(items + layout.arrayDataOffset, count * layout.pointerSize);
 			for (let i = 0; i < count; i++) {
-				const ability = entries.readUInt32LE(i * 4);
+				const ability =
+					layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(i * 8)) : entries.readUInt32LE(i * 4);
 				if (!validPointer(ability) || pointer(ability) !== j.abilityType) continue;
 				const data = pointer(ability + j.dataOffset);
 				if (!validPointer(data) || pointer(data) !== j.dataType) return undefined;
@@ -103,9 +121,9 @@ export function readSnrLiveRoles(
 					pointer(player + j.abilitiesOffset) !== list ||
 					pointer(list) !== j.listType ||
 					pointer(list + j.itemsOffset) !== items ||
-					pointer(list + j.countOffset) !== count ||
+					read(list + j.countOffset, 4).readUInt32LE(0) !== count ||
 					pointer(items) !== j.itemsType ||
-					!read(items + 8, count * 4).equals(entries) ||
+					!read(items + layout.arrayDataOffset, count * layout.pointerSize).equals(entries) ||
 					pointer(ability) !== j.abilityType ||
 					pointer(ability + j.dataOffset) !== data ||
 					pointer(data) !== j.dataType
@@ -123,10 +141,10 @@ export function readSnrLiveRoles(
 		if (
 			!validPointer(array) ||
 			pointer(array) !== layout.arrayType ||
-			pointer(array + layout.arrayLengthOffset) !== 256
+			read(array + layout.arrayLengthOffset, 4).readUInt32LE(0) !== 256
 		)
 			throw new Error('SNR player array changed or is unavailable');
-		const entries = read(array + layout.arrayDataOffset, 256 * 4);
+		const entries = read(array + layout.arrayDataOffset, 256 * layout.pointerSize);
 		const result = new Map<number, SnrLiveRole>();
 		const fields = Object.values(layout.fields).filter((f): f is NumberField => f !== null);
 		const size = Math.max(...fields.map((f) => f.offset + f.size));
@@ -151,11 +169,15 @@ export function readSnrLiveRoles(
 			return { value, name };
 		};
 		for (let id = 0; id < 256; id++) {
-			const player = entries.readUInt32LE(id * 4);
+			const player =
+				layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(id * 8)) : entries.readUInt32LE(id * 4);
 			if (!player) continue;
 			if (!validPointer(player)) throw new Error('Invalid SNR player pointer');
 			const bytes = read(player, size);
-			if (bytes.readUInt32LE(0) !== layout.playerType || describe(bytes, layout.fields.playerId)?.value !== id)
+			if (
+				(layout.pointerSize === 8 ? Number(bytes.readBigUInt64LE(0)) : bytes.readUInt32LE(0)) !== layout.playerType ||
+				describe(bytes, layout.fields.playerId)?.value !== id
+			)
 				throw new Error('SNR player changed during read');
 			const role: SnrLiveRole = {
 				role: describe(bytes, layout.fields.role)!,
@@ -165,7 +187,10 @@ export function readSnrLiveRoles(
 			if (hasSnrJumbo(role)) role.jumbo = readJumbo(player);
 			result.set(id, role);
 		}
-		if (pointer(layout.arraySlot) !== array || !read(array + layout.arrayDataOffset, 1024).equals(entries))
+		if (
+			pointer(layout.arraySlot) !== array ||
+			!read(array + layout.arrayDataOffset, 256 * layout.pointerSize).equals(entries)
+		)
 			throw new Error('SNR player array changed during read');
 		return result;
 	};

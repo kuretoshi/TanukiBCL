@@ -138,7 +138,7 @@ export default class GameReader {
 	initPatternDebug = '';
 	debugBaselines: Record<string, Record<number, number>> = {};
 	nativeReadFailureCount = 0;
-	private snrRoles = new SnrLiveTracker(readSnrRoles);
+	private snrRoles = new SnrLiveTracker((pid) => readSnrRoles(pid, this.is_64bit));
 	nosContents = new NosContentsTracker();
 	private readonly cosmeticsEnabled = !isLiteRuntime();
 	private nosSnapshot = new NosSnapshotTracker((pid) => resolveNosSnapshot(pid, 'layout', this.is_64bit));
@@ -1792,8 +1792,8 @@ export default class GameReader {
 			inVent: this.readMemory<number>('byte', data.objectPtr, this.offsets.player.inVent) > 0,
 			isLocal,
 			isDummy,
-			x: x_round || x || 999,
-			y: y_round || y || 999,
+			x: Number.isFinite(x_round) ? x_round || x : 999,
+			y: Number.isFinite(y_round) ? y_round || y : 999,
 		};
 	}
 

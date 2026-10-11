@@ -70,8 +70,7 @@ catch (Exception error)
 
 static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize, Dictionary<string, Dictionary<long,string>> enums)
 {
-    // The native live reader currently supports the x86 CoreCLR used by SNR.
-    if (pointerSize != 4 || source.PlayerType.IsCollectible) return null;
+    if (pointerSize != 4 && pointerSize != 8) return null;
     object? DescribeField(string name)
     {
         var field = source.PlayerType.Fields.FirstOrDefault(f => f.Name == name || f.Name == $"<{name}>k__BackingField");

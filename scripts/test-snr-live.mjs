@@ -78,6 +78,44 @@ assert.equal(tracker.update(123, 'round1', read).size, 0, 'Never retain stale ro
 write(player, layout.playerType);
 assert.equal(tracker.update(123, 'round1', read).get(3).role.name, 'Jackal');
 console.log('PASS live roles: changes, modifier removal/flags, unknown IDs, inconsistent reads, empty array, PID switch, discovery throttling, stale clearing');
+const x64Base = 0x100000000, x64Memory = Buffer.alloc(0x5000);
+const x64Address = (offset) => x64Base + offset;
+const x64WritePointer = (offset, value) => x64Memory.writeBigUInt64LE(BigInt(value), offset);
+const x64WriteInt = (offset, value) => x64Memory.writeInt32LE(value, offset);
+const x64Read = (address, size) => Buffer.from(x64Memory.subarray(address - x64Base, address - x64Base + size));
+const x64 = { ...layout, pointerSize: 8, arraySlot: x64Address(0x100), arrayType: x64Address(0x300),
+  playerType: x64Address(0x400), arrayLengthOffset: 8, arrayDataOffset: 16,
+  fields: { playerId: field(150), role: field(144), modifier: field(146, { 16: 'JumboModifier' }), ghostRole: field(148) },
+  jumbo: { abilityType: x64Address(0x500), dataType: x64Address(0x600), listType: x64Address(0x700),
+    itemsType: x64Address(0x800), abilitiesOffset: 72, itemsOffset: 8, countOffset: 16,
+    currentOffset: 36, dataOffset: 40, maxOffset: 8 } };
+const x64Array = x64Address(0x200), x64Player = x64Address(0x1100), x64List = x64Address(0x1200);
+const x64Items = x64Address(0x1300), x64Ability = x64Address(0x1400), x64Data = x64Address(0x1500);
+x64WritePointer(0x100, x64Array);
+x64WritePointer(0x200, x64.arrayType);
+x64WriteInt(0x208, 256);
+x64WritePointer(0x210 + 3 * 8, x64Player);
+x64WritePointer(0x1100, x64.playerType);
+x64Memory[0x1100 + 150] = 3;
+x64Memory.writeInt16LE(1, 0x1100 + 144);
+x64Memory.writeInt16LE(16, 0x1100 + 146);
+x64WritePointer(0x1100 + 72, x64List);
+x64WritePointer(0x1200, x64.jumbo.listType);
+x64WritePointer(0x1200 + 8, x64Items);
+x64WriteInt(0x1200 + 16, 1);
+x64WriteInt(0x1200 + 20, 99); // The adjacent list version must not be read as part of count.
+x64WritePointer(0x1300, x64.jumbo.itemsType);
+x64WriteInt(0x1300 + 8, 4);
+x64WritePointer(0x1300 + 16, x64Ability);
+x64WritePointer(0x1400, x64.jumbo.abilityType);
+x64WritePointer(0x1400 + 40, x64Data);
+x64Memory.writeFloatLE(2.4, 0x1400 + 36);
+x64WritePointer(0x1500, x64.jumbo.dataType);
+x64Memory.writeFloatLE(7.2, 0x1500 + 8);
+assert.ok(isSnrLiveLayout(x64, 123));
+assert.equal(readSnrLiveRoles(x64, x64Read).get(3).jumbo.currentSize.toFixed(1), '2.4');
+assert.equal(readSnrLiveRoles(x64, x64Read).get(3).jumbo.maxSize.toFixed(1), '7.2');
+console.log('PASS x64 live roles: jumbo current/max size, pointer stride, separate list count/version');
 const eligibilityTracker = new SnrLiveTracker(async () => { throw new Error('Unexpected discovery'); });
 eligibilityTracker.accept(123, { status: 'ok', pid: 123, liveLayout: layout, players: [{ playerId: 3, role: { value: 137 }, isNeutral: false, canKill: false }] });
 setRole(222, 0);

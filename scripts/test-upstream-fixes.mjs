@@ -1235,6 +1235,7 @@ for (const entries of [
 		[3, targetOutfit],
 	],
 ]) {
+	const memory = { outfit: 3, x: 1, y: 2, role: 1, dummy: false, vent: 0 };
 	const fixture = {
 		PlayerStruct: {
 			report: () => ({
@@ -1260,7 +1261,7 @@ for (const entries of [
 				? address
 				: typeof address === 'object'
 					? address[offset]
-					: { outfit: 3, x: 1, y: 2, role: 1, dummy: false, vent: 0 }[offset],
+					: memory[offset],
 		readDictionary: (_ptr, _limit, visit) => entries.forEach(([key, value], index) => visit(key, value, index)),
 		formatRoleLabel: () => 'IMPOSTOR',
 		hashCode: (value) => value.length,
@@ -1273,6 +1274,22 @@ for (const entries of [
 	assert.equal(parsed.skinId, 'original-skin');
 	assert.equal(parsed.appearanceName, 'Target');
 	assert.equal(parsed.appearanceSkinId, 'target-skin');
+	memory.x = 15.5;
+	memory.y = 0;
+	const mainHallSpawn = parsePlayer.call(fixture, 1, Buffer.alloc(0));
+	assert.equal(mainHallSpawn.x, 15.5);
+	assert.equal(mainHallSpawn.y, 0, 'Main Hall spawn Y=0 must not become an out-of-range sentinel');
+	assert.equal(
+		spatial({
+			state: { ...state, map: MapType.AIRSHIP },
+			me: { ...me, x: mainHallSpawn.x, y: mainHallSpawn.y },
+			other: { ...other, x: 15.5, y: 1 },
+		}).gain,
+		1,
+		'Main Hall spawn must hear a nearby player without moving'
+	);
+	memory.x = 0;
+	assert.equal(parsePlayer.call(fixture, 1, Buffer.alloc(0)).x, 0, 'X=0 is also a valid coordinate');
 	const reset = normalizeMeetingState({ ...meeting, players: [parsed] }).players[0];
 	assert.equal(reset.appearanceName, 'Original');
 	assert.equal(reset.appearanceSkinId, 'original-skin');

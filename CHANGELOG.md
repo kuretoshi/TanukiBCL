@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.23
+
+- エアシップのメインホールにスポーンした際、座標の0が欠損値として扱われ、移動するまで近くのプレイヤーと会話できない問題を修正。
+- 64bit版Among UsでSNRの役職・ジャンボの現在サイズと最大サイズを取得できず、声の太さが変わらない問題を修正。
+
 ## v3.2.22
 
 - NoSのデータが未取得のまま試合が始まった場合、ロビー中の再取得待ち時間を引き継がず、読み取り位置をすぐに再取得するよう修正。
