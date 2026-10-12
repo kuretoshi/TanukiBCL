@@ -46,6 +46,7 @@ export interface HatDementions {
 const SNR_HAT_FRONT_DEMENTIONS: HatDementions = { top: '-52%', width: '140%', left: '-18px' };
 const SNR_HAT_BACK_DEMENTIONS: HatDementions = { ...SNR_HAT_FRONT_DEMENTIONS };
 const SNR_VISOR_DEMENTIONS: HatDementions = { top: '-52%', width: '140%', left: '-18px' };
+const SNR_SKIN_DEMENTIONS: HatDementions = { top: '-52%', width: '140%', left: '-18px' };
 
 let requestingHats = false;
 export let initializedHats = false;
@@ -223,6 +224,7 @@ export function getHatDementions(id: string, mod: ModsType, type: cosmeticType =
 		// SNR custom sprites use the same full 300x375 player canvas as the game.
 		// The avatar base is slightly wider and starts lower, so align each full
 		// canvas independently instead of applying vanilla hat offsets.
+		if (type === cosmeticType.skin) return SNR_SKIN_DEMENTIONS;
 		if (type === cosmeticType.visor) {
 			const definition = findSnrDefinition(id, snrVisorDefinitions);
 			const isSnrLayout = definition?.IsSNR === true || definition?.IsSNR === 'true' || definition?.isSNR === true;

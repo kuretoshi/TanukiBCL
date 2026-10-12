@@ -45,7 +45,7 @@ try {
 			this.url = value;
 		}
 	};
-	const { getCosmetic, cosmeticType } = await bundle('src/renderer/lib/cosmetics.ts', 'renderer.mjs');
+	const { getCosmetic, getHatDementions, cosmeticType } = await bundle('src/renderer/lib/cosmetics.ts', 'renderer.mjs');
 	for (const [part, type] of [
 		['hat-front', cosmeticType.hat],
 		['hat-back', cosmeticType.hat_back],
@@ -57,6 +57,11 @@ try {
 		assert.equal(url.host, part);
 		assert.equal(decodeURIComponent(url.pathname.slice(1)), 'Modded_めめ村クローゼット_gutierrez');
 	}
+	assert.deepEqual(getHatDementions('Modded_めめ村クローゼット_gutierrez', 'SUPER_NEW_ROLES', cosmeticType.skin), {
+		top: '-52%',
+		width: '140%',
+		left: '-18px',
+	});
 	const adaptive = new URL(
 		getCosmetic(4, true, cosmeticType.hat, 'Modded_Multiverse Costume SEL_test', 'SUPER_NEW_ROLES')
 	);
