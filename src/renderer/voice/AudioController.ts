@@ -1,7 +1,7 @@
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
-import { IpcMessages, IpcRendererMessages } from '../../common/ipc-messages';
+import { IpcRendererMessages } from '../../common/ipc-messages';
 import { pushToTalkOptions } from '../../common/pushToTalkOptions';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { TypedEmitter } from '../lib/TypedEmitter';
@@ -11,6 +11,7 @@ import { calculateVoiceAudio } from './spatialAudio';
 import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { createBerserkerEffect } from './berserkerEffect';
 import { createBibiriEcho, updateBibiriEcho, disconnectBibiriEcho, stopBibiriEcho } from './bibiriEcho';
+import { createMegaphoneRecording } from './megaphoneRecording';
 import { selectVoiceEffect, shouldApplyRainbowStarEcho, type VoiceEffectSetting } from './voiceEffectRules';
 import { createVoiceDisguiseEffect, updateVoiceDisguiseEffect } from '../voiceEffect';
 
@@ -53,6 +54,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private useContextSink = false;
 	private microphoneGain?: GainNode;
 	private inputSource?: MediaStreamAudioSourceNode;
+	private localMegaphoneRecording?: ReturnType<typeof createMegaphoneRecording>;
 	private inputDestination?: MediaStreamAudioDestinationNode;
 	private audioListener?: VadNode;
 	private remoteVoiceInput = false;
@@ -189,6 +191,18 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const source = context.createMediaStreamSource(inputStream);
 		this.inputSource = source;
+		if (this.masterGain)
+			this.localMegaphoneRecording = createMegaphoneRecording(
+				context,
+				source,
+				this.masterGain,
+				() =>
+					!!this.inputStream?.getAudioTracks()[0]?.enabled &&
+					!this.mutedState &&
+					!this.remoteVoiceInput &&
+					!this.deafenedState &&
+					!this.jammedState
+			);
 		const voiceRoleAnalyser = context.createAnalyser();
 		voiceRoleAnalyser.fftSize = 2048;
 		voiceRoleAnalyser.smoothingTimeConstant = 0;
@@ -255,6 +269,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private teardownInputChain(): void {
+		this.localMegaphoneRecording?.disconnect();
+		this.localMegaphoneRecording = undefined;
 		if (this.voiceRoleTimer) clearInterval(this.voiceRoleTimer);
 		this.voiceRoleTimer = undefined;
 		this.voiceRoleAnalyser?.disconnect();
@@ -438,8 +454,10 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	toggleDeafen(): void {
 		this.deafenedState = !this.deafenedState;
+		if (this.deafenedState) this.localMegaphoneRecording?.cancel();
 		if (this.deafenedState)
 			for (const peer of this.peers.values()) {
+				peer.megaphoneRecording?.cancel();
 				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
 			}
 		this.applyTrackEnabled();
@@ -509,6 +527,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		gain.connect(masterGain);
 
 		this.peers.set(peerId, {
+			megaphoneRecording: createMegaphoneRecording(context, source, masterGain),
 			bibiriEcho: createBibiriEcho(context, gain, masterGain),
 			voiceEffectConnected: false,
 			stream,
@@ -531,6 +550,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		if (!peer) return;
 		this.peers.delete(peerId);
+		peer.megaphoneRecording?.disconnect();
 		if (peer.voiceEffect) disconnectProcessingEffect(peer.voiceEffect);
 
 		this.teardownAudioElement(peer.dummyAudioElement);
@@ -571,6 +591,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	silenceAllPeers(): void {
+		this.localMegaphoneRecording?.cancel();
+		for (const peer of this.peers.values()) peer.megaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) {
 			peer.gain.gain.value = 0;
 			this.clearVoiceEffect(peer);
@@ -580,6 +602,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	silencePeersExcept(peerIds: string[]): void {
 		for (const [peerId, peer] of this.peers) {
 			if (!peerIds.includes(peerId)) {
+				peer.megaphoneRecording?.cancel();
 				peer.gain.gain.value = 0;
 				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
 				this.clearVoiceEffect(peer);
@@ -588,6 +611,18 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	updateGameState(state: AmongUsState): void {
+		const local = state.players.find((player) => player.isLocal);
+		this.localMegaphoneRecording?.update(
+			state.nosMegaphones?.find((entry) => entry.playerId === local?.id),
+			state.mod === 'NoS' &&
+				state.gameState === GameState.TASKS &&
+				!!local &&
+				!local.disconnected &&
+				!this.deafenedState,
+			SettingsStore.store.masterVolume / 100
+		);
+		if (state.mod !== 'NoS' || state.gameState !== GameState.TASKS)
+			for (const peer of this.peers.values()) peer.megaphoneRecording?.cancel();
 		if (state.mod !== 'NoS' || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION)) {
 			for (const peer of this.peers.values())
 				if (peer.bibiriEcho) updateBibiriEcho(peer.bibiriEcho, false, false, undefined);
@@ -610,6 +645,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	stopPeerDeathEcho(peerId: string): void {
+		this.peers.get(peerId)?.megaphoneRecording?.cancel();
 		const echo = this.peers.get(peerId)?.bibiriEcho;
 		if (echo) stopBibiriEcho(echo);
 	}
@@ -632,6 +668,11 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
+		peer.megaphoneRecording?.update(
+			state.nosMegaphones?.find((entry) => entry.playerId === other.id),
+			state.mod === 'NoS' && state.gameState === GameState.TASKS && !other.disconnected && !this.deafenedState,
+			settings.masterVolume / 100
+		);
 		if (peer.bibiriEcho)
 			updateBibiriEcho(
 				peer.bibiriEcho,
@@ -714,6 +755,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 
 		return result.gain;
+	}
+	setMegaphonePlaybackVolume(peerId: string, volume: number): void {
+		this.peers.get(peerId)?.megaphoneRecording?.setVolume(volume);
 	}
 }
 

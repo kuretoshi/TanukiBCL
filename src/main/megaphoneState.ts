@@ -1,12 +1,15 @@
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MegaphoneState } from '../common/MegaphoneState';
 
-export function readMegaphoneState(
-	pid: number,
-	now = Date.now(),
-	filePath = process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS', 'megaphone-state.json') : ''
-): MegaphoneState[] {
+function stateFile(pid: number): string {
+	if (!process.env.LOCALAPPDATA) return '';
+	const root = join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS');
+	const perProcess = join(root, `megaphone-state-${pid}.json`);
+	return existsSync(perProcess) ? perProcess : join(root, 'megaphone-state.json');
+}
+
+export function readMegaphoneState(pid: number, now = Date.now(), filePath = stateFile(pid)): MegaphoneState[] {
 	try {
 		if (!filePath || statSync(filePath).size > 16384) return [];
 		const data = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -34,7 +37,11 @@ export function readMegaphoneState(
 				!Number.isFinite(player.range) ||
 				player.range < 2 ||
 				player.range > 40 ||
-				(player.voiceEffect !== undefined && typeof player.voiceEffect !== 'boolean')
+				(player.voiceEffect !== undefined && typeof player.voiceEffect !== 'boolean') ||
+				(player.phase !== undefined &&
+					(!['charging', 'firing'].includes(player.phase) ||
+						!Number.isSafeInteger(player.shotId) ||
+						player.shotId <= 0))
 			)
 				return [];
 			ids.add(player.playerId);

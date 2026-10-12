@@ -3,4 +3,6 @@ export interface MegaphoneState {
 	energy: number;
 	range: number;
 	voiceEffect?: boolean;
+	shotId?: number;
+	phase?: 'charging' | 'firing';
 }

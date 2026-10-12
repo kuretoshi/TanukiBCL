@@ -31,6 +31,10 @@ try {
 		return readMegaphoneState(pid, time, file);
 	}
 	assert.deepEqual(await read(), snapshot.players);
+	const recordingState = { ...snapshot, players: [{ ...snapshot.players[0], phase: 'charging', shotId: 1 }] };
+	assert.deepEqual(await read(recordingState), recordingState.players);
+	assert.deepEqual(await read({ ...snapshot, players: [{ ...snapshot.players[0], phase: 'firing' }] }), []);
+	assert.deepEqual(await read({ ...snapshot, players: [{ ...snapshot.players[0], phase: 'bad', shotId: 1 }] }), []);
 	assert.deepEqual(await read(snapshot, 456), []);
 	assert.deepEqual(await read(snapshot, 123, now + 501), []);
 	assert.deepEqual(await read(snapshot, 123, now - 101), []);

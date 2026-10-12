@@ -10,6 +10,7 @@ export interface ExtendedAudioElement extends HTMLAudioElement {
 }
 
 export interface PeerAudioNodes {
+	megaphoneRecording?: ReturnType<typeof import('./megaphoneRecording').createMegaphoneRecording>;
 	bibiriEcho?: ReturnType<typeof import('./bibiriEcho').createBibiriEcho>;
 	voiceEffect?: VoiceProcessingEffect;
 	voiceEffectConnected: boolean;

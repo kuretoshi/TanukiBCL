@@ -1545,6 +1545,11 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			}
 
 			this.audio.setPeerGain(peerId, gain);
+			const echoConfig = this.playerConfigs[player.playerConfigId] ?? this.playerConfigs[player.nameHash];
+			this.audio.setMegaphonePlaybackVolume(
+				peerId,
+				this.audio.deafened || echoConfig?.isMuted ? 0 : ((echoConfig?.volume ?? 1) * settings.masterVolume) / 100
+			);
 
 			const talking = Boolean(this.otherVAD[player.clientId]) && gain > 0;
 			if (talking !== otherTalking[player.clientId]) {

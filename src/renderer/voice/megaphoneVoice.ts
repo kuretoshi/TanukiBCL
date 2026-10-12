@@ -10,7 +10,7 @@ export function chargingMegaphone(state: AmongUsState, other: Player) {
 		other.bugged
 	)
 		return;
-	return state.nosMegaphones?.find((entry) => entry.playerId === other.id);
+	return state.nosMegaphones?.find((entry) => entry.playerId === other.id && !entry.phase);
 }
 
 export function megaphoneGain(range: number, dx: number, dy: number): number {
