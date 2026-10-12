@@ -171,6 +171,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private playerConfigs: playerConfigMap = {};
 	private impostorRadioPressed = false;
 	private readonly heldNosRadio = new HeldNosRadio();
+	private activeNosRadioKind?: number;
 	private nosRadioKinds: Record<number, number | undefined> = {};
 	private radioStatusVersion = 0;
 	private radioStatusVersions: Record<number, number> = {};
@@ -309,6 +310,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.tohLobbyNames = {};
 		this.impostorRadioPressed = false;
 		this.heldNosRadio.clear();
+		this.activeNosRadioKind = undefined;
+		this.audio.setLocalRadioPending(false);
 		this.nosRadioKinds = {};
 		this.radioStatusVersion = 0;
 		this.radioStatusVersions = {};
@@ -409,17 +412,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			const player = state.players?.find((player) => player.isLocal);
 			if (
 				pressing &&
-				(!player ||
-					player.isDead ||
-					(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION) ||
-					!isNosRadioEnabled(kind, this.activeLobbySettings) ||
-					!this.getNosRadios(state, player)?.some((radio) => radio.kind === kind))
+				(!player || player.isDead || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION))
 			)
 				return;
-			const previous = this.heldNosRadio.kind;
 			this.heldNosRadio.set(kind, pressing);
-			if (previous === this.heldNosRadio.kind) return;
-			pressing = this.heldNosRadio.kind !== undefined;
+			this.refreshNosRadio(state, player);
+			return;
 		} else if (kind !== 0) return;
 		this.radioStatusVersion = Math.max(Date.now(), this.radioStatusVersion + 1);
 		this.impostorRadioPressed = pressing;
@@ -428,6 +426,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 	private stopAllRadio(): void {
 		this.heldNosRadio.clear();
+		this.activeNosRadioKind = undefined;
+		this.audio.setLocalRadioPending(false);
 		this.impostorRadioPressed = false;
 		this.radioStatusVersion = Math.max(Date.now(), this.radioStatusVersion + 1);
 		this.applyImpostorRadio();
@@ -596,6 +596,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.otherVAD = {};
 				this.heldNosRadio.clear();
 				this.impostorRadioPressed = false;
+				this.activeNosRadioKind = undefined;
+				this.audio.setLocalRadioPending(false);
 				this.nosRadioKinds = {};
 				this.patch({ otherTalking: {}, impostorRadioClientId: -1, impostorRadioClientIds: [], nosRadiosByPlayer: {} });
 				this.prev.nosRadioSession = '';
@@ -1327,6 +1329,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (!myPlayer) return;
 		if (this.impostorRadioPressed && (myPlayer.isDead || !this.canUseRadio(state, myPlayer))) {
 			this.heldNosRadio.clear();
+			this.activeNosRadioKind = undefined;
 			this.impostorRadioPressed = false;
 			this.radioStatusVersion = Math.max(Date.now(), this.radioStatusVersion + 1);
 		}
@@ -1353,7 +1356,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			JSON.stringify({
 				impostorRadio: this.impostorRadioPressed,
 				impostorRadioVersion: this.radioStatusVersion,
-				nosRadioKind: state?.mod === 'NoS' ? this.heldNosRadio.kind : undefined,
+				nosRadioKind: state?.mod === 'NoS' ? this.activeNosRadioKind : undefined,
 			})
 		);
 		this.lastRadioStatusSentAt = Date.now();
@@ -1369,6 +1372,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 	private cleanupImpostorRadio(state: AmongUsState, myPlayer: Player | undefined): void {
 		if (!state.players || !myPlayer) return;
+		if (state.mod === 'NoS') this.refreshNosRadio(state, myPlayer);
+		else if (this.heldNosRadio.kind !== undefined) this.stopAllRadio();
 		if (
 			this.impostorRadioPressed &&
 			(myPlayer.isDead ||
@@ -1394,6 +1399,30 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.patch({ impostorRadioClientIds: valid, impostorRadioClientId: valid[0] ?? -1 });
 	}
 
+	private refreshNosRadio(state: AmongUsState, myPlayer: Player | undefined): void {
+		const kind = this.heldNosRadio.kind;
+		const radios = state.nosRadios;
+		if (
+			kind !== undefined &&
+			(!myPlayer ||
+				myPlayer.isDead ||
+				(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION))
+		)
+			this.heldNosRadio.clear();
+		const activeKind =
+			this.heldNosRadio.kind !== undefined &&
+			isNosRadioEnabled(this.heldNosRadio.kind, this.activeLobbySettings) &&
+			radios?.some((radio) => radio.kind === this.heldNosRadio.kind)
+				? this.heldNosRadio.kind
+				: undefined;
+		this.audio.setLocalRadioPending(this.heldNosRadio.kind !== undefined && activeKind === undefined);
+		if (this.impostorRadioPressed === (activeKind !== undefined) && this.activeNosRadioKind === activeKind) return;
+		this.activeNosRadioKind = activeKind;
+		this.impostorRadioPressed = activeKind !== undefined;
+		this.radioStatusVersion = Math.max(Date.now(), this.radioStatusVersion + 1);
+		this.applyImpostorRadio();
+	}
+
 	private isJackalRadioPlayer(state: AmongUsState, player: Player): boolean {
 		return state.mod === 'SUPER_NEW_ROLES' && isSnrJackalTeam(player.snrRole);
 	}
@@ -1406,7 +1435,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private senderNosRadioKind(state: AmongUsState, sender: Player): number | undefined {
-		const selected = sender.isLocal ? this.heldNosRadio.kind : this.nosRadioKinds[sender.clientId];
+		const selected = sender.isLocal ? this.activeNosRadioKind : this.nosRadioKinds[sender.clientId];
 		return resolveNosRadioKind(this.getNosRadios(state, sender), selected);
 	}
 

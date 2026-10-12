@@ -42,6 +42,7 @@ for (const config of ['', '{}', 'invalid']) assert.equal(verifyDebugPassword('te
 console.log('ok developer password: correct password only, invalid and missing configuration rejected');
 const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
 const { AudioController } = await bundle('src/renderer/voice/AudioController.ts');
+const { pushToTalkOptions } = await bundle('src/common/pushToTalkOptions.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { normalizeMeetingState } = await bundle('src/common/meetingState.ts');
 const { MapType, CameraLocation } = await bundle('src/common/AmongusMap.ts');
@@ -819,6 +820,33 @@ const context = {
 	createBuffer: (_, length) => ({ getChannelData: () => new Float32Array(length) }),
 };
 const audio = new AudioController();
+const localTrack = { enabled: true };
+const outboundTrack = { enabled: true };
+audio.inputStream = { getAudioTracks: () => [localTrack] };
+audio.stream = { getAudioTracks: () => [outboundTrack] };
+audio.radioPending = true;
+audio.applyTrackEnabled();
+assert.equal(localTrack.enabled, false, 'pending radio must mute the microphone');
+assert.equal(outboundTrack.enabled, false, 'pending radio must mute the processed outbound track');
+audio.radioPending = false;
+audio.applyTrackEnabled();
+assert.equal(localTrack.enabled, true);
+assert.equal(outboundTrack.enabled, true);
+audio.pushToTalkMode = pushToTalkOptions.PUSH_TO_TALK;
+audio.pushToTalkPressed = true;
+audio.radioPending = true;
+audio.applyTrackEnabled();
+assert.equal(localTrack.enabled, false);
+audio.radioPending = false;
+audio.applyTrackEnabled();
+assert.equal(localTrack.enabled, true, 'held push-to-talk resumes after radio recovery');
+audio.pushToTalkMode = pushToTalkOptions.PUSH_TO_MUTE;
+audio.applyTrackEnabled();
+assert.equal(localTrack.enabled, false, 'held push-to-mute remains muted after radio recovery');
+audio.pushToTalkMode = pushToTalkOptions.VOICE;
+audio.pushToTalkPressed = false;
+audio.inputStream = undefined;
+audio.stream = undefined;
 audio.context = context;
 audio.masterGain = new Node();
 function peer() {
@@ -1316,11 +1344,7 @@ for (const entries of [
 		rainbowColor: 99,
 		readString: (value) => value || '',
 		readMemory: (_type, address, offset) =>
-			offset === undefined
-				? address
-				: typeof address === 'object'
-					? address[offset]
-					: memory[offset],
+			offset === undefined ? address : typeof address === 'object' ? address[offset] : memory[offset],
 		readDictionary: (_ptr, _limit, visit) => entries.forEach(([key, value], index) => visit(key, value, index)),
 		formatRoleLabel: () => 'IMPOSTOR',
 		hashCode: (value) => value.length,

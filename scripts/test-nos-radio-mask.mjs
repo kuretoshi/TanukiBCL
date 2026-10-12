@@ -51,6 +51,7 @@ const names = [
 	'onPeerData',
 	'setRadioClientActive',
 	'cleanupImpostorRadio',
+	'refreshNosRadio',
 ];
 const methods = [];
 function visit(node) {
@@ -72,6 +73,8 @@ const controller = vm.runInNewContext(
 	}
 );
 controller.heldNosRadio = new policy.HeldNosRadio();
+let localRadioPending = false;
+controller.audio = { setLocalRadioPending: (pending) => (localRadioPending = pending) };
 controller.nosRadioKinds = {};
 controller.activeLobbySettings = { ...defaultLobbySettings, impostorRadioEnabled: true, jackalRadioEnabled: true };
 const local = { id: 2, clientId: 20, isLocal: true, isImpostor: false, isDead: false, x: 0, y: 0 };
@@ -188,6 +191,36 @@ assert.deepEqual(
 		[false, undefined],
 	]
 );
+
+// A meeting snapshot can briefly be unavailable while the radio key remains physically held.
+state.gameState = GameState.DISCUSSION;
+state.nosRadios = radios(1 << 5);
+controller.setImpostorRadio(true, 0);
+assert.equal(controller.impostorRadioPressed, true);
+state.nosRadios = undefined;
+controller.cleanupImpostorRadio(state, local);
+assert.equal(controller.impostorRadioPressed, false, 'unknown RadioData suspends transmission');
+assert.equal(controller.heldNosRadio.kind, 0, 'snapshot gap preserves the held key');
+assert.equal(localRadioPending, true, 'snapshot gap mutes the microphone');
+state.nosRadios = radios(1 << 5);
+controller.cleanupImpostorRadio(state, local);
+assert.equal(controller.impostorRadioPressed, true, 'transmission resumes when RadioData returns');
+assert.equal(localRadioPending, false);
+controller.setImpostorRadio(false, 0);
+state.nosRadios = undefined;
+controller.setImpostorRadio(true, 0);
+assert.equal(controller.impostorRadioPressed, false, 'pressing during a gap cannot transmit yet');
+state.nosRadios = radios(1 << 5);
+controller.cleanupImpostorRadio(state, local);
+assert.equal(controller.impostorRadioPressed, true, 'a held press during a gap starts after recovery');
+controller.setImpostorRadio(false, 0);
+state.nosRadios = [];
+controller.setImpostorRadio(true, 0);
+assert.equal(controller.impostorRadioPressed, false, 'published empty RadioData never starts a radio');
+assert.equal(localRadioPending, true, 'published empty RadioData keeps the held radio key muted');
+controller.setImpostorRadio(false, 0);
+state.gameState = GameState.TASKS;
+state.nosRadios = [...radios(0, 0), ...radios(0, 1)];
 controller.setImpostorRadio(true, 1);
 controller.activeLobbySettings.jackalRadioEnabled = false;
 controller.cleanupImpostorRadio(state, local);
@@ -196,7 +229,10 @@ assert.equal(
 	false,
 	'disabled selected channel stops instead of switching to impostor'
 );
-assert.equal(controller.heldNosRadio.kind, undefined);
+assert.equal(controller.heldNosRadio.kind, 1);
+assert.equal(localRadioPending, true);
+controller.setImpostorRadio(false, 1);
+assert.equal(controller.impostorRadioPressed, false);
 controller.activeLobbySettings.jackalRadioEnabled = true;
 controller.setImpostorRadio(true, 0);
 local.isDead = true;

@@ -65,9 +65,12 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private ipcHandlers: [string, (...args: unknown[]) => void][] = [];
 
 	private pushToTalkMode: number = pushToTalkOptions.VOICE;
+	private pushToTalkPressed = false;
 	private mutedState = false;
 	private deafenedState = false;
 	private jammedState = false;
+	private radioPending = false;
+	private localRadioPending = false;
 	private maxDistance = 2;
 	private lastGameState?: AmongUsState;
 	private airshipSpawnUntil = 0;
@@ -313,6 +316,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.mutedState = false;
 		this.deafenedState = false;
 		this.jammedState = false;
+		this.radioPending = false;
+		this.localRadioPending = false;
+		this.pushToTalkPressed = false;
 		this.removeAllListeners();
 	}
 
@@ -398,11 +404,13 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		add(IpcRendererMessages.TOGGLE_DEAFEN, () => this.toggleDeafen());
 		add(IpcRendererMessages.TOGGLE_MUTE, () => this.toggleMute());
 		add(IpcRendererMessages.PUSH_TO_TALK, (_: unknown, pressing: boolean) => {
-			if (this.pushToTalkMode === pushToTalkOptions.VOICE) return;
-			if (this.remoteVoiceInput || this.deafenedState || this.mutedState || this.jammedState) return;
-			const track = this.inputStream?.getAudioTracks()[0];
-			if (!track) return;
-			track.enabled = this.pushToTalkMode === pushToTalkOptions.PUSH_TO_TALK ? pressing : !pressing;
+			this.pushToTalkPressed = pressing;
+			this.applyTrackEnabled();
+		});
+		add(IpcRendererMessages.RADIO_PENDING, (_: unknown, pending: boolean) => {
+			if (this.radioPending === pending) return;
+			this.radioPending = pending;
+			this.applyTrackEnabled();
 		});
 	}
 
@@ -418,6 +426,12 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.applyTrackEnabled();
 	}
 
+	setLocalRadioPending(pending: boolean): void {
+		if (this.localRadioPending === pending) return;
+		this.localRadioPending = pending;
+		this.applyTrackEnabled();
+	}
+
 	private applyTrackEnabled(): void {
 		const track = this.inputStream?.getAudioTracks()[0];
 		if (!track) return;
@@ -426,9 +440,17 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			!this.deafenedState &&
 			!this.mutedState &&
 			!this.jammedState &&
-			this.pushToTalkMode !== pushToTalkOptions.PUSH_TO_TALK;
+			!this.radioPending &&
+			!this.localRadioPending &&
+			(this.pushToTalkMode === pushToTalkOptions.PUSH_TO_TALK
+				? this.pushToTalkPressed
+				: this.pushToTalkMode === pushToTalkOptions.PUSH_TO_MUTE
+					? !this.pushToTalkPressed
+					: true);
 		const outboundTrack = this.stream?.getAudioTracks()[0];
-		if (outboundTrack && outboundTrack !== track) outboundTrack.enabled = !this.remoteVoiceInput && !this.jammedState;
+		if (outboundTrack && outboundTrack !== track)
+			outboundTrack.enabled =
+				!this.remoteVoiceInput && !this.jammedState && !this.radioPending && !this.localRadioPending;
 	}
 
 	setJammed(jammed: boolean): void {
