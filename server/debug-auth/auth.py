@@ -10,6 +10,8 @@ import secrets
 import sqlite3
 import time
 
+import inquiry
+
 MAX_PASSWORDS = 16
 
 
@@ -43,6 +45,7 @@ def initialize(path):
             );
         """)
     os.chmod(path, 0o600)
+    inquiry.initialize(path)
 
 
 def derive(password, salt):
@@ -171,6 +174,12 @@ def create_app(database=None):
     def health():
         return jsonify(status='ok')
 
+    @app.post('/v1/inquiries')
+    def submit_inquiry():
+        request.max_content_length = inquiry.REQUEST_LIMIT
+        request.max_form_parts = 12
+        return inquiry.receive(request, database)
+
     @app.post('/v1/debug-auth/verify')
     def authenticate():
         # Our loopback reverse proxy overwrites this header; ignore it from other peers.
@@ -201,6 +210,13 @@ def main():
     invitation.add_argument('name')
     invitation.add_argument('--hours', type=int, default=72)
     commands.add_parser('revoke-invite').add_argument('name')
+    webhook = commands.add_parser('webhook-set')
+    webhook.add_argument('product', choices=inquiry.PRODUCTS)
+    webhook.add_argument('--kind', choices=('forum', 'text'), default='forum')
+    for tag in inquiry.TAGS:
+        webhook.add_argument('--{}-tag'.format(tag), default=None)
+    commands.add_parser('webhook-list')
+    commands.add_parser('webhook-remove').add_argument('product', choices=inquiry.PRODUCTS)
     for command in ('set', 'disable', 'remove'):
         commands.add_parser(command).add_argument('name')
     args = parser.parse_args()
@@ -226,6 +242,24 @@ def main():
         with closing(connect(args.db)) as db:
             for row in db.execute('SELECT name,enabled FROM passwords ORDER BY name'):
                 print('{}\t{}'.format(row['name'], 'enabled' if row['enabled'] else 'disabled'))
+    elif args.command == 'webhook-set':
+        url = getpass.getpass('Discord webhook URL (hidden): ')
+        if url != getpass.getpass('Confirm webhook URL (hidden): '):
+            parser.error('Webhook URLs do not match.')
+        try:
+            inquiry.set_webhook(args.db, args.product, url, args.kind,
+                                {tag: getattr(args, '{}_tag'.format(tag)) for tag in inquiry.TAGS})
+        except ValueError as error:
+            parser.error(str(error))
+        print('Webhook saved for {} ({}). URL is not shown.'.format(args.product, args.kind))
+    elif args.command == 'webhook-list':
+        with closing(connect(args.db)) as db:
+            for row in db.execute('SELECT product,kind FROM inquiry_webhooks ORDER BY product'):
+                print('{}\t{}\tconfigured'.format(row['product'], row['kind']))
+    elif args.command == 'webhook-remove':
+        with closing(connect(args.db)) as db, db:
+            result = db.execute('DELETE FROM inquiry_webhooks WHERE product=?', (args.product,))
+        print('Webhook removed.' if result.rowcount else 'No matching webhook.')
     elif args.command in ('disable', 'remove'):
         with closing(connect(args.db)) as db, db:
             if args.command == 'disable':

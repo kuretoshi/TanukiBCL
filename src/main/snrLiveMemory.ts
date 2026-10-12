@@ -36,10 +36,7 @@ export function isSnrLiveLayout(value: unknown, pid: number): value is SnrLiveLa
 	if (!value || typeof value !== 'object') return false;
 	const v = value as SnrLiveLayout;
 	const pointer = (n: number) =>
-		Number.isSafeInteger(n) &&
-		n >= 0x10000 &&
-		(v.pointerSize === 8 || n <= 0xfffffffc) &&
-		n % v.pointerSize === 0;
+		Number.isSafeInteger(n) && n >= 0x10000 && (v.pointerSize === 8 || n <= 0xfffffffc) && n % v.pointerSize === 0;
 	const field = (f: NumberField | null, required = false) =>
 		f == null
 			? !required
@@ -107,8 +104,7 @@ export function readSnrLiveRoles(
 				return undefined;
 			const entries = read(items + layout.arrayDataOffset, count * layout.pointerSize);
 			for (let i = 0; i < count; i++) {
-				const ability =
-					layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(i * 8)) : entries.readUInt32LE(i * 4);
+				const ability = layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(i * 8)) : entries.readUInt32LE(i * 4);
 				if (!validPointer(ability) || pointer(ability) !== j.abilityType) continue;
 				const data = pointer(ability + j.dataOffset);
 				if (!validPointer(data) || pointer(data) !== j.dataType) return undefined;
@@ -169,8 +165,7 @@ export function readSnrLiveRoles(
 			return { value, name };
 		};
 		for (let id = 0; id < 256; id++) {
-			const player =
-				layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(id * 8)) : entries.readUInt32LE(id * 4);
+			const player = layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(id * 8)) : entries.readUInt32LE(id * 4);
 			if (!player) continue;
 			if (!validPointer(player)) throw new Error('Invalid SNR player pointer');
 			const bytes = read(player, size);

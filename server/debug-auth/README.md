@@ -45,6 +45,22 @@ sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-de
 
 失効は次回のデバッグ画面を開く操作から適用されます。すでに開いている画面を遠隔で閉じる機能はありません。通常の通話機能は認証APIの停止に影響されません。
 
+## お問い合わせのDiscord送信先
+
+デバッグパスワードとは別のSQLiteテーブル `inquiry_webhooks` に、本家用 `tanuki` と.NET用 `net` のWebhookを1件ずつ保存します。アプリにはWebhook URLを含めず、両アプリは `https://debug-auth.kuretoshi.work/v1/inquiries` に報告を送ります。製品識別子は送信先の選択用であり、認証情報ではありません。公開APIは1送信元あたり毎時10件・全体で毎時120件に制限します。
+
+Piへ `auth.py`、`inquiry.py`、実運用の `nginx-tunnel.conf` を配置し、`nginx -t` 後にnginxの設定を反映してサービスを再起動した後、**Pi上で**以下を実行してください。別のHTTPS構成で `nginx-location.conf` を使っている場合はそちらも更新します。新規チャンネルがDiscordフォーラムなら、そのチャンネル内にWebhookを作り、フォーラムタグのIDを指定します。タグが不要なら `--question-tag` 等は省略できます。通常のテキストチャンネルなら `--kind text` を指定し、タグIDは指定しません。
+
+```sh
+sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/auth.py webhook-set tanuki --kind forum --question-tag 111111111111111111 --bug-tag 222222222222222222 --request-tag 333333333333333333
+sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/auth.py webhook-set net --kind forum --question-tag 444444444444444444 --bug-tag 555555555555555555 --request-tag 666666666666666666
+sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/auth.py webhook-list
+```
+
+上の数字は例なので、**実際の各フォーラムのタグIDに置き換えてください**。各 `webhook-set` はWebhook URLを非表示で2回入力します。URLを引数に渡したり、Gitやチャットに貼ったりしないでください。`webhook-list` は設定済みの製品とチャンネル種別だけを表示し、URLは表示しません。URLを変更するときは同じ `webhook-set` を再実行します。送信先を止めるときは `webhook-remove tanuki` または `webhook-remove net` を使います。DBは平文でWebhookを保持するため、SQLiteファイルとバックアップの権限を限定してください。
+
+公開済みの旧アプリには以前のWebhookが残っています。新しい両アプリの配布と受付APIの確認後、旧WebhookをDiscord側で削除・再発行してください。旧版の報告機能はその時点で使えなくなるため、更新案内も必要です。Git履歴の削除だけでは旧Webhookを無効化できません。
+
 ## アプリの設定
 
 現在のPiの公開先は `https://debug-auth.kuretoshi.work` です。担当者には `https://debug-auth.kuretoshi.work/debug-register` と招待コードを渡します。

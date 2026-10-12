@@ -1,0 +1,185 @@
+"""Server-side relay for the two desktop clients' Discord inquiries."""
+from contextlib import closing
+import hashlib
+import json
+import re
+import sqlite3
+import time
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+
+
+PRODUCTS = ('tanuki', 'net')
+TAGS = ('question', 'bug', 'request')
+ATTACHMENT_LIMIT = 24 * 1024 * 1024
+REQUEST_LIMIT = 26 * 1024 * 1024
+WEBHOOK_PATH = re.compile(r'/api/webhooks/\d+/[A-Za-z0-9._-]+\Z')
+TAG_ID = re.compile(r'\d{1,20}\Z')
+
+
+def connect(path):
+    db = sqlite3.connect(path, timeout=5)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+def initialize(path):
+    with closing(connect(path)) as db, db:
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS inquiry_webhooks (
+                product TEXT PRIMARY KEY CHECK(product IN ('tanuki','net')),
+                webhook_url TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('forum','text')),
+                question_tag TEXT,
+                bug_tag TEXT,
+                request_tag TEXT,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS inquiry_attempts (
+                source TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS inquiry_attempts_timestamp
+                ON inquiry_attempts(timestamp);
+        """)
+
+
+def validate_webhook(url):
+    if not isinstance(url, str):
+        raise ValueError('Enter a Discord incoming webhook URL.')
+    try:
+        parsed = urlparse(url)
+        valid = (parsed.scheme == 'https' and parsed.hostname in ('discord.com', 'discordapp.com')
+                 and parsed.port is None and not parsed.username and not parsed.password
+                 and not parsed.query and not parsed.fragment and WEBHOOK_PATH.fullmatch(parsed.path))
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError('Enter a Discord incoming webhook URL without /github or query parameters.')
+    return url
+
+
+def set_webhook(path, product, url, kind='forum', tags=None):
+    if product not in PRODUCTS or kind not in ('forum', 'text'):
+        raise ValueError('Choose product tanuki/net and kind forum/text.')
+    validate_webhook(url)
+    tags = tags or {}
+    if kind == 'text' and any(tags.values()):
+        raise ValueError('Text channels do not support forum tags.')
+    for key, value in tags.items():
+        if key not in TAGS or (value is not None and not TAG_ID.fullmatch(value)):
+            raise ValueError('Forum tag IDs must contain digits only.')
+    with closing(connect(path)) as db, db:
+        db.execute("""INSERT INTO inquiry_webhooks
+            (product,webhook_url,kind,question_tag,bug_tag,request_tag,updated_at)
+            VALUES (?,?,?,?,?,?,?) ON CONFLICT(product) DO UPDATE SET
+            webhook_url=excluded.webhook_url,kind=excluded.kind,
+            question_tag=excluded.question_tag,bug_tag=excluded.bug_tag,
+            request_tag=excluded.request_tag,updated_at=excluded.updated_at""",
+            (product, url, kind, tags.get('question'), tags.get('bug'), tags.get('request'), int(time.time())))
+
+
+def get_webhook(path, product):
+    with closing(connect(path)) as db:
+        return db.execute('SELECT * FROM inquiry_webhooks WHERE product=?', (product,)).fetchone()
+
+
+def allow_attempt(path, source, now=None):
+    now = int(time.time()) if now is None else now
+    # Keep report traffic independent of the debug-password limiter.
+    source = hashlib.sha256(source.encode('utf-8')).hexdigest()
+    with closing(connect(path)) as db, db:
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('DELETE FROM inquiry_attempts WHERE timestamp<=?', (now - 3600,))
+        total = db.execute('SELECT COUNT(*) FROM inquiry_attempts').fetchone()[0]
+        personal = db.execute('SELECT COUNT(*) FROM inquiry_attempts WHERE source=?', (source,)).fetchone()[0]
+        if total >= 120 or personal >= 10:
+            return False
+        db.execute('INSERT INTO inquiry_attempts VALUES(?,?)', (source, now))
+    return True
+
+
+def _files(request):
+    files = []
+    total = 0
+    for name, uploaded in request.files.items(multi=True):
+        if not re.fullmatch(r'files\[\d+\]', name) or len(files) >= 10:
+            raise ValueError('Invalid attachments.')
+        data = uploaded.read(ATTACHMENT_LIMIT + 1 - total)
+        total += len(data)
+        if total > ATTACHMENT_LIMIT:
+            raise ValueError('Attachments exceed 24 MiB.')
+        filename = (uploaded.filename or 'attachment').replace('\\', '_').replace('/', '_')
+        filename = re.sub(r'[\r\n"]', '_', filename)[:150] or 'attachment'
+        files.append((filename, data))
+    return files
+
+
+def _multipart(payload, files):
+    import secrets
+    boundary = '----TanukiInquiry' + secrets.token_hex(16)
+    chunks = []
+    def field(name, data, filename=None):
+        disposition = f'Content-Disposition: form-data; name="{name}"'
+        if filename is not None:
+            disposition += f'; filename="{filename}"'
+        chunks.extend((f'--{boundary}\r\n{disposition}\r\n\r\n'.encode(), data, b'\r\n'))
+    field('payload_json', json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+    for index, (filename, data) in enumerate(files):
+        field(f'files[{index}]', data, filename)
+    chunks.append(f'--{boundary}--\r\n'.encode())
+    return b''.join(chunks), f'multipart/form-data; boundary={boundary}'
+
+
+def send_to_discord(route, tag, subject, body, files):
+    if route['kind'] == 'forum':
+        payload = {'thread_name': subject, 'content': body, 'allowed_mentions': {'parse': []}}
+        tag_id = route[f'{tag}_tag']
+        if tag_id:
+            payload['applied_tags'] = [tag_id]
+    else:
+        payload = {'content': f'**[{tag}] {subject}**\n{body}', 'allowed_mentions': {'parse': []}}
+    if files:
+        data, content_type = _multipart(payload, files)
+    else:
+        data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        content_type = 'application/json'
+    request = Request(route['webhook_url'] + '?wait=true', data=data, method='POST', headers={
+        'Content-Type': content_type,
+        'User-Agent': 'DiscordBot (https://github.com/kuretoshi/TanukiBCL, 1.0)',
+    })
+    with urlopen(request, timeout=20) as response:
+        result = json.load(response)
+    if not isinstance(result, dict) or not result.get('id'):
+        raise RuntimeError('Discord did not confirm the report.')
+
+
+def receive(request, database):
+    source = request.remote_addr or 'unknown'
+    if source in ('127.0.0.1', '::1'):
+        source = request.headers.get('X-Real-IP', source)
+    try:
+        if not allow_attempt(database, source):
+            return {'error': '送信回数が多すぎます。時間をおいて再試行してください。'}, 429
+        data = request.get_json(silent=True) if request.is_json else json.loads(request.form['payload_json'])
+        if not isinstance(data, dict):
+            raise ValueError('Invalid report.')
+        product, tag = data.get('product'), data.get('tag')
+        subject, body = data.get('subject'), data.get('body')
+        if (product not in PRODUCTS or tag not in TAGS or not isinstance(subject, str)
+                or not isinstance(body, str) or not 1 <= len(subject.strip()) <= 100
+                or not 1 <= len(body.strip()) <= 1800):
+            raise ValueError('Invalid report.')
+        route = get_webhook(database, product)
+        if route is None:
+            return {'error': 'この報告先は現在利用できません。'}, 503
+        files = _files(request)
+        send_to_discord(route, tag, subject.strip(), body.strip(), files)
+        return {'submitted': True}, 200
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return {'error': '報告内容を確認してください。'}, 400
+    except (HTTPError, URLError, TimeoutError, OSError, RuntimeError):
+        return {'error': '報告を送信できませんでした。時間をおいて再試行してください。'}, 502
+    except sqlite3.Error:
+        return {'error': '報告を送信できませんでした。時間をおいて再試行してください。'}, 503

@@ -1,10 +1,14 @@
 import sqlite3
 from contextlib import closing
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from auth import allow_attempt, create_app, initialize, set_password, verify, issue_invitation, redeem_invitation
+import inquiry
 
 
 class AuthenticationTests(unittest.TestCase):
@@ -46,6 +50,7 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(self.client.post(endpoint, json={'password': password}).status_code, 401)
         self.assertEqual(self.client.post(endpoint, data='not json').status_code, 401)
         self.assertEqual(self.client.get(endpoint).status_code, 405)
+        self.assertEqual(self.client.post(endpoint, json={'password': 'x' * 8193}).status_code, 413)
 
     def test_rate_limit_persisted_and_releases(self):
         for _ in range(10):
@@ -106,6 +111,91 @@ class AuthenticationTests(unittest.TestCase):
             self.assertIn("frame-ancestors 'none'", response.headers['Content-Security-Policy'])
             response.close()
         self.assertEqual(self.client.get('/debug-register/auth.py').status_code, 404)
+
+
+class InquiryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.db = str(Path(self.temp.name) / 'auth.sqlite3')
+        initialize(self.db)
+        self.client = create_app(self.db).test_client()
+        self.url_tanuki = 'https://discord.com/api/webhooks/123456789/tanuki_test_token'
+        self.url_net = 'https://discord.com/api/webhooks/987654321/net_test_token'
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_routes_are_separate_and_secret_is_not_exposed(self):
+        inquiry.set_webhook(self.db, 'tanuki', self.url_tanuki, 'text')
+        inquiry.set_webhook(self.db, 'net', self.url_net, 'forum', {'bug': '12345'})
+        with closing(sqlite3.connect(self.db)) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM inquiry_webhooks').fetchone()[0], 2)
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM passwords').fetchone()[0], 0)
+        requests = []
+
+        def fake_open(request, timeout):
+            requests.append(request)
+            return io.BytesIO(b'{"id":"42"}')
+
+        with mock.patch.object(inquiry, 'urlopen', side_effect=fake_open):
+            for product in inquiry.PRODUCTS:
+                result = self.client.post('/v1/inquiries', json={
+                    'product': product, 'tag': 'bug', 'subject': 'Broken', 'body': 'Details'})
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual(result.json, {'submitted': True})
+                self.assertNotIn('discord.com', result.get_data(as_text=True))
+        self.assertEqual([request.full_url for request in requests],
+                         [self.url_tanuki + '?wait=true', self.url_net + '?wait=true'])
+        self.assertEqual(json.loads(requests[0].data)['allowed_mentions'], {'parse': []})
+        self.assertEqual(json.loads(requests[1].data)['applied_tags'], ['12345'])
+        self.assertEqual(json.loads(requests[1].data)['thread_name'], 'Broken')
+        self.assertEqual(requests[1].get_header('User-agent'),
+                         'DiscordBot (https://github.com/kuretoshi/TanukiBCL, 1.0)')
+
+    def test_multipart_attachment_and_limits(self):
+        inquiry.set_webhook(self.db, 'net', self.url_net, 'forum')
+        sent = []
+
+        def fake_open(request, timeout):
+            sent.append(request)
+            return io.BytesIO(b'{"id":"42"}')
+
+        with mock.patch.object(inquiry, 'urlopen', side_effect=fake_open):
+            result = self.client.post('/v1/inquiries', data={
+                'payload_json': json.dumps({'product': 'net', 'tag': 'question',
+                                            'subject': 'Subject', 'body': 'Body'}),
+                'files[0]': (io.BytesIO(b'attachment content'), 'test.txt'),
+            })
+        self.assertEqual(result.status_code, 200)
+        self.assertIn(b'attachment content', sent[0].data)
+        self.assertIn('multipart/form-data', sent[0].get_header('Content-type'))
+
+    def test_missing_route_invalid_input_and_rate_limit(self):
+        valid = {'product': 'net', 'tag': 'bug', 'subject': 'Subject', 'body': 'Body'}
+        self.assertEqual(self.client.post('/v1/inquiries', json=valid).status_code, 503)
+        inquiry.set_webhook(self.db, 'net', self.url_net)
+        self.assertEqual(self.client.post('/v1/inquiries', json={**valid, 'product': 'other'}).status_code, 400)
+        self.assertEqual(self.client.post('/v1/inquiries', json={**valid, 'body': ''}).status_code, 400)
+        with mock.patch.object(inquiry, 'urlopen', side_effect=lambda request, timeout: io.BytesIO(b'{"id":"42"}')):
+            for _ in range(7):
+                self.assertEqual(self.client.post('/v1/inquiries', json=valid).status_code, 200)
+            self.assertEqual(self.client.post('/v1/inquiries', json=valid).status_code, 429)
+
+    def test_discord_failure_does_not_expose_webhook(self):
+        from urllib.error import HTTPError
+        inquiry.set_webhook(self.db, 'net', self.url_net)
+        with mock.patch.object(inquiry, 'urlopen', side_effect=HTTPError(self.url_net, 403, 'Forbidden', {}, None)):
+            result = self.client.post('/v1/inquiries', json={
+                'product': 'net', 'tag': 'bug', 'subject': 'Broken', 'body': 'Details'})
+        self.assertEqual(result.status_code, 502)
+        self.assertNotIn(self.url_net, result.get_data(as_text=True))
+
+    def test_webhook_validation(self):
+        for invalid in (self.url_net + '/github', self.url_net + '?wait=true',
+                        'http://discord.com/api/webhooks/1/token',
+                        'https://example.invalid/api/webhooks/1/token'):
+            with self.assertRaises(ValueError):
+                inquiry.set_webhook(self.db, 'net', invalid)
 
 
 if __name__ == '__main__':

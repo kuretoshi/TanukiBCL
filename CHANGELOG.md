@@ -2,6 +2,15 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.26
+
+- 問い合わせのDiscord Webhook URLを配布アプリから除去し、サーバー側の中継APIを通して送信するよう変更。
+- 本家版と.NET版の送信先をサーバー側で分離し、既存の件名・本文・添付ファイル・ログ添付を維持。
+
+## v3.2.25
+
+- メガホンレーザーのチャージ中の声を最大10秒録音し、発射時に全員へ距離・壁による減衰なしで再生。
+
 ## v3.2.24
 
 - SNRで押し出されて落下している間は会話を継続し、落下中の声に残響を追加。

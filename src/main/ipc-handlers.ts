@@ -22,11 +22,10 @@ import {
 	IpcMessages,
 	IpcOverlayMessages,
 } from '../common/ipc-messages';
-import { INQUIRY_DISCORD_FORUM_TAG_IDS, INQUIRY_DISCORD_FORUM_WEBHOOK_URL } from './inquiryConfig';
+import { INQUIRY_RELAY_URL } from './inquiryConfig';
 import { getLogFilePaths } from './logger';
 
-const DISCORD_FORUM_WEBHOOK_URL =
-	process.env.BETTERCREWLINK_DISCORD_FORUM_WEBHOOK_URL || INQUIRY_DISCORD_FORUM_WEBHOOK_URL;
+const INQUIRY_ENDPOINT_URL = process.env.BETTERCREWLINK_INQUIRY_URL || INQUIRY_RELAY_URL;
 const DISCORD_ATTACHMENT_LIMIT_BYTES = 24 * 1024 * 1024;
 const DISCORD_BODY_LIMIT = 1800;
 const INQUIRY_LOG_TAIL_BYTES = 1024 * 1024;
@@ -36,17 +35,7 @@ const TEXT = {
 	discordPostFailed: 'Discord\u3078\u306e\u6295\u7a3f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002',
 	invalidAttachment: '\u6dfb\u4ed8\u3067\u304d\u306a\u3044\u30d5\u30a1\u30a4\u30eb\u3067\u3059',
 	missingFields: '\u4ef6\u540d\u3068\u672c\u6587\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002',
-	missingTag:
-		'\u9078\u629e\u3055\u308c\u305f\u30d5\u30a9\u30fc\u30e9\u30e0\u30bf\u30b0ID\u304c\u8a2d\u5b9a\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002',
-	missingWebhook:
-		'Discord\u30d5\u30a9\u30fc\u30e9\u30e0Webhook URL\u304c\u8a2d\u5b9a\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002',
 };
-
-function appendWebhookWait(url: string): string {
-	const webhookUrl = new URL(url);
-	webhookUrl.searchParams.set('wait', 'true');
-	return webhookUrl.toString();
-}
 
 function sanitizeDiscordText(value: string, maxLength: number): string {
 	return value.trim().replace(/\r\n/g, '\n').slice(0, maxLength);
@@ -122,10 +111,6 @@ function buildMultipartBody(payload: Record<string, unknown>, files: string[]) {
 }
 
 async function submitDiscordInquiry(inquiry: InquiryPayload) {
-	if (!DISCORD_FORUM_WEBHOOK_URL) {
-		throw new Error(TEXT.missingWebhook);
-	}
-
 	const subject = sanitizeDiscordText(inquiry.subject, 100);
 	const body = sanitizeDiscordText(inquiry.body, DISCORD_BODY_LIMIT);
 	if (!subject || !body) {
@@ -146,38 +131,31 @@ async function submitDiscordInquiry(inquiry: InquiryPayload) {
 		throw new Error(TEXT.attachmentTooLarge);
 	}
 
-	const tagId = INQUIRY_DISCORD_FORUM_TAG_IDS[inquiry.tag];
-	if (!tagId) {
-		throw new Error(TEXT.missingTag);
-	}
-
 	const payload = {
-		thread_name: subject,
-		content: body,
-		applied_tags: [tagId],
-		allowed_mentions: { parse: [] },
+		product: 'tanuki',
+		tag: inquiry.tag,
+		subject,
+		body,
 	};
 
-	const webhookUrl = appendWebhookWait(DISCORD_FORUM_WEBHOOK_URL);
 	const response =
 		attachmentPaths.length > 0
 			? await (async () => {
 					const multipart = buildMultipartBody(payload, attachmentPaths);
-					return fetch(webhookUrl, {
+					return fetch(INQUIRY_ENDPOINT_URL, {
 						method: 'POST',
 						headers: { 'Content-Type': multipart.contentType },
 						body: multipart.body,
 					});
 				})()
-			: await fetch(webhookUrl, {
+			: await fetch(INQUIRY_ENDPOINT_URL, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(payload),
 				});
 
 	if (!response.ok) {
-		const text = await response.text();
-		throw new Error(`${TEXT.discordPostFailed}HTTP ${response.status}: ${text}`);
+		throw new Error(`${TEXT.discordPostFailed}HTTP ${response.status}`);
 	}
 }
 
