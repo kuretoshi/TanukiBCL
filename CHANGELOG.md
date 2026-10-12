@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.27
+
+- SNRのカスタムスキンがベタクル画面のアバターに表示されない問題を修正。
+- NoSの会議中にRadioDataの更新が一時的に途切れると、インポスターラジオが使えなくなる場合がある問題を修正。
+
 ## v3.2.26
 
 - 問い合わせのDiscord Webhook URLを配布アプリから除去し、サーバー側の中継APIを通して送信するよう変更。
