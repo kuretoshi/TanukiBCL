@@ -70,7 +70,7 @@ class InquiryDiscordClient(discord.Client):
         product = self.forums.get(thread.parent_id)
         route = inquiry.get_webhook(DATABASE, product) if product else None
         if route is not None:
-            applied = {str(value) for value in thread.applied_tags}
+            applied = {str(getattr(value, 'id', value)) for value in thread.applied_tags}
             for tag in ('bug', 'request', 'question'):
                 if route[f'{tag}_tag'] in applied:
                     return tag

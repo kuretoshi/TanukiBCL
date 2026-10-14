@@ -413,6 +413,18 @@ class InquiryTests(unittest.TestCase):
         self.assertEqual([item[1] for item in requests],
                          ['kuretoshi/TanukiBCL', 'kuretoshi/BetterCrewLink_Net'])
 
+    def test_forum_tag_objects_select_issue_type(self):
+        with mock.patch.dict('os.environ', {'INQUIRY_DISCORD_FORUM_ID_TANUKI': '20'}), \
+                mock.patch.object(discord_bridge, 'DATABASE', self.db):
+            client = discord_bridge.InquiryDiscordClient()
+            thread = SimpleNamespace(parent_id=20,
+                                     applied_tags=[SimpleNamespace(id=123)])
+            route = {'bug_tag': '123', 'request_tag': '456', 'question_tag': '789'}
+            with mock.patch.object(inquiry, 'get_webhook', return_value=route):
+                self.assertEqual(client._tag_for_thread(thread), 'bug')
+                thread.applied_tags = [SimpleNamespace(id=456)]
+                self.assertEqual(client._tag_for_thread(thread), 'request')
+
     def test_issue_is_accepted_when_discord_is_temporarily_unavailable(self):
         from urllib.error import HTTPError
         inquiry.set_webhook(self.db, 'tanuki', self.url_tanuki, 'forum')
