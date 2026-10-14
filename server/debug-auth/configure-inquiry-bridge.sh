@@ -9,6 +9,7 @@ printf '\n'
 read -rsp 'Discord Bot token: ' discord_token
 printf '\n'
 read -rp 'Tanuki inquiry forum channel ID (blank to disable direct-post import): ' tanuki_forum_id
+read -rp '.NET inquiry forum channel ID (blank to disable direct-post import): ' net_forum_id
 
 if [[ ! "$github_token_tanuki" =~ ^[A-Za-z0-9_-]+$ || ! "$github_token_net" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo 'Invalid GitHub token format.' >&2
@@ -22,6 +23,14 @@ if [[ -n "$tanuki_forum_id" && ! "$tanuki_forum_id" =~ ^[0-9]{15,20}$ ]]; then
   echo 'Invalid Tanuki forum channel ID.' >&2
   exit 1
 fi
+if [[ -n "$net_forum_id" && ! "$net_forum_id" =~ ^[0-9]{15,20}$ ]]; then
+  echo 'Invalid .NET forum channel ID.' >&2
+  exit 1
+fi
+if [[ -n "$net_forum_id" && "$net_forum_id" == "$tanuki_forum_id" ]]; then
+  echo 'Tanuki and .NET forum channel IDs must be different.' >&2
+  exit 1
+fi
 
 temporary_file=$(mktemp)
 trap 'rm -f -- "$temporary_file"' EXIT
@@ -30,7 +39,10 @@ printf 'INQUIRY_GITHUB_REPO_TANUKI=kuretoshi/TanukiBCL\nINQUIRY_GITHUB_REPO_NET=
 if [[ -n "$tanuki_forum_id" ]]; then
   printf 'INQUIRY_DISCORD_FORUM_ID_TANUKI=%s\n' "$tanuki_forum_id" >> "$temporary_file"
 fi
-unset github_token_tanuki github_token_net discord_token tanuki_forum_id
+if [[ -n "$net_forum_id" ]]; then
+  printf 'INQUIRY_DISCORD_FORUM_ID_NET=%s\n' "$net_forum_id" >> "$temporary_file"
+fi
+unset github_token_tanuki github_token_net discord_token tanuki_forum_id net_forum_id
 
 sudo install -o root -g root -m 600 "$temporary_file" /etc/tanuki-inquiry-bridge.env
 sudo systemctl restart tanuki-debug-auth.service

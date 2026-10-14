@@ -229,7 +229,7 @@ def is_discord_thread_ignored(path, thread_id):
                           (str(thread_id),)).fetchone() is not None
 
 
-def discord_issue_body(tag, author, content, attachments, thread_url, deleted=False):
+def discord_issue_body(product, tag, author, content, attachments, thread_url, deleted=False):
     text = 'Discordの元投稿が削除されました。' if deleted else (_safe_markdown(content.strip()) or '（本文なし）')
     attachment_note = ''
     if attachments and not deleted:
@@ -239,17 +239,17 @@ def discord_issue_body(tag, author, content, attachments, thread_url, deleted=Fa
             lines.append(f'- [{label}]({url})')
         attachment_note = '\n\n### 添付ファイル（公開）\n' + '\n'.join(lines)
     author_line = '' if deleted else f'Discord投稿者: {_safe_markdown(author)}\n'
-    return (f'製品: tanuki\n種別: {tag}\n{author_line}\n'
+    return (f'製品: {product}\n種別: {tag}\n{author_line}\n'
             f'{text}{attachment_note}\n\n---\nDiscordフォーラムの元投稿: {thread_url}')
 
 
-def create_discord_issue(path, repository, tag, subject, body, thread_id, guild_id, initial_message_id,
+def create_discord_issue(path, repository, product, tag, subject, body, thread_id, guild_id, initial_message_id,
                          now=None):
     existing = get_by_thread(path, thread_id)
     if existing is not None:
         return existing
     result = _github('POST', repository, '/issues', {
-        'title': f'[tanuki/{tag}] {subject}', 'body': body,
+        'title': f'[{product}/{tag}] {subject}', 'body': body,
     })
     if not isinstance(result, dict) or not isinstance(result.get('number'), int) or not result.get('html_url'):
         raise RuntimeError('GitHub did not confirm issue creation.')
@@ -259,7 +259,7 @@ def create_discord_issue(path, repository, tag, subject, body, thread_id, guild_
             (fingerprint,product,repository,issue_number,issue_url,tag,subject,body,
              thread_id,guild_id,initial_message_id,created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
-            (key, 'tanuki', repository, result['number'], result['html_url'], tag, subject, body,
+            (key, product, repository, result['number'], result['html_url'], tag, subject, body,
              str(thread_id), str(guild_id), str(initial_message_id),
              int(time.time()) if now is None else now))
     return get_by_thread(path, thread_id)

@@ -20,16 +20,24 @@ class InquiryDiscordClient(discord.Client):
         intents = discord.Intents(guilds=True, messages=True, message_content=True)
         super().__init__(intents=intents)
         self._maintenance_task = None
-        configured_forum = os.environ.get('INQUIRY_DISCORD_FORUM_ID_TANUKI', '')
-        self.forum_id = int(configured_forum) if configured_forum.isdecimal() else None
-        self.source_since = (issue_bridge.discord_source_since(DATABASE, self.forum_id)
-                             if self.forum_id is not None else None)
+        self.forums = {}
+        self.source_since = {}
+        for product in inquiry.PRODUCTS:
+            configured_forum = os.environ.get(f'INQUIRY_DISCORD_FORUM_ID_{product.upper()}', '')
+            if not configured_forum.isdecimal():
+                continue
+            forum_id = int(configured_forum)
+            if forum_id in self.forums:
+                raise RuntimeError('The same Discord forum cannot be assigned to multiple products.')
+            self.forums[forum_id] = product
+            self.source_since[forum_id] = issue_bridge.discord_source_since(DATABASE, forum_id)
         self._import_locks = {}
 
     async def on_ready(self):
         LOG.info('Discord bridge connected as %s', self.user)
-        if self.forum_id is None:
-            LOG.warning('Direct Discord forum import is disabled: Tanuki forum ID is not configured')
+        for product in inquiry.PRODUCTS:
+            if product not in self.forums.values():
+                LOG.warning('Direct Discord forum import is disabled for %s: forum ID is not configured', product)
         if self._maintenance_task is None or self._maintenance_task.done():
             self._maintenance_task = asyncio.create_task(self._maintain())
 
@@ -40,7 +48,7 @@ class InquiryDiscordClient(discord.Client):
                 try:
                     await self._scan_new_threads()
                 except Exception:
-                    LOG.exception('Could not scan the Tanuki inquiry forum')
+                    LOG.exception('Could not scan the inquiry forums')
                 for row in await asyncio.to_thread(issue_bridge.list_linked, DATABASE):
                     await self._reconcile(row)
             except Exception:
@@ -54,12 +62,13 @@ class InquiryDiscordClient(discord.Client):
         return channel if isinstance(channel, discord.Thread) else None
 
     def _is_new_source_thread(self, thread):
-        return (self.forum_id is not None and isinstance(thread, discord.Thread)
-                and thread.parent_id == self.forum_id and thread.created_at is not None
-                and thread.created_at.timestamp() >= self.source_since)
+        return (isinstance(thread, discord.Thread) and thread.parent_id in self.forums
+                and thread.created_at is not None
+                and thread.created_at.timestamp() >= self.source_since[thread.parent_id])
 
     def _tag_for_thread(self, thread):
-        route = inquiry.get_webhook(DATABASE, 'tanuki')
+        product = self.forums.get(thread.parent_id)
+        route = inquiry.get_webhook(DATABASE, product) if product else None
         if route is not None:
             applied = {str(value) for value in thread.applied_tags}
             for tag in ('bug', 'request', 'question'):
@@ -68,13 +77,18 @@ class InquiryDiscordClient(discord.Client):
         return 'question'
 
     async def _scan_new_threads(self):
-        if self.forum_id is None:
-            return
-        forum = self.get_channel(self.forum_id) or await self.fetch_channel(self.forum_id)
+        for forum_id, product in self.forums.items():
+            try:
+                await self._scan_forum(forum_id, product)
+            except Exception:
+                LOG.exception('Could not scan the %s inquiry forum', product)
+
+    async def _scan_forum(self, forum_id, product):
+        forum = self.get_channel(forum_id) or await self.fetch_channel(forum_id)
         if not isinstance(forum, discord.ForumChannel):
-            raise RuntimeError('Configured Tanuki forum ID does not identify a forum channel.')
+            raise RuntimeError(f'Configured {product} forum ID does not identify a forum channel.')
         scan_started_at = int(time.time())
-        archive_since = await asyncio.to_thread(issue_bridge.discord_scan_since, DATABASE, self.forum_id)
+        archive_since = await asyncio.to_thread(issue_bridge.discord_scan_since, DATABASE, forum_id)
         had_error = False
         for thread in await forum.guild.active_threads():
             if self._is_new_source_thread(thread):
@@ -93,7 +107,7 @@ class InquiryDiscordClient(discord.Client):
                     had_error = True
                     LOG.exception('Failed to import archived Discord thread %s', thread.id)
         if not had_error:
-            await asyncio.to_thread(issue_bridge.mark_discord_scan, DATABASE, self.forum_id,
+            await asyncio.to_thread(issue_bridge.mark_discord_scan, DATABASE, forum_id,
                                     scan_started_at)
 
     async def _import_thread(self, thread):
@@ -112,13 +126,14 @@ class InquiryDiscordClient(discord.Client):
                 return None
             if starter.author.bot or starter.webhook_id:
                 return None
+            product = self.forums[thread.parent_id]
             tag = await asyncio.to_thread(self._tag_for_thread, thread)
             content, attachments = await self._message_data(starter)
             thread_url = f'https://discord.com/channels/{thread.guild.id}/{thread.id}'
-            body = issue_bridge.discord_issue_body(tag, starter.author.display_name, content,
+            body = issue_bridge.discord_issue_body(product, tag, starter.author.display_name, content,
                                                   attachments, thread_url)
             row = await asyncio.to_thread(issue_bridge.create_discord_issue, DATABASE,
-                                          issue_bridge.repository_for('tanuki'), tag,
+                                          issue_bridge.repository_for(product), product, tag,
                                           thread.name[:100], body, thread.id, thread.guild.id,
                                           starter.id)
             LOG.info('Created Issue %s from Discord thread %s', row['issue_number'], thread.id)
@@ -182,13 +197,14 @@ class InquiryDiscordClient(discord.Client):
             return
         content, attachments = await self._message_data(message)
         thread_url = f"https://discord.com/channels/{row['guild_id']}/{row['thread_id']}"
-        body = issue_bridge.discord_issue_body(row['tag'], message.author.display_name,
+        body = issue_bridge.discord_issue_body(row['product'], row['tag'], message.author.display_name,
                                               content, attachments, thread_url)
         await asyncio.to_thread(issue_bridge.sync_discord_initial, DATABASE, row['thread_id'], body)
 
     async def _delete_initial(self, row):
         thread_url = f"https://discord.com/channels/{row['guild_id']}/{row['thread_id']}"
-        body = issue_bridge.discord_issue_body(row['tag'], '', '', [], thread_url, deleted=True)
+        body = issue_bridge.discord_issue_body(row['product'], row['tag'], '', '', [], thread_url,
+                                               deleted=True)
         await asyncio.to_thread(issue_bridge.sync_discord_initial, DATABASE, row['thread_id'], body)
 
     async def _sync_message(self, message):
