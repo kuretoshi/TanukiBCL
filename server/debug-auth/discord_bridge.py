@@ -101,6 +101,8 @@ class InquiryDiscordClient(discord.Client):
             return None
         lock = self._import_locks.setdefault(thread.id, asyncio.Lock())
         async with lock:
+            if await asyncio.to_thread(issue_bridge.is_discord_thread_ignored, DATABASE, thread.id):
+                return None
             existing = await asyncio.to_thread(issue_bridge.get_by_thread, DATABASE, thread.id)
             if existing is not None:
                 return existing

@@ -70,6 +70,9 @@ def initialize(path):
                 enabled_at INTEGER NOT NULL,
                 scanned_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS inquiry_discord_ignored (
+                thread_id TEXT PRIMARY KEY
+            );
         """)
 
 
@@ -213,6 +216,17 @@ def mark_discord_scan(path, forum_id, now):
     with closing(connect(path)) as db, db:
         db.execute('UPDATE inquiry_discord_sources SET scanned_at=? WHERE forum_id=?',
                    (now, str(forum_id)))
+
+
+def ignore_discord_thread(path, thread_id):
+    with closing(connect(path)) as db, db:
+        db.execute('INSERT OR IGNORE INTO inquiry_discord_ignored VALUES(?)', (str(thread_id),))
+
+
+def is_discord_thread_ignored(path, thread_id):
+    with closing(connect(path)) as db:
+        return db.execute('SELECT 1 FROM inquiry_discord_ignored WHERE thread_id=?',
+                          (str(thread_id),)).fetchone() is not None
 
 
 def discord_issue_body(tag, author, content, attachments, thread_url, deleted=False):
