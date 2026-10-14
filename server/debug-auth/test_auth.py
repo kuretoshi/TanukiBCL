@@ -142,7 +142,7 @@ class InquiryTests(unittest.TestCase):
             for product in inquiry.PRODUCTS:
                 result = self.client.post('/v1/inquiries', json={
                     'product': product, 'tag': 'bug', 'subject': 'Broken', 'body': 'Details',
-                    'public_issue_consent': product == 'net'})
+                    'public_issue_consent': False})
                 self.assertEqual(result.status_code, 200)
                 self.assertEqual(result.json, {'submitted': True})
                 self.assertNotIn('discord.com', result.get_data(as_text=True))
@@ -257,6 +257,38 @@ class InquiryTests(unittest.TestCase):
         self.assertIn(attachment_url, requests[0][2]['body'])
         self.assertIn('削除', requests[2][2]['body'])
         self.assertIn('Renamed', requests[3][2]['title'])
+
+    def test_net_public_issue_uses_net_repository_and_forum(self):
+        inquiry.set_webhook(self.db, 'net', self.url_net, 'forum')
+        calls = []
+
+        def github(method, repository, endpoint, payload=None):
+            calls.append((method, repository, endpoint, payload))
+            if endpoint == '/issues':
+                return {'number': 12,
+                        'html_url': 'https://github.com/kuretoshi/BetterCrewLink_Net/issues/12'}
+            return {'id': 101}
+
+        def discord(request, timeout):
+            calls.append(('DISCORD', request.full_url, request.data))
+            return io.BytesIO(b'{"id":"80","channel_id":"90","guild_id":"70"}')
+
+        payload = {'product': 'net', 'tag': 'bug', 'subject': 'Net bug',
+                   'body': 'Details', 'public_issue_consent': True}
+        with mock.patch.dict('os.environ', {'INQUIRY_GITHUB_REPO_NET': 'kuretoshi/BetterCrewLink_Net'}), \
+                mock.patch.object(issue_bridge, '_github', side_effect=github), \
+                mock.patch.object(inquiry, 'urlopen', side_effect=discord):
+            result = self.client.post('/v1/inquiries', json=payload)
+            self.assertTrue(issue_bridge.sync_comment(self.db, '90', '91', 'Reporter', 'Reply'))
+            self.assertTrue(issue_bridge.rename_issue(self.db, '90', 'Renamed'))
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json['issue_url'],
+                         'https://github.com/kuretoshi/BetterCrewLink_Net/issues/12')
+        self.assertEqual(calls[0][:3], ('POST', 'kuretoshi/BetterCrewLink_Net', '/issues'))
+        self.assertIn(b'github.com/kuretoshi/BetterCrewLink_Net/issues/12', calls[1][2])
+        self.assertEqual(calls[2][1:3], ('kuretoshi/BetterCrewLink_Net', '/issues/12/comments'))
+        self.assertEqual(calls[3][1:3], ('kuretoshi/BetterCrewLink_Net', '/issues/12/comments'))
+        self.assertEqual(calls[4][1:3], ('kuretoshi/BetterCrewLink_Net', '/issues/12'))
 
     def test_bot_completes_discord_link_when_webhook_omits_guild_id(self):
         issue_bridge.save_issue(self.db, 'key', 'tanuki', 'kuretoshi/TanukiBCL', 7,

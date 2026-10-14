@@ -2,7 +2,7 @@
 set -euo pipefail
 
 umask 077
-read -rsp 'GitHub fine-grained token (TanukiBCL Issues write): ' github_token
+read -rsp 'GitHub fine-grained token (TanukiBCL and BetterCrewLink_Net Issues write): ' github_token
 printf '\n'
 read -rsp 'Discord Bot token: ' discord_token
 printf '\n'
@@ -18,7 +18,7 @@ fi
 
 temporary_file=$(mktemp)
 trap 'rm -f -- "$temporary_file"' EXIT
-printf 'INQUIRY_GITHUB_REPO_TANUKI=kuretoshi/TanukiBCL\nINQUIRY_GITHUB_TOKEN=%s\nINQUIRY_DISCORD_BOT_TOKEN=%s\nINQUIRY_PUBLIC_BASE=https://debug-auth.kuretoshi.work\n' \
+printf 'INQUIRY_GITHUB_REPO_TANUKI=kuretoshi/TanukiBCL\nINQUIRY_GITHUB_REPO_NET=kuretoshi/BetterCrewLink_Net\nINQUIRY_GITHUB_TOKEN=%s\nINQUIRY_DISCORD_BOT_TOKEN=%s\nINQUIRY_PUBLIC_BASE=https://debug-auth.kuretoshi.work\n' \
   "$github_token" "$discord_token" > "$temporary_file"
 unset github_token discord_token
 

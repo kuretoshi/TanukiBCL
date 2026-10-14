@@ -213,8 +213,8 @@ def receive(request, database):
             return {'error': 'この報告先は現在利用できません。'}, 503
         files = _files(request)
         subject, body = subject.strip(), body.strip()
-        # Existing Tanuki clients and the .NET client keep their current private route.
-        if product != 'tanuki' or data.get('public_issue_consent') is not True:
+        # Older clients stay on the private Discord route until they show public disclosure.
+        if data.get('public_issue_consent') is not True:
             send_to_discord(route, tag, subject, body, files)
             return {'submitted': True}, 200
         if route['kind'] != 'forum':
