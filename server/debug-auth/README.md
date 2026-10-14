@@ -51,6 +51,8 @@ sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-de
 
 新版ベタクルと3.2.28以降の.NET版は、それぞれの公開GitHub Issueを先に作成し、そのURL付きで各Discordフォーラムへ投稿します。Discordスレッドの返信・編集・削除・件名変更はBotが対応するIssueへ反映します。公開確認を送らない旧版の問い合わせは従来のDiscord直送を維持します。新版の画面には、本文・手動添付・自動添付ログが公開される旨と確認チェックを表示します。添付ファイルは受付サーバーのSQLiteに保存し、推測困難な公開ダウンロードURLをIssueに掲載します。公開ファイルは現状自動削除しないため、DBとバックアップ容量を監視してください。
 
+`INQUIRY_DISCORD_FORUM_ID_TANUKI` を設定すると、ベタクル用フォーラムに人が直接作成した投稿も公開GitHub Issueに登録します。有効化後の新規投稿だけが対象で、開始時刻はSQLiteに保存されるためBot停止中の投稿も再起動時に取得できます。元投稿・返信・件名・タグの編集や削除もIssueに反映します。BotやWebhookが作成した投稿、.NET用フォーラム、過去の投稿は取り込みません。Discordのフォーラム案内文にも、投稿と添付が公開Issueになることを明記してください。
+
 GitHub側では `kuretoshi/TanukiBCL` と `kuretoshi/BetterCrewLink_Net` のIssuesを有効にします。リポジトリごとにIssuesの読み書き権限を持つトークンをサーバーだけに設定し、Discord Botを両製品のフォーラムがあるサーバーへ追加してチャンネル閲覧・履歴閲覧権限を付け、Bot設定でMessage Content Intentを有効にします。Botには返信の送信権限は不要です。両トークンはPiの `/etc/tanuki-inquiry-bridge.env` に保存し、所有者root・権限0600にします。
 
 ```ini
@@ -59,6 +61,7 @@ INQUIRY_GITHUB_REPO_NET=kuretoshi/BetterCrewLink_Net
 INQUIRY_GITHUB_TOKEN=...
 INQUIRY_GITHUB_TOKEN_NET=...
 INQUIRY_DISCORD_BOT_TOKEN=...
+INQUIRY_DISCORD_FORUM_ID_TANUKI=ベタクル用フォーラムのチャンネルID
 INQUIRY_PUBLIC_BASE=https://debug-auth.kuretoshi.work
 ```
 

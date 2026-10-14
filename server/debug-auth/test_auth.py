@@ -1,15 +1,18 @@
 import sqlite3
+import asyncio
 from contextlib import closing
 import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from auth import allow_attempt, create_app, initialize, set_password, verify, issue_invitation, redeem_invitation
 import inquiry
 import issue_bridge
+import discord_bridge
 import update_inquiry_github_token as token_tool
 
 
@@ -301,6 +304,85 @@ class InquiryTests(unittest.TestCase):
             self.assertTrue(issue_bridge.ensure_discord_link(self.db, row))
             self.assertFalse(issue_bridge.ensure_discord_link(self.db, issue_bridge.get_by_thread(self.db, '60')))
         self.assertIn('discord.com/channels/70/60', github.call_args.args[3]['body'])
+
+    def test_discord_direct_issue_and_initial_updates(self):
+        self.assertEqual(issue_bridge.discord_source_since(self.db, '20', now=100), 100)
+        self.assertEqual(issue_bridge.discord_source_since(self.db, '20', now=200), 100)
+        self.assertEqual(issue_bridge.discord_scan_since(self.db, '20'), 100)
+        issue_bridge.mark_discord_scan(self.db, '20', 150)
+        self.assertEqual(issue_bridge.discord_scan_since(self.db, '20'), 150)
+        body = issue_bridge.discord_issue_body('question', 'Reporter', 'First post',
+                                               [('log.txt', 'https://example.com/log')],
+                                               'https://discord.com/channels/70/60')
+        self.assertIn('First post', body)
+        self.assertIn('log.txt', body)
+        requests = []
+
+        def github(method, repository, endpoint, payload=None):
+            requests.append((method, endpoint, payload))
+            if endpoint == '/issues':
+                return {'number': 9, 'html_url': 'https://github.com/kuretoshi/TanukiBCL/issues/9'}
+            return {'id': 102}
+
+        with mock.patch.object(issue_bridge, '_github', side_effect=github):
+            first = issue_bridge.create_discord_issue(self.db, 'kuretoshi/TanukiBCL',
+                    'question', 'Direct post', body, '60', '70', '60')
+            second = issue_bridge.create_discord_issue(self.db, 'kuretoshi/TanukiBCL',
+                    'question', 'Direct post', body, '60', '70', '60')
+            self.assertEqual(first['issue_number'], second['issue_number'])
+            self.assertFalse(issue_bridge.ensure_discord_link(self.db, first))
+            edited = issue_bridge.discord_issue_body('question', 'Reporter', 'Edited post', [],
+                                                     'https://discord.com/channels/70/60')
+            self.assertTrue(issue_bridge.sync_discord_initial(self.db, '60', edited))
+            self.assertFalse(issue_bridge.sync_discord_initial(self.db, '60', edited))
+            self.assertTrue(issue_bridge.rename_issue(self.db, '60', 'Renamed', 'bug'))
+            self.assertTrue(issue_bridge.sync_comment(self.db, '60', '61', 'Helper', 'Reply'))
+            deleted = issue_bridge.discord_issue_body('bug', '', '', [],
+                    'https://discord.com/channels/70/60', deleted=True)
+            self.assertTrue(issue_bridge.sync_discord_initial(self.db, '60', deleted))
+        self.assertEqual([item[0] for item in requests], ['POST', 'PATCH', 'PATCH', 'POST', 'PATCH'])
+        self.assertEqual(issue_bridge.get_by_thread(self.db, '60')['tag'], 'bug')
+        self.assertIn('削除', requests[-1][2]['body'])
+
+    def test_bot_imports_human_starter_once_and_skips_webhook(self):
+        class FakeThread:
+            def __init__(self, thread_id, webhook_id=None):
+                self.id = thread_id
+                self.name = 'Direct report'
+                self.guild = SimpleNamespace(id=70)
+                self.starter = SimpleNamespace(id=thread_id, webhook_id=webhook_id,
+                        author=SimpleNamespace(bot=False, display_name='Reporter'))
+
+            async def fetch_message(self, message_id):
+                self.asserted_id = message_id
+                return self.starter
+
+        requests = []
+
+        def github(method, repository, endpoint, payload=None):
+            requests.append((method, endpoint, payload))
+            return {'number': 10, 'html_url': 'https://github.com/kuretoshi/TanukiBCL/issues/10'}
+
+        async def exercise():
+            client = discord_bridge.InquiryDiscordClient()
+            with mock.patch.object(client, '_is_new_source_thread', return_value=True), \
+                    mock.patch.object(client, '_tag_for_thread', return_value='question'), \
+                    mock.patch.object(client, '_message_data', new=mock.AsyncMock(return_value=('Body', []))):
+                human = FakeThread(60)
+                first = await client._import_thread(human)
+                second = await client._import_thread(human)
+                ignored = await client._import_thread(FakeThread(61, webhook_id=123))
+                self.assertEqual(human.asserted_id, 60)
+                self.assertEqual(first['issue_number'], second['issue_number'])
+                self.assertIsNone(ignored)
+            await client.close()
+
+        with mock.patch.dict('os.environ', {'INQUIRY_DISCORD_FORUM_ID_TANUKI': '20',
+                                             'INQUIRY_GITHUB_REPO_TANUKI': 'kuretoshi/TanukiBCL'}), \
+                mock.patch.object(discord_bridge, 'DATABASE', self.db), \
+                mock.patch.object(issue_bridge, '_github', side_effect=github):
+            asyncio.run(exercise())
+        self.assertEqual(len(requests), 1)
 
     def test_issue_is_accepted_when_discord_is_temporarily_unavailable(self):
         from urllib.error import HTTPError
