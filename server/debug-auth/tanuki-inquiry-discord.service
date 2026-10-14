@@ -1,0 +1,23 @@
+[Unit]
+Description=TanukiBCL inquiry Discord to GitHub bridge
+After=network-online.target tanuki-debug-auth.service
+Wants=network-online.target
+
+[Service]
+User=tanuki-debug-auth
+Group=tanuki-debug-auth
+WorkingDirectory=/opt/tanuki-debug-auth
+Environment=DEBUG_AUTH_DB=/var/lib/tanuki-debug-auth/auth.sqlite3
+EnvironmentFile=/etc/tanuki-inquiry-bridge.env
+ExecStart=/opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/discord_bridge.py
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tanuki-debug-auth
+
+[Install]
+WantedBy=multi-user.target

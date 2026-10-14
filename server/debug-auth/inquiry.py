@@ -1,13 +1,16 @@
-"""Server-side relay for the two desktop clients' Discord inquiries."""
+"""Server-side intake for GitHub Issues mirrored to Discord forums."""
 from contextlib import closing
 import hashlib
 import json
+import logging
 import re
 import sqlite3
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+
+import issue_bridge
 
 
 PRODUCTS = ('tanuki', 'net')
@@ -16,6 +19,7 @@ ATTACHMENT_LIMIT = 24 * 1024 * 1024
 REQUEST_LIMIT = 26 * 1024 * 1024
 WEBHOOK_PATH = re.compile(r'/api/webhooks/\d+/[A-Za-z0-9._-]+\Z')
 TAG_ID = re.compile(r'\d{1,20}\Z')
+LOG = logging.getLogger(__name__)
 
 
 def connect(path):
@@ -43,6 +47,7 @@ def initialize(path):
             CREATE INDEX IF NOT EXISTS inquiry_attempts_timestamp
                 ON inquiry_attempts(timestamp);
         """)
+    issue_bridge.initialize(path)
 
 
 def validate_webhook(url):
@@ -132,14 +137,15 @@ def _multipart(payload, files):
     return b''.join(chunks), f'multipart/form-data; boundary={boundary}'
 
 
-def send_to_discord(route, tag, subject, body, files):
+def send_to_discord(route, tag, subject, body, files, issue_url=None):
+    content = f'{body}\n\nGitHub Issue: {issue_url}' if issue_url else body
     if route['kind'] == 'forum':
-        payload = {'thread_name': subject, 'content': body, 'allowed_mentions': {'parse': []}}
+        payload = {'thread_name': subject, 'content': content, 'allowed_mentions': {'parse': []}}
         tag_id = route[f'{tag}_tag']
         if tag_id:
             payload['applied_tags'] = [tag_id]
     else:
-        payload = {'content': f'**[{tag}] {subject}**\n{body}', 'allowed_mentions': {'parse': []}}
+        payload = {'content': f'**[{tag}] {subject}**\n{content}', 'allowed_mentions': {'parse': []}}
     if files:
         data, content_type = _multipart(payload, files)
     else:
@@ -149,10 +155,41 @@ def send_to_discord(route, tag, subject, body, files):
         'Content-Type': content_type,
         'User-Agent': 'DiscordBot (https://github.com/kuretoshi/TanukiBCL, 1.0)',
     })
-    with urlopen(request, timeout=20) as response:
+    with urlopen(request, timeout=12) as response:
         result = json.load(response)
     if not isinstance(result, dict) or not result.get('id'):
         raise RuntimeError('Discord did not confirm the report.')
+    return result
+
+
+def mirror_pending(database, only_key=None):
+    """Retry Discord delivery after the Issue has already been accepted."""
+    for row in issue_bridge.pending(database):
+        if only_key is not None and row['fingerprint'] != only_key:
+            continue
+        route = get_webhook(database, row['product'])
+        if route is None or route['kind'] != 'forum':
+            continue
+        claimed = issue_bridge.claim_pending(database, row['fingerprint'])
+        if claimed is None:
+            continue
+        try:
+            result = send_to_discord(route, row['tag'], row['subject'], row['body'],
+                                     issue_bridge.pending_files(database, row['fingerprint']), row['issue_url'])
+            if not result.get('channel_id'):
+                raise RuntimeError('Discord did not return a forum thread ID.')
+            issue_bridge.link_thread(database, row['fingerprint'], result['channel_id'], result['id'],
+                                     result.get('guild_id'))
+        except Exception:
+            issue_bridge.release_pending(database, row['fingerprint'])
+            if only_key is not None:
+                raise
+            LOG.exception('Could not mirror inquiry %s to Discord', row['fingerprint'])
+    for row in issue_bridge.list_linked(database):
+        try:
+            issue_bridge.ensure_discord_link(database, row)
+        except Exception:
+            LOG.exception('Could not add Discord link to issue %s', row['issue_number'])
 
 
 def receive(request, database):
@@ -175,8 +212,32 @@ def receive(request, database):
         if route is None:
             return {'error': 'この報告先は現在利用できません。'}, 503
         files = _files(request)
-        send_to_discord(route, tag, subject.strip(), body.strip(), files)
-        return {'submitted': True}, 200
+        subject, body = subject.strip(), body.strip()
+        # Existing Tanuki clients and the .NET client keep their current private route.
+        if product != 'tanuki' or data.get('public_issue_consent') is not True:
+            send_to_discord(route, tag, subject, body, files)
+            return {'submitted': True}, 200
+        if route['kind'] != 'forum':
+            return {'error': 'この報告先は現在利用できません。'}, 503
+        repository = issue_bridge.repository_for(product)
+        key = issue_bridge.fingerprint(source, product, tag, subject, body, files, int(time.time()) // 600)
+        existing = issue_bridge.get_by_fingerprint(database, key)
+        if existing is not None:
+            return {'submitted': True, 'issue_url': existing['issue_url']}, 200
+        attachments = issue_bridge.save_attachments(database, key, files)
+        try:
+            number, issue_url = issue_bridge.create_issue(repository, product, tag, subject, body, attachments)
+        except Exception:
+            issue_bridge.delete_attachments(database, key)
+            raise
+        issue_bridge.save_issue(database, key, product, repository, number, issue_url,
+                                tag, subject, body, files, int(time.time()))
+        try:
+            mirror_pending(database, key)
+        except Exception:
+            # The Issue is the accepted record. The bot worker will retry the forum mirror.
+            LOG.exception('Issue %s was created but Discord delivery is pending', number)
+        return {'submitted': True, 'issue_url': issue_url}, 200
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return {'error': '報告内容を確認してください。'}, 400
     except (HTTPError, URLError, TimeoutError, OSError, RuntimeError):

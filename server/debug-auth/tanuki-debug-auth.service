@@ -9,7 +9,8 @@ WorkingDirectory=/opt/tanuki-debug-auth
 StateDirectory=tanuki-debug-auth
 StateDirectoryMode=0700
 Environment=DEBUG_AUTH_DB=/var/lib/tanuki-debug-auth/auth.sqlite3
-ExecStart=/opt/tanuki-debug-auth/.venv/bin/gunicorn --bind 127.0.0.1:8765 --workers 2 --timeout 30 auth:create_app()
+EnvironmentFile=-/etc/tanuki-inquiry-bridge.env
+ExecStart=/opt/tanuki-debug-auth/.venv/bin/gunicorn --bind 127.0.0.1:8765 --workers 2 --timeout 45 auth:create_app()
 Restart=on-failure
 UMask=0077
 NoNewPrivileges=true

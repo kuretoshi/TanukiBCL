@@ -2,6 +2,13 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.28
+
+- ベタクル新版の問い合わせを公開GitHub Issueとして作成し、Discordフォーラムにも転送するよう変更。
+- Discordフォーラムの返信・編集・削除・件名変更を対応するIssueへ反映。
+- 問い合わせの本文・添付ファイル・自動添付ログが公開されることを送信前に確認できるよう変更。
+- ベタクル旧版と.NET版の問い合わせ送信方法は従来どおり維持。
+
 ## v3.2.27
 
 - SNRのカスタムスキンがベタクル画面のアバターに表示されない問題を修正。

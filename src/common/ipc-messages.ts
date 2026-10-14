@@ -82,6 +82,7 @@ export interface InquiryPayload {
 	body: string;
 	tag: InquiryTag;
 	attachmentPaths: string[];
+	publicIssueAcknowledged: boolean;
 }
 
 export type InquiryTag = 'question' | 'bug' | 'request';
