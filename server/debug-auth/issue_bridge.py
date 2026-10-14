@@ -65,6 +65,11 @@ def initialize(path):
                 comment_id INTEGER NOT NULL,
                 content_hash TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS inquiry_discord_sources (
+                forum_id TEXT PRIMARY KEY,
+                enabled_at INTEGER NOT NULL,
+                scanned_at INTEGER NOT NULL
+            );
         """)
 
 
@@ -189,6 +194,73 @@ def create_issue(repository, product, tag, subject, body, attachments):
     return result['number'], result['html_url']
 
 
+def discord_source_since(path, forum_id, now=None):
+    now = int(time.time()) if now is None else now
+    with closing(connect(path)) as db, db:
+        db.execute('INSERT OR IGNORE INTO inquiry_discord_sources VALUES(?,?,?)',
+                   (str(forum_id), now, now))
+        return db.execute('SELECT enabled_at FROM inquiry_discord_sources WHERE forum_id=?',
+                          (str(forum_id),)).fetchone()['enabled_at']
+
+
+def discord_scan_since(path, forum_id):
+    with closing(connect(path)) as db:
+        return db.execute('SELECT scanned_at FROM inquiry_discord_sources WHERE forum_id=?',
+                          (str(forum_id),)).fetchone()['scanned_at']
+
+
+def mark_discord_scan(path, forum_id, now):
+    with closing(connect(path)) as db, db:
+        db.execute('UPDATE inquiry_discord_sources SET scanned_at=? WHERE forum_id=?',
+                   (now, str(forum_id)))
+
+
+def discord_issue_body(tag, author, content, attachments, thread_url, deleted=False):
+    text = 'Discordの元投稿が削除されました。' if deleted else (_safe_markdown(content.strip()) or '（本文なし）')
+    attachment_note = ''
+    if attachments and not deleted:
+        lines = []
+        for filename, url in attachments:
+            label = _safe_markdown(filename).replace('[', '\\[').replace(']', '\\]')
+            lines.append(f'- [{label}]({url})')
+        attachment_note = '\n\n### 添付ファイル（公開）\n' + '\n'.join(lines)
+    author_line = '' if deleted else f'Discord投稿者: {_safe_markdown(author)}\n'
+    return (f'製品: tanuki\n種別: {tag}\n{author_line}\n'
+            f'{text}{attachment_note}\n\n---\nDiscordフォーラムの元投稿: {thread_url}')
+
+
+def create_discord_issue(path, repository, tag, subject, body, thread_id, guild_id, initial_message_id,
+                         now=None):
+    existing = get_by_thread(path, thread_id)
+    if existing is not None:
+        return existing
+    result = _github('POST', repository, '/issues', {
+        'title': f'[tanuki/{tag}] {subject}', 'body': body,
+    })
+    if not isinstance(result, dict) or not isinstance(result.get('number'), int) or not result.get('html_url'):
+        raise RuntimeError('GitHub did not confirm issue creation.')
+    key = f'discord:{thread_id}'
+    with closing(connect(path)) as db, db:
+        db.execute('''INSERT INTO inquiry_issues
+            (fingerprint,product,repository,issue_number,issue_url,tag,subject,body,
+             thread_id,guild_id,initial_message_id,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (key, 'tanuki', repository, result['number'], result['html_url'], tag, subject, body,
+             str(thread_id), str(guild_id), str(initial_message_id),
+             int(time.time()) if now is None else now))
+    return get_by_thread(path, thread_id)
+
+
+def sync_discord_initial(path, thread_id, body):
+    row = get_by_thread(path, thread_id)
+    if row is None or not row['fingerprint'].startswith('discord:') or row['body'] == body:
+        return False
+    _github('PATCH', row['repository'], f"/issues/{row['issue_number']}", {'body': body})
+    with closing(connect(path)) as db, db:
+        db.execute('UPDATE inquiry_issues SET body=? WHERE fingerprint=?', (body, row['fingerprint']))
+    return True
+
+
 def get_by_fingerprint(path, key):
     with closing(connect(path)) as db:
         return db.execute('SELECT * FROM inquiry_issues WHERE fingerprint=?', (key,)).fetchone()
@@ -264,7 +336,8 @@ def list_linked(path):
 
 
 def ensure_discord_link(path, row):
-    if not row['thread_id'] or not row['guild_id'] or row['link_comment_id']:
+    if (not row['thread_id'] or not row['guild_id'] or row['link_comment_id']
+            or row['fingerprint'].startswith('discord:')):
         return False
     thread_url = f"https://discord.com/channels/{row['guild_id']}/{row['thread_id']}"
     result = _github('POST', row['repository'], f"/issues/{row['issue_number']}/comments", {
@@ -323,15 +396,17 @@ def sync_comment(path, thread_id, message_id, author, content, attachments=(), d
     return True
 
 
-def rename_issue(path, thread_id, title):
+def rename_issue(path, thread_id, title, tag=None):
     row = get_by_thread(path, thread_id)
     if row is None:
         return False
     title = title.strip()[:100]
-    if not title or title == row['subject']:
+    tag = tag if tag in ('question', 'bug', 'request') else row['tag']
+    if not title or (title == row['subject'] and tag == row['tag']):
         return False
     _github('PATCH', row['repository'], f"/issues/{row['issue_number']}",
-            {'title': f"[{row['product']}/{row['tag']}] {title}"})
+            {'title': f"[{row['product']}/{tag}] {title}"})
     with closing(connect(path)) as db, db:
-        db.execute('UPDATE inquiry_issues SET subject=? WHERE fingerprint=?', (title, row['fingerprint']))
+        db.execute('UPDATE inquiry_issues SET subject=?,tag=? WHERE fingerprint=?',
+                   (title, tag, row['fingerprint']))
     return True
