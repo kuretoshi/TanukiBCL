@@ -32,7 +32,7 @@ const INQUIRY_LOG_TAIL_BYTES = 1024 * 1024;
 const TEXT = {
 	attachmentTooLarge:
 		'\u6dfb\u4ed8\u30d5\u30a1\u30a4\u30eb\u306e\u5408\u8a08\u30b5\u30a4\u30ba\u306f24MB\u4ee5\u4e0b\u306b\u3057\u3066\u304f\u3060\u3055\u3044\u3002',
-	discordPostFailed: 'Discord\u3078\u306e\u6295\u7a3f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002',
+	inquiryPostFailed: '問い合わせの送信に失敗しました。',
 	invalidAttachment: '\u6dfb\u4ed8\u3067\u304d\u306a\u3044\u30d5\u30a1\u30a4\u30eb\u3067\u3059',
 	missingFields: '\u4ef6\u540d\u3068\u672c\u6587\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002',
 };
@@ -110,7 +110,10 @@ function buildMultipartBody(payload: Record<string, unknown>, files: string[]) {
 	};
 }
 
-async function submitDiscordInquiry(inquiry: InquiryPayload) {
+async function submitInquiry(inquiry: InquiryPayload) {
+	if (inquiry.publicIssueAcknowledged !== true) {
+		throw new Error('公開される内容を確認してください。');
+	}
 	const subject = sanitizeDiscordText(inquiry.subject, 100);
 	const body = sanitizeDiscordText(inquiry.body, DISCORD_BODY_LIMIT);
 	if (!subject || !body) {
@@ -133,6 +136,7 @@ async function submitDiscordInquiry(inquiry: InquiryPayload) {
 
 	const payload = {
 		product: 'tanuki',
+		public_issue_consent: true,
 		tag: inquiry.tag,
 		subject,
 		body,
@@ -155,8 +159,13 @@ async function submitDiscordInquiry(inquiry: InquiryPayload) {
 				});
 
 	if (!response.ok) {
-		throw new Error(`${TEXT.discordPostFailed}HTTP ${response.status}`);
+		throw new Error(`${TEXT.inquiryPostFailed}HTTP ${response.status}`);
 	}
+	const result = (await response.json()) as { issue_url?: string };
+	if (!result.issue_url || !/^https:\/\/github\.com\/kuretoshi\/TanukiBCL\/issues\/\d+$/.test(result.issue_url)) {
+		throw new Error(TEXT.inquiryPostFailed);
+	}
+	return result.issue_url;
 }
 
 // Listeners are fire and forget, they do not have "responses" or return values
@@ -270,7 +279,7 @@ export const initializeIpcHandlers = (): void => {
 	});
 
 	ipcMain.handle(IpcHandlerMessages.SUBMIT_INQUIRY, async (_, inquiry: InquiryPayload) => {
-		await submitDiscordInquiry(inquiry);
+		return submitInquiry(inquiry);
 	});
 
 	ipcMain.handle(IpcMessages.REQUEST_PLATFORMS_AVAILABLE, (_, customPlatforms: GamePlatformMap) => {

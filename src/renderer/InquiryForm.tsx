@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
-import { ipcRenderer } from './lib/electron-bridge';
-import { Alert, Button, IconButton, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { ipcRenderer, shell } from './lib/electron-bridge';
+import {
+	Alert,
+	Button,
+	Checkbox,
+	FormControlLabel,
+	IconButton,
+	MenuItem,
+	Select,
+	TextField,
+	Typography,
+} from '@mui/material';
 import Box from '@mui/material/Box';
 import { useTheme, Theme } from '@mui/material/styles';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -52,12 +62,15 @@ export const InquiryForm: React.FC = function () {
 	const [body, setBody] = useState('');
 	const [tag, setTag] = useState<InquiryTag>('question');
 	const [attachments, setAttachments] = useState<InquiryAttachment[]>([]);
+	const [publicIssueAcknowledged, setPublicIssueAcknowledged] = useState(false);
 	const [sending, setSending] = useState(false);
 	const [message, setMessage] = useState('');
+	const [issueUrl, setIssueUrl] = useState('');
 	const [error, setError] = useState('');
 
 	const resetStatus = () => {
 		setMessage('');
+		setIssueUrl('');
 		setError('');
 	};
 
@@ -78,17 +91,20 @@ export const InquiryForm: React.FC = function () {
 		resetStatus();
 		setSending(true);
 		try {
-			await ipcRenderer.invoke(IpcHandlerMessages.SUBMIT_INQUIRY, {
+			const createdIssueUrl = (await ipcRenderer.invoke(IpcHandlerMessages.SUBMIT_INQUIRY, {
 				subject,
 				body,
 				tag,
 				attachmentPaths: attachments.map((attachment) => attachment.path),
-			});
+				publicIssueAcknowledged,
+			})) as string;
 			setMessage(TEXT.sendComplete);
+			setIssueUrl(createdIssueUrl);
 			setSubject('');
 			setBody('');
 			setTag('question');
 			setAttachments([]);
+			setPublicIssueAcknowledged(false);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -102,7 +118,26 @@ export const InquiryForm: React.FC = function () {
 				<Typography variant="h6">{TEXT.inquiry}</Typography>
 				<Box sx={classes.form}>
 					{message && <Alert severity="success">{message}</Alert>}
+					{issueUrl && (
+						<Alert severity="info">
+							公開Issue: <Button onClick={() => shell.openExternal(issueUrl)}>{issueUrl}</Button>
+						</Alert>
+					)}
 					{error && <Alert severity="error">{error}</Alert>}
+					<Alert severity="warning">
+						送信すると、本文・選択した添付ファイル・自動添付されるログが公開GitHub
+						Issueに掲載されます。個人情報や秘密情報が含まれていないか確認してください。
+					</Alert>
+					<FormControlLabel
+						control={
+							<Checkbox
+								checked={publicIssueAcknowledged}
+								onChange={(event) => setPublicIssueAcknowledged(event.target.checked)}
+								disabled={sending}
+							/>
+						}
+						label="公開される内容を確認しました"
+					/>
 					<Select
 						inputProps={{ 'aria-label': TEXT.tag }}
 						value={tag}
@@ -169,7 +204,7 @@ export const InquiryForm: React.FC = function () {
 					variant="contained"
 					color="secondary"
 					onClick={submitInquiry}
-					disabled={sending || subject.trim().length === 0 || body.trim().length === 0}
+					disabled={sending || !publicIssueAcknowledged || subject.trim().length === 0 || body.trim().length === 0}
 				>
 					<SendIcon sx={classes.icon} />
 					{TEXT.send}

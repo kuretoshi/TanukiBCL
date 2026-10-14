@@ -11,6 +11,7 @@ import sqlite3
 import time
 
 import inquiry
+import issue_bridge
 
 MAX_PASSWORDS = 16
 
@@ -129,7 +130,8 @@ def allow_attempt(path, source, now=None):
 
 
 def create_app(database=None):
-    from flask import Flask, jsonify, request, send_from_directory
+    from flask import Flask, jsonify, request, send_file, send_from_directory
+    from io import BytesIO
     app = Flask(__name__)
     app.config['MAX_CONTENT_LENGTH'] = 8192
     database = database or os.environ.get('DEBUG_AUTH_DB', '/var/lib/tanuki-debug-auth/auth.sqlite3')
@@ -179,6 +181,14 @@ def create_app(database=None):
         request.max_content_length = inquiry.REQUEST_LIMIT
         request.max_form_parts = 12
         return inquiry.receive(request, database)
+
+    @app.get('/v1/inquiries/attachments/<token>')
+    def inquiry_attachment(token):
+        row = issue_bridge.get_attachment(database, token)
+        if row is None:
+            return '', 404
+        return send_file(BytesIO(row['data']), mimetype='application/octet-stream',
+                         as_attachment=True, download_name=row['filename'])
 
     @app.post('/v1/debug-auth/verify')
     def authenticate():
