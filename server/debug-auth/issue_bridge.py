@@ -241,6 +241,13 @@ def get_by_thread(path, thread_id):
         return db.execute('SELECT * FROM inquiry_issues WHERE thread_id=?', (str(thread_id),)).fetchone()
 
 
+def set_guild_id(path, thread_id, guild_id):
+    with closing(connect(path)) as db, db:
+        db.execute('UPDATE inquiry_issues SET guild_id=? WHERE thread_id=? AND guild_id IS NULL',
+                   (str(guild_id), str(thread_id)))
+    return get_by_thread(path, thread_id)
+
+
 def comment_message_ids(path, thread_id):
     with closing(connect(path)) as db:
         return {row['message_id'] for row in db.execute(

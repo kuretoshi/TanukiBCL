@@ -46,6 +46,9 @@ class InquiryDiscordClient(discord.Client):
             channel = await self._thread(row['thread_id'])
             if channel is None:
                 return
+            if not row['guild_id']:
+                row = await asyncio.to_thread(issue_bridge.set_guild_id, DATABASE, channel.id, channel.guild.id)
+            await asyncio.to_thread(issue_bridge.ensure_discord_link, DATABASE, row)
             await asyncio.to_thread(issue_bridge.rename_issue, DATABASE, channel.id, channel.name)
             seen = set()
             async for message in channel.history(limit=None, oldest_first=True):

@@ -258,6 +258,17 @@ class InquiryTests(unittest.TestCase):
         self.assertIn('削除', requests[2][2]['body'])
         self.assertIn('Renamed', requests[3][2]['title'])
 
+    def test_bot_completes_discord_link_when_webhook_omits_guild_id(self):
+        issue_bridge.save_issue(self.db, 'key', 'tanuki', 'kuretoshi/TanukiBCL', 7,
+                                'https://github.com/kuretoshi/TanukiBCL/issues/7',
+                                'bug', 'Subject', 'Body', [], 1)
+        issue_bridge.link_thread(self.db, 'key', '60', '50', None)
+        with mock.patch.object(issue_bridge, '_github', return_value={'id': 101}) as github:
+            row = issue_bridge.set_guild_id(self.db, '60', '70')
+            self.assertTrue(issue_bridge.ensure_discord_link(self.db, row))
+            self.assertFalse(issue_bridge.ensure_discord_link(self.db, issue_bridge.get_by_thread(self.db, '60')))
+        self.assertIn('discord.com/channels/70/60', github.call_args.args[3]['body'])
+
     def test_issue_is_accepted_when_discord_is_temporarily_unavailable(self):
         from urllib.error import HTTPError
         inquiry.set_webhook(self.db, 'tanuki', self.url_tanuki, 'forum')
