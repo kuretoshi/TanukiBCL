@@ -317,15 +317,32 @@ class InquiryTests(unittest.TestCase):
         self.assertEqual(result.json['issue_url'], 'https://github.com/kuretoshi/TanukiBCL/issues/8')
         self.assertEqual(len(issue_bridge.pending(self.db)), 1)
 
-    def test_interactive_github_token_replacement_keeps_other_settings(self):
+    def test_product_github_tokens_are_selected_independently(self):
+        response = io.BytesIO(b'{}')
+        with mock.patch.dict('os.environ', {
+            'INQUIRY_GITHUB_REPO_NET': 'kuretoshi/BetterCrewLink_Net',
+            'INQUIRY_GITHUB_TOKEN': 'tanuki_token',
+            'INQUIRY_GITHUB_TOKEN_NET': 'net_token',
+        }), mock.patch.object(issue_bridge, 'urlopen') as urlopen:
+            urlopen.return_value.__enter__.return_value = response
+            issue_bridge._github('GET', 'kuretoshi/BetterCrewLink_Net', '/issues')
+            self.assertEqual(urlopen.call_args.args[0].get_header('Authorization'), 'Bearer net_token')
+            response.seek(0)
+            issue_bridge._github('GET', 'kuretoshi/TanukiBCL', '/issues')
+            self.assertEqual(urlopen.call_args.args[0].get_header('Authorization'), 'Bearer tanuki_token')
+
+    def test_interactive_net_token_update_keeps_tanuki_and_bot_tokens(self):
         path = Path(self.temp.name) / 'bridge.env'
         path.write_text('INQUIRY_GITHUB_TOKEN=old\nINQUIRY_DISCORD_BOT_TOKEN=keep\n', encoding='utf-8')
         token_tool.replace_token(path, 'github_pat_new')
         self.assertEqual(path.read_text(encoding='utf-8'),
-                         'INQUIRY_GITHUB_TOKEN=github_pat_new\nINQUIRY_DISCORD_BOT_TOKEN=keep\n')
+                         'INQUIRY_GITHUB_TOKEN=old\nINQUIRY_DISCORD_BOT_TOKEN=keep\n'
+                         'INQUIRY_GITHUB_TOKEN_NET=github_pat_new\n')
+        token_tool.replace_token(path, 'github_pat_newer')
+        self.assertIn('INQUIRY_GITHUB_TOKEN_NET=github_pat_newer\n', path.read_text(encoding='utf-8'))
         with self.assertRaises(ValueError):
             token_tool.replace_token(path, 'bad token')
-        self.assertIn('github_pat_new', path.read_text(encoding='utf-8'))
+        self.assertIn('INQUIRY_GITHUB_TOKEN=old\n', path.read_text(encoding='utf-8'))
         from urllib.error import HTTPError
         with mock.patch.object(token_tool, 'urlopen',
                                side_effect=HTTPError('https://api.github.com', 422, 'Invalid', {}, None)):

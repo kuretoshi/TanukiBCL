@@ -1,6 +1,7 @@
 """Interactively replace the inquiry bridge's GitHub token without exposing it."""
 
 import getpass
+import argparse
 import os
 from pathlib import Path
 import re
@@ -10,7 +11,10 @@ from urllib.request import Request, urlopen
 
 
 ENVIRONMENT_FILE = Path('/etc/tanuki-inquiry-bridge.env')
-REPOSITORIES = ('kuretoshi/TanukiBCL', 'kuretoshi/BetterCrewLink_Net')
+PRODUCTS = {
+    'tanuki': ('kuretoshi/TanukiBCL', 'INQUIRY_GITHUB_TOKEN'),
+    'net': ('kuretoshi/BetterCrewLink_Net', 'INQUIRY_GITHUB_TOKEN_NET'),
+}
 
 
 def validate_token(token):
@@ -37,14 +41,19 @@ def check_issue_permission(token, repository):
             raise RuntimeError(f'Issues permission check failed for {repository} (HTTP {error.code}).') from error
 
 
-def replace_token(path, token):
+def replace_token(path, token, variable='INQUIRY_GITHUB_TOKEN_NET'):
     validate_token(token)
     original = path.read_text(encoding='utf-8').splitlines(keepends=True)
     matching = [index for index, line in enumerate(original)
-                if line.startswith('INQUIRY_GITHUB_TOKEN=')]
-    if len(matching) != 1:
-        raise RuntimeError('Expected exactly one GitHub token entry; file was not changed.')
-    original[matching[0]] = f'INQUIRY_GITHUB_TOKEN={token}\n'
+                if line.startswith(variable + '=')]
+    if len(matching) > 1:
+        raise RuntimeError('Duplicate GitHub token entries; file was not changed.')
+    if matching:
+        original[matching[0]] = f'{variable}={token}\n'
+    else:
+        if original and not original[-1].endswith('\n'):
+            original[-1] += '\n'
+        original.append(f'{variable}={token}\n')
     staged_path = None
     try:
         with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=path.parent,
@@ -59,16 +68,19 @@ def replace_token(path, token):
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Rotate one inquiry GitHub token without printing it.')
+    parser.add_argument('--product', choices=PRODUCTS, default='net')
+    args = parser.parse_args()
     if os.geteuid() != 0:
         raise SystemExit('Run this command with sudo.')
     if not ENVIRONMENT_FILE.is_file():
         raise SystemExit('Inquiry bridge environment file was not found.')
-    token = getpass.getpass('GitHub token for both repositories (hidden): ')
+    repository, variable = PRODUCTS[args.product]
+    token = getpass.getpass(f'GitHub token for {repository} (hidden): ')
     validate_token(token)
-    for repository in REPOSITORIES:
-        check_issue_permission(token, repository)
-        print(f'Issues permission confirmed: {repository}')
-    replace_token(ENVIRONMENT_FILE, token)
+    check_issue_permission(token, repository)
+    print(f'Issues permission confirmed: {repository}')
+    replace_token(ENVIRONMENT_FILE, token, variable)
     print('Token saved. Restart tanuki-debug-auth.service and tanuki-inquiry-discord.service.')
 
 

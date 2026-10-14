@@ -129,7 +129,11 @@ def save_discord_attachment(path, message_id, attachment_id, filename, data):
 
 
 def _github(method, repository, endpoint, payload=None):
-    token = os.environ.get('INQUIRY_GITHUB_TOKEN', '')
+    net_repository = os.environ.get('INQUIRY_GITHUB_REPO_NET', '')
+    token = (os.environ.get('INQUIRY_GITHUB_TOKEN_NET', '')
+             if repository == net_repository and net_repository else '')
+    if not token:
+        token = os.environ.get('INQUIRY_GITHUB_TOKEN', '')
     if not token:
         raise RuntimeError('GitHub issue token is not configured.')
     if not REPOSITORY.fullmatch(repository):

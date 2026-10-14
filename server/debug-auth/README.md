@@ -51,23 +51,24 @@ sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-de
 
 新版ベタクルと3.2.28以降の.NET版は、それぞれの公開GitHub Issueを先に作成し、そのURL付きで各Discordフォーラムへ投稿します。Discordスレッドの返信・編集・削除・件名変更はBotが対応するIssueへ反映します。公開確認を送らない旧版の問い合わせは従来のDiscord直送を維持します。新版の画面には、本文・手動添付・自動添付ログが公開される旨と確認チェックを表示します。添付ファイルは受付サーバーのSQLiteに保存し、推測困難な公開ダウンロードURLをIssueに掲載します。公開ファイルは現状自動削除しないため、DBとバックアップ容量を監視してください。
 
-GitHub側では `kuretoshi/TanukiBCL` と `kuretoshi/BetterCrewLink_Net` のIssuesを有効にします。両リポジトリにIssuesの読み書き権限を持つトークンをサーバーだけに設定し、Discord Botを両製品のフォーラムがあるサーバーへ追加してチャンネル閲覧・履歴閲覧権限を付け、Bot設定でMessage Content Intentを有効にします。Botには返信の送信権限は不要です。両トークンはPiの `/etc/tanuki-inquiry-bridge.env` に保存し、所有者root・権限0600にします。
+GitHub側では `kuretoshi/TanukiBCL` と `kuretoshi/BetterCrewLink_Net` のIssuesを有効にします。リポジトリごとにIssuesの読み書き権限を持つトークンをサーバーだけに設定し、Discord Botを両製品のフォーラムがあるサーバーへ追加してチャンネル閲覧・履歴閲覧権限を付け、Bot設定でMessage Content Intentを有効にします。Botには返信の送信権限は不要です。両トークンはPiの `/etc/tanuki-inquiry-bridge.env` に保存し、所有者root・権限0600にします。
 
 ```ini
 INQUIRY_GITHUB_REPO_TANUKI=kuretoshi/TanukiBCL
 INQUIRY_GITHUB_REPO_NET=kuretoshi/BetterCrewLink_Net
 INQUIRY_GITHUB_TOKEN=...
+INQUIRY_GITHUB_TOKEN_NET=...
 INQUIRY_DISCORD_BOT_TOKEN=...
 INQUIRY_PUBLIC_BASE=https://debug-auth.kuretoshi.work
 ```
 
 Piへ `issue_bridge.py`、`discord_bridge.py`、`tanuki-inquiry-discord.service` も配置します。`tanuki-debug-auth.service` とBotサービスの両方が同じ環境ファイル・SQLiteを使います。Python依存を更新後、サービスファイルをsystemdに配置して `daemon-reload` し、受付APIとBotを再起動・起動します。nginxには `/v1/inquiries/attachments/` のGETルートを追加し、`nginx -t` の後に反映します。Botの起動ログに接続完了が出ること、Issue作成・Discord投稿・返信編集・添付ダウンロードを確認してから新版アプリを配布します。
 
-既存Piの環境ファイルに `INQUIRY_GITHUB_REPO_NET` を追加せずに運用する場合は、`net-issue-repository.conf` を `/etc/systemd/system/tanuki-debug-auth.service.d/` に配置し、`systemctl daemon-reload` とサービス再起動を行えます。GitHubトークンは引き続き環境ファイルにのみ置き、.NETリポジトリのIssues読み書き権限を付けてください。
+既存Piの環境ファイルに `INQUIRY_GITHUB_REPO_NET` を追加せずに運用する場合は、`net-issue-repository.conf` を `/etc/systemd/system/tanuki-debug-auth.service.d/` に配置し、`systemctl daemon-reload` とサービス再起動を行えます。GitHubトークンは引き続き環境ファイルにのみ置き、.NET専用トークンには.NETリポジトリのIssues読み書き権限を付けてください。
 
 トークンを設定する際は、Piで `bash /opt/tanuki-debug-auth/configure-inquiry-bridge.sh` を実行します。2つのトークンを非表示入力で受け取り、rootのみ読める環境ファイルを作成して受付APIとBotを起動します。トークンをコマンド引数やチャットに貼らないでください。
 
-既存のDiscord Botトークンを変えずにGitHubトークンだけ更新する場合は、Piで `sudo /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/update_inquiry_github_token.py` を実行します。新トークンを非表示で入力し、両リポジトリのIssues書き込み権限を検査してから、既存の環境ファイルを権限0600で原子的に更新します。成功後に `sudo systemctl restart tanuki-debug-auth.service tanuki-inquiry-discord.service` を実行してください。トークンはチャットやコマンド引数に貼らないでください。
+既存の通常版GitHubトークンとDiscord Botトークンを変えずに.NET専用トークンを追加・更新する場合は、Piで `sudo /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-debug-auth/update_inquiry_github_token.py` を実行します。.NET用トークンを非表示で入力し、.NETリポジトリのIssues書き込み権限だけを検査してから、既存の環境ファイルを権限0600で原子的に更新します。通常版トークンを単独で更新する場合は `--product tanuki` を付けます。成功後に `sudo systemctl restart tanuki-debug-auth.service tanuki-inquiry-discord.service` を実行してください。トークンはチャットやコマンド引数に貼らないでください。
 
 Piへ `auth.py`、`inquiry.py`、実運用の `nginx-tunnel.conf` を配置し、`nginx -t` 後にnginxの設定を反映してサービスを再起動した後、**Pi上で**以下を実行してください。別のHTTPS構成で `nginx-location.conf` を使っている場合はそちらも更新します。新規チャンネルがDiscordフォーラムなら、そのチャンネル内にWebhookを作り、フォーラムタグのIDを指定します。タグが不要なら `--question-tag` 等は省略できます。通常のテキストチャンネルなら `--kind text` を指定し、タグIDは指定しません。
 
