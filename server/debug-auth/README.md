@@ -62,6 +62,8 @@ INQUIRY_PUBLIC_BASE=https://debug-auth.kuretoshi.work
 
 Piへ `issue_bridge.py`、`discord_bridge.py`、`tanuki-inquiry-discord.service` も配置します。`tanuki-debug-auth.service` とBotサービスの両方が同じ環境ファイル・SQLiteを使います。Python依存を更新後、サービスファイルをsystemdに配置して `daemon-reload` し、受付APIとBotを再起動・起動します。nginxには `/v1/inquiries/attachments/` のGETルートを追加し、`nginx -t` の後に反映します。Botの起動ログに接続完了が出ること、Issue作成・Discord投稿・返信編集・添付ダウンロードを確認してから新版アプリを配布します。
 
+トークンを設定する際は、Piで `bash /opt/tanuki-debug-auth/configure-inquiry-bridge.sh` を実行します。2つのトークンを非表示入力で受け取り、rootのみ読める環境ファイルを作成して受付APIとBotを起動します。トークンをコマンド引数やチャットに貼らないでください。
+
 Piへ `auth.py`、`inquiry.py`、実運用の `nginx-tunnel.conf` を配置し、`nginx -t` 後にnginxの設定を反映してサービスを再起動した後、**Pi上で**以下を実行してください。別のHTTPS構成で `nginx-location.conf` を使っている場合はそちらも更新します。新規チャンネルがDiscordフォーラムなら、そのチャンネル内にWebhookを作り、フォーラムタグのIDを指定します。タグが不要なら `--question-tag` 等は省略できます。通常のテキストチャンネルなら `--kind text` を指定し、タグIDは指定しません。
 
 ```sh
