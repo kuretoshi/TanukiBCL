@@ -10,6 +10,7 @@ from unittest import mock
 from auth import allow_attempt, create_app, initialize, set_password, verify, issue_invitation, redeem_invitation
 import inquiry
 import issue_bridge
+import update_inquiry_github_token as token_tool
 
 
 class AuthenticationTests(unittest.TestCase):
@@ -315,6 +316,24 @@ class InquiryTests(unittest.TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json['issue_url'], 'https://github.com/kuretoshi/TanukiBCL/issues/8')
         self.assertEqual(len(issue_bridge.pending(self.db)), 1)
+
+    def test_interactive_github_token_replacement_keeps_other_settings(self):
+        path = Path(self.temp.name) / 'bridge.env'
+        path.write_text('INQUIRY_GITHUB_TOKEN=old\nINQUIRY_DISCORD_BOT_TOKEN=keep\n', encoding='utf-8')
+        token_tool.replace_token(path, 'github_pat_new')
+        self.assertEqual(path.read_text(encoding='utf-8'),
+                         'INQUIRY_GITHUB_TOKEN=github_pat_new\nINQUIRY_DISCORD_BOT_TOKEN=keep\n')
+        with self.assertRaises(ValueError):
+            token_tool.replace_token(path, 'bad token')
+        self.assertIn('github_pat_new', path.read_text(encoding='utf-8'))
+        from urllib.error import HTTPError
+        with mock.patch.object(token_tool, 'urlopen',
+                               side_effect=HTTPError('https://api.github.com', 422, 'Invalid', {}, None)):
+            token_tool.check_issue_permission('github_pat_new', 'kuretoshi/BetterCrewLink_Net')
+        with mock.patch.object(token_tool, 'urlopen',
+                               side_effect=HTTPError('https://api.github.com', 403, 'Forbidden', {}, None)):
+            with self.assertRaisesRegex(RuntimeError, 'HTTP 403'):
+                token_tool.check_issue_permission('github_pat_new', 'kuretoshi/BetterCrewLink_Net')
 
 
 if __name__ == '__main__':
