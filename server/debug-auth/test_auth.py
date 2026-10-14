@@ -375,6 +375,10 @@ class InquiryTests(unittest.TestCase):
                 self.assertEqual(human.asserted_id, 60)
                 self.assertEqual(first['issue_number'], second['issue_number'])
                 self.assertIsNone(ignored)
+                issue_bridge.ignore_discord_thread(self.db, 62)
+                self.assertTrue(issue_bridge.is_discord_thread_ignored(self.db, 62))
+                self.assertIsNone(await client._import_thread(FakeThread(62)))
+                self.assertFalse(issue_bridge.is_discord_thread_ignored(self.db, 63))
             await client.close()
 
         with mock.patch.dict('os.environ', {'INQUIRY_DISCORD_FORUM_ID_TANUKI': '20',
