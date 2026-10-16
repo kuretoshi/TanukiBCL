@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.29
+
+- Among Us終了時にNoSの音声役職用データが未取得になると、ベタクルのメインプロセスでエラーが発生する問題を修正。
+
 ## v3.2.28
 
 - ベタクル新版の問い合わせを公開GitHub Issueとして作成し、Discordフォーラムにも転送するよう変更。
