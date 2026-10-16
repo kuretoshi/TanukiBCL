@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.31
+
+- バージョン不一致の通知でプレイヤー表示の配置が崩れる問題を修正。
+
 ## v3.2.30
 
 - 3.2.29の配布物にWindowsレジストリ用のネイティブモジュールが含まれず、起動時にエラーとなる問題を修正。
