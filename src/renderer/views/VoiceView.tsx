@@ -38,10 +38,28 @@ const useStyles = () => {
 		},
 		root: {
 			height: '100vh',
+			width: '100vw',
 			boxSizing: 'border-box',
 			overflowY: 'auto',
+			scrollbarGutter: 'stable',
 			paddingTop: theme.spacing(3),
 			paddingBottom: '80px',
+		},
+		versionWarning: {
+			position: 'fixed',
+			left: 12,
+			right: 12,
+			bottom: 72,
+			zIndex: 4,
+			boxSizing: 'border-box',
+			maxHeight: 96,
+			overflowY: 'auto',
+			overflowWrap: 'anywhere',
+			whiteSpace: 'normal',
+			padding: '8px 10px',
+			border: '1px solid #9b7b2d',
+			borderRadius: '4px',
+			backgroundColor: '#443919',
 		},
 		top: {
 			display: 'flex',
@@ -163,7 +181,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 		gameState.mod === 'NONE' ? undefined : (modList.find(({ id }) => id === gameState.mod)?.label ?? gameState.mod);
 
 	return (
-		<Box sx={classes.root}>
+		<Box sx={{ ...classes.root, paddingBottom: voice.versionWarning && lobbyDetected ? '184px' : '80px' }}>
 			{detectedMod && (
 				<Box
 					title={gameState.nosReadStatus?.message}
@@ -181,7 +199,7 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 				</Box>
 			)}
 			{voice.versionWarning && lobbyDetected && (
-				<Typography role="status" color="warning.main" align="center" sx={{ px: 2, mb: 1 }}>
+				<Typography role="status" color="warning.main" align="center" sx={classes.versionWarning}>
 					{voice.versionWarning}
 				</Typography>
 			)}
