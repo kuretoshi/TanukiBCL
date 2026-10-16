@@ -59,7 +59,7 @@ export class NosVoiceRoleSender {
 
 	send(rms: unknown, active: unknown, pid: number, state?: AmongUsState): void {
 		if (typeof rms !== 'number' || !Number.isFinite(rms) || rms < 0 || rms > 1 || typeof active !== 'boolean') return;
-		const player = state?.players.find((p) => p.isLocal);
+		const player = state?.players?.find((p) => p.isLocal);
 		if (
 			state?.mod !== 'NoS' ||
 			(state.gameState !== GameState.TASKS &&
