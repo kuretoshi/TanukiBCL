@@ -25,7 +25,7 @@ export function sendHostVoice(
 		typeof active !== 'boolean'
 	)
 		return false;
-	const player = state.players.find((p) => p.id === playerId);
+	const player = state.players?.find((p) => p.id === playerId);
 	if (!player || player.disconnected || player.isDead) return false;
 	try {
 		const d = JSON.parse(

@@ -33,6 +33,8 @@ const descriptor = {
 const state = { mod: 'NoS', gameState: 1, players: [{ id: 7, isLocal: true, isDead: false, disconnected: false }] };
 const sender = new NosVoiceRoleSender(descriptorPath);
 try {
+	assert.doesNotThrow(() => sender.send(0.5, true, 123, { mod: 'NoS', gameState: 1 }),
+		'missing players during Among Us shutdown must not crash the main process');
 	assert.equal(validVoiceRoleDescriptor(descriptor), true);
 	for (const change of [
 		{ protocol: 2 },

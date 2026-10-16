@@ -29,6 +29,8 @@ try {
  assert(!admission.accept('mobile',client,last,state));
  assert(!admission.accept('other',{playerId:8,clientId:88},last,state));
  assert(!sendHostVoice(7,.5,true,123,{...state,isHost:false}));
+ assert.doesNotThrow(()=>assert.equal(sendHostVoice(7,.5,true,123,{...state,players:undefined}),false),
+  'host relay must ignore a missing player list during Among Us shutdown');
  mobile.sample(.5,false,state,player,true,10100,10100);await delay(80);assert.equal(packets[1][6],'0');
  console.log('PASS Web/mobile -> authenticated host admission -> actual loopback UDP; replay, impersonation, non-host, mute');
 } finally {socket.close();if(old===undefined)delete process.env.LOCALAPPDATA;else process.env.LOCALAPPDATA=old;await rm(dir,{recursive:true,force:true});}
