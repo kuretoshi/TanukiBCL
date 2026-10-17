@@ -3,6 +3,7 @@ import Typography from '@mui/material/Typography';
 import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
+import { captureMicrophone } from '../lib/captureMicrophone';
 
 interface TestMicProps {
 	microphone: string;
@@ -70,7 +71,6 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, aut
 		};
 
 		const audio_options: LegacyAudioConstraints = {
-			deviceId: microphone && microphone.toLowerCase() !== 'default' ? { exact: microphone } : undefined,
 			autoGainControl,
 			channelCount: 2,
 			echoCancellation: false,
@@ -83,12 +83,8 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, aut
 		};
 
 		let cancelled = false;
-		navigator.mediaDevices
-			.getUserMedia({
-				audio: audio_options,
-				video: false,
-			})
-			.then((s) => {
+		captureMicrophone(audio_options, microphone)
+			.then(({ stream: s }) => {
 				if (cancelled) {
 					s.getTracks().forEach((track) => track.stop());
 					return;
