@@ -12,6 +12,7 @@ import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { createBerserkerEffect } from './berserkerEffect';
 import { createBibiriEcho, updateBibiriEcho, disconnectBibiriEcho, stopBibiriEcho } from './bibiriEcho';
 import { createMegaphoneRecording } from './megaphoneRecording';
+import { createDyingVoiceRecording, inDyingVoiceRange } from './dyingVoiceRecording';
 import { selectVoiceEffect, shouldApplyRainbowStarEcho, type VoiceEffectSetting } from './voiceEffectRules';
 import { createVoiceDisguiseEffect, updateVoiceDisguiseEffect } from '../voiceEffect';
 
@@ -484,6 +485,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (this.deafenedState) this.localMegaphoneRecording?.cancel();
 		if (this.deafenedState)
 			for (const peer of this.peers.values()) {
+				peer.dyingVoiceRecording?.setVolume(0);
 				peer.megaphoneRecording?.cancel();
 				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
 			}
@@ -555,6 +557,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		gain.connect(masterGain);
 
 		this.peers.set(peerId, {
+			dyingVoiceRecording: createDyingVoiceRecording(context, source, masterGain),
 			megaphoneRecording: createMegaphoneRecording(context, source, masterGain),
 			bibiriEcho: createBibiriEcho(context, gain, masterGain),
 			voiceEffectConnected: false,
@@ -579,6 +582,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (!peer) return;
 		this.peers.delete(peerId);
 		peer.megaphoneRecording?.disconnect();
+		peer.dyingVoiceRecording?.disconnect();
 		if (peer.voiceEffect) disconnectProcessingEffect(peer.voiceEffect);
 
 		this.teardownAudioElement(peer.dummyAudioElement);
@@ -622,6 +626,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.localMegaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) peer.megaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) {
+			peer.dyingVoiceRecording?.cancel();
 			peer.gain.gain.value = 0;
 			this.clearVoiceEffect(peer);
 		}
@@ -630,6 +635,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	silencePeersExcept(peerIds: string[]): void {
 		for (const [peerId, peer] of this.peers) {
 			if (!peerIds.includes(peerId)) {
+				peer.dyingVoiceRecording?.cancel();
 				peer.megaphoneRecording?.cancel();
 				peer.gain.gain.value = 0;
 				if (peer.bibiriEcho) stopBibiriEcho(peer.bibiriEcho);
@@ -639,6 +645,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	updateGameState(state: AmongUsState): void {
+		if (state.mod !== 'NoS' || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION))
+			for (const peer of this.peers.values()) peer.dyingVoiceRecording?.cancel();
 		const local = state.players.find((player) => player.isLocal);
 		this.localMegaphoneRecording?.update(
 			state.nosMegaphones?.find((entry) => entry.playerId === local?.id),
@@ -696,6 +704,16 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
+		const message = state.nosDyingVoices?.find((entry) => entry.playerId === other.id);
+		const nearMessage = inDyingVoiceRange(message, me, state.gameState === GameState.TASKS);
+		peer.dyingVoiceRecording?.update(
+			message,
+			state.mod === 'NoS' &&
+				(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+				other.isDead &&
+				!other.disconnected,
+			nearMessage && !this.deafenedState
+		);
 		peer.megaphoneRecording?.update(
 			state.nosMegaphones?.find((entry) => entry.playerId === other.id),
 			state.mod === 'NoS' && state.gameState === GameState.TASKS && !other.disconnected && !this.deafenedState,
@@ -785,6 +803,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		return result.gain;
 	}
 	setMegaphonePlaybackVolume(peerId: string, volume: number): void {
+		this.peers.get(peerId)?.dyingVoiceRecording?.setVolume(volume);
 		this.peers.get(peerId)?.megaphoneRecording?.setVolume(volume);
 	}
 }

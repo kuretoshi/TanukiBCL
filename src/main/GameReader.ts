@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { normalizeMeetingState } from '../common/meetingState';
 import { readMegaphoneState } from './megaphoneState';
+import { readDyingVoiceState } from './dyingVoiceState';
 import { readPortableMegaphoneState } from './portableMegaphoneState';
 import { readBibiriEchoState } from './bibiriEchoState';
 import { GameInfo } from '../common/GameInfo';
@@ -568,6 +569,10 @@ export default class GameReader {
 						: undefined,
 				nosMegaphones:
 					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readMegaphoneState(this.pid) : undefined,
+				nosDyingVoices:
+					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
+						? readDyingVoiceState(this.pid)
+						: undefined,
 				nosPortableMegaphones:
 					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readPortableMegaphoneState(this.pid) : undefined,
 				lobbyCode: lobbyCode,
