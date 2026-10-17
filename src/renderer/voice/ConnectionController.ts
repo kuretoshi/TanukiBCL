@@ -53,6 +53,7 @@ interface ConnectionControllerEvents extends Record<string, unknown[]> {
 	voiceRoleControl: [from: string, client: Client | undefined, data: Record<string, unknown>];
 	mobileDetected: [];
 	mobileCosmeticsRequested: [ids: string[]];
+	obsCosmeticsRequested: [from: string, secret: string, sources: string[]];
 	lobbyReset: [];
 }
 
@@ -206,6 +207,17 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 		});
 
 		socket.on('signal', ({ data, from, client }: { data: SignalData; from: string; client: Client }) => {
+			if ((data as { type?: string }).type === 'obs-cosmetics-request') {
+				const request = data as unknown as { secret?: unknown; sources?: unknown };
+				if (typeof from === 'string' && typeof request.secret === 'string' && Array.isArray(request.sources))
+					this.emit(
+						'obsCosmeticsRequested',
+						from,
+						request.secret,
+						request.sources.slice(0, 4).filter((source): source is string => typeof source === 'string')
+					);
+				return;
+			}
 			if ((data as { type?: string }).type === 'nos-voice-source') {
 				if (this.voiceRoleSources.receive(client, data, this.context.lobbyCode, this.clients))
 					this.emit('socketClients', this.clients);

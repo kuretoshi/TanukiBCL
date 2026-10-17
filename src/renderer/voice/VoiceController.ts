@@ -33,6 +33,7 @@ import { gameStore } from '../state/gameStore';
 import { AudioController } from './AudioController';
 import { ConnectionController } from './ConnectionController';
 import { MobileCosmetics } from './MobileCosmetics';
+import { ObsSkinAssets, obsAppearance } from './ObsSkinAssets';
 import { defaultLobbySettings, VoiceSnapshot } from './types';
 import { isToh4eHostName } from '../../common/Mods';
 import { isSnrJackalTeam } from '../../common/SnrRole';
@@ -134,6 +135,7 @@ function emptyPrev() {
 		gameOpen: false,
 		gameInfo: '',
 		obsPayload: '',
+		obsSentAt: 0,
 		toh4eLobby: false,
 		tohRole: null,
 		tohRoleSentSignatures: {} as Record<number, string>,
@@ -155,6 +157,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private readonly audio = new AudioController();
 	private readonly connection = new ConnectionController();
 	private readonly mobileCosmetics = new MobileCosmetics();
+	private readonly obsSkinAssets = new ObsSkinAssets();
 
 	private started = false;
 	private startToken = 0;
@@ -299,6 +302,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.disableRemoteVoice();
 		this.connection.stop();
 		this.mobileCosmetics.reset();
+		this.obsSkinAssets.reset();
 		this.audio.stop();
 		this.unwireConnection();
 		this.unwireAudio();
@@ -639,6 +643,18 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 		add(this.connection.on('mobileDetected', () => this.mobileCosmetics.resend()));
 		add(this.connection.on('mobileCosmeticsRequested', (ids) => this.mobileCosmetics.resend(ids)));
+		add(
+			this.connection.on('obsCosmeticsRequested', (from, secret, sources) => {
+				const settings = SettingsStore.store;
+				if (!settings.obsOverlay || secret !== settings.obsSecret || secret.length !== 9) return;
+				for (const source of sources) {
+					void this.obsSkinAssets.get(source).then((png) => {
+						if (png && settings.obsOverlay && secret === SettingsStore.store.obsSecret)
+							this.connection.signalTo(from, { type: 'obs-cosmetic', source, png });
+					});
+				}
+			})
+		);
 	}
 
 	private onPeerData(peerId: string, data: Record<string, unknown>): void {
@@ -1623,20 +1639,28 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const { playerColors } = gameStore.getSnapshot();
 		const { socketClients, playerSocketIds, otherTalking, otherDead, talking } = this.snapshot;
 		const visibleRadioClientIds = myPlayer ? this.getVisibleRadioClientIds(state) : [];
+		const appearances = state.players.map((player) => obsAppearance(player, state.mod));
+		const assetSession = `${state.lobbyCode}:${state.mod}`;
+		this.obsSkinAssets.setActive(
+			assetSession,
+			appearances.flatMap(({ skinSource, bodyMaskSource }) => [skinSource, bodyMaskSource])
+		);
 
 		const obsVoiceState: ObsVoiceState = {
 			overlayState: {
 				gameState: state.gameState,
-				players: state.players.map((player) => ({
+				players: state.players.map((player, index) => ({
 					id: player.id,
 					clientId: player.clientId,
 					inVent: player.inVent,
 					isDead: player.isDead,
 					name: player.name,
-					hatId: player.hatId,
+					hatId: appearances[index].hatId,
 					petId: player.petId,
-					skinId: player.skinId,
-					visorId: player.visorId,
+					skinId: appearances[index].skinId,
+					visorId: appearances[index].visorId,
+					skinSource: appearances[index].skinSource,
+					bodyMaskSource: appearances[index].bodyMaskSource,
 					disconnected: player.disconnected,
 					isLocal: player.isLocal,
 					bugged: player.bugged,
@@ -1660,11 +1684,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			localIsAlive: !myPlayer?.isDead,
 			mod: state.mod,
 			oldMeetingHud: state.oldMeetingHud,
+			assetSession,
 		};
 
 		const payload = JSON.stringify(obsVoiceState);
-		if (payload === this.prev.obsPayload) return;
+		if (payload === this.prev.obsPayload && Date.now() - this.prev.obsSentAt < 5000) return;
 		this.prev.obsPayload = payload;
+		this.prev.obsSentAt = Date.now();
 
 		this.connection.signalTo(settings.obsSecret, obsVoiceState);
 	}
