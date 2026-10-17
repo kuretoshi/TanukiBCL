@@ -80,6 +80,7 @@ function actor(clientId) {
 		isTohImpostorEntries,
 		defaultLobbySettings,
 		OVERLAY_VOICE_KEYS: [],
+		TOH_SYNC_REFRESH_MS: 3000,
 		Date: { now: () => now },
 		console,
 		packageJson: { version: 'test' },
@@ -115,7 +116,7 @@ function actor(clientId) {
 	c.connection.setMobileRunning = () => {};
 	c.connection.joinLobby = () => events.emit('lobbyReset');
 	c.connection.leaveLobby = () => events.emit('lobbyReset');
-	c.audio = { setMaxDistance() {}, removePeer() {}, setJammed() {} };
+	c.audio = { updateGameState() {}, setMaxDistance() {}, removePeer() {}, setJammed() {}, setLocalRadioPending() {} };
 	c.emit = () => {};
 	for (const name of [
 		'unwireConnection',
@@ -239,6 +240,19 @@ for (const a of clients) {
 }
 host.setState(game(host));
 assert.equal(packets.filter((p) => p.data.type === 'toh4e-role').length, 3, 'Unchanged roles are throttled');
+const initialPackets = packets.length;
+const initialRosters = packets.filter((p) => p.data.type === 'toh4e-roster').length;
+const initialCatalogues = packets.filter((p) => p.data.type === 'toh4e-lobby').length;
+now += 1000;
+host.setState(game(host));
+now += 1000;
+host.setState(game(host));
+assert.equal(packets.length, initialPackets, 'No unchanged TOH host packets during the refresh interval');
+now += 1000;
+host.setState(game(host));
+assert.equal(packets.filter((p) => p.data.type === 'toh4e-role').length, 6, 'Roles are refreshed before client expiry');
+assert.equal(packets.filter((p) => p.data.type === 'toh4e-roster').length, initialRosters, 'Unchanged roster is not rebroadcast');
+assert.equal(packets.filter((p) => p.data.type === 'toh4e-lobby').length, initialCatalogues + 3, 'Catalogue is refreshed before client expiry');
 
 const first = clients[0];
 const rolePacket = { type: 'toh4e-role', lobbyCode: 'ABCDEF', targetClientId: 101, targetPlayerId: 1, role: roles[1] };
