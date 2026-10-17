@@ -4,6 +4,7 @@ import { ISettings, ILobbySettings } from '../../common/ISettings';
 import { IpcRendererMessages } from '../../common/ipc-messages';
 import { pushToTalkOptions } from '../../common/pushToTalkOptions';
 import { ipcRenderer } from '../lib/electron-bridge';
+import { captureMicrophone } from '../lib/captureMicrophone';
 import { TypedEmitter } from '../lib/TypedEmitter';
 import VAD, { VADOptions } from '../lib/vad';
 import SettingsStore from '../settings/SettingsStore';
@@ -164,10 +165,6 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (!context || !this.started || token !== this.startToken || inputToken !== this.inputToken) return;
 
 		const constraints: MediaTrackConstraints & Record<string, unknown> = {
-			deviceId:
-				settings.microphone && settings.microphone.toLowerCase() !== 'default'
-					? { exact: settings.microphone }
-					: undefined,
 			autoGainControl: settings.autoGainControl,
 			channelCount: 2,
 			echoCancellation: settings.echoCancellation,
@@ -180,8 +177,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			sampleRate: settings.oldSampleDebug ? 48000 : undefined,
 		};
 		let inputStream: MediaStream;
+		let usedDefault = false;
 		try {
-			inputStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: constraints });
+			({ stream: inputStream, usedDefault } = await captureMicrophone(constraints, settings.microphone));
 		} catch (error) {
 			if (token !== this.startToken || inputToken !== this.inputToken) return;
 			this.emit('error', "Couldn't connect to your microphone:\n" + error);
@@ -274,6 +272,10 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		audioListener.options.maxNoiseLevel = 1;
 		audioListener.init();
 		this.audioListener = audioListener;
+		if (usedDefault && SettingsStore.store.microphone === settings.microphone) {
+			console.warn('Selected microphone is unavailable; switched to the default input');
+			SettingsStore.set('microphone', 'default');
+		}
 	}
 
 	private teardownInputChain(): void {
