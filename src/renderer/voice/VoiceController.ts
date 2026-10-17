@@ -643,16 +643,18 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 		add(this.connection.on('mobileDetected', () => this.mobileCosmetics.resend()));
 		add(this.connection.on('mobileCosmeticsRequested', (ids) => this.mobileCosmetics.resend(ids)));
-		add(this.connection.on('obsCosmeticsRequested', (from, secret, sources) => {
-			const settings = SettingsStore.store;
-			if (!settings.obsOverlay || secret !== settings.obsSecret || secret.length !== 9) return;
-			for (const source of sources) {
-				void this.obsSkinAssets.get(source).then((png) => {
-					if (png && settings.obsOverlay && secret === SettingsStore.store.obsSecret)
-						this.connection.signalTo(from, { type: 'obs-cosmetic', source, png });
-				});
-			}
-		}));
+		add(
+			this.connection.on('obsCosmeticsRequested', (from, secret, sources) => {
+				const settings = SettingsStore.store;
+				if (!settings.obsOverlay || secret !== settings.obsSecret || secret.length !== 9) return;
+				for (const source of sources) {
+					void this.obsSkinAssets.get(source).then((png) => {
+						if (png && settings.obsOverlay && secret === SettingsStore.store.obsSecret)
+							this.connection.signalTo(from, { type: 'obs-cosmetic', source, png });
+					});
+				}
+			})
+		);
 	}
 
 	private onPeerData(peerId: string, data: Record<string, unknown>): void {
@@ -1639,7 +1641,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const visibleRadioClientIds = myPlayer ? this.getVisibleRadioClientIds(state) : [];
 		const appearances = state.players.map((player) => obsAppearance(player, state.mod));
 		const assetSession = `${state.lobbyCode}:${state.mod}`;
-		this.obsSkinAssets.setActive(assetSession, appearances.flatMap(({ skinSource, bodyMaskSource }) => [skinSource, bodyMaskSource]));
+		this.obsSkinAssets.setActive(
+			assetSession,
+			appearances.flatMap(({ skinSource, bodyMaskSource }) => [skinSource, bodyMaskSource])
+		);
 
 		const obsVoiceState: ObsVoiceState = {
 			overlayState: {

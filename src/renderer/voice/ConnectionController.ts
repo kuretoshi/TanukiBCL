@@ -210,8 +210,12 @@ export class ConnectionController extends TypedEmitter<ConnectionControllerEvent
 			if ((data as { type?: string }).type === 'obs-cosmetics-request') {
 				const request = data as unknown as { secret?: unknown; sources?: unknown };
 				if (typeof from === 'string' && typeof request.secret === 'string' && Array.isArray(request.sources))
-					this.emit('obsCosmeticsRequested', from, request.secret,
-						request.sources.slice(0, 4).filter((source): source is string => typeof source === 'string'));
+					this.emit(
+						'obsCosmeticsRequested',
+						from,
+						request.secret,
+						request.sources.slice(0, 4).filter((source): source is string => typeof source === 'string')
+					);
 				return;
 			}
 			if ((data as { type?: string }).type === 'nos-voice-source') {

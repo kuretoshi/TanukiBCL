@@ -7,17 +7,19 @@ const RETRY_DELAY_MS = 1500;
 
 export function obsAppearance(player: Player, mod: string) {
 	const outfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
-	const display = (original: string, current: string) =>
-		outfit || current.startsWith('Modded_') ? current : original;
-	const hatId = mod === 'NoS' && player.nosPlayer?.hat?.name
-		? player.nosPlayer.hat.name
-		: display(player.hatId, player.appearanceHatId);
-	const skinId = mod === 'NoS' && player.nosPlayer?.skin?.name
-		? player.nosPlayer.skin.name
-		: display(player.skinId, player.appearanceSkinId);
-	const visorId = mod === 'NoS' && player.nosPlayer?.visor?.name
-		? player.nosPlayer.visor.name
-		: display(player.visorId, player.appearanceVisorId);
+	const display = (original: string, current: string) => (outfit || current.startsWith('Modded_') ? current : original);
+	const hatId =
+		mod === 'NoS' && player.nosPlayer?.hat?.name
+			? player.nosPlayer.hat.name
+			: display(player.hatId, player.appearanceHatId);
+	const skinId =
+		mod === 'NoS' && player.nosPlayer?.skin?.name
+			? player.nosPlayer.skin.name
+			: display(player.skinId, player.appearanceSkinId);
+	const visorId =
+		mod === 'NoS' && player.nosPlayer?.visor?.name
+			? player.nosPlayer.visor.name
+			: display(player.visorId, player.appearanceVisorId);
 	return {
 		hatId,
 		skinId,
@@ -36,8 +38,9 @@ export function obsAppearance(player: Player, mod: string) {
 }
 
 export function isObsSkinSource(source: string): boolean {
-	return source.length <= 512 &&
-		(source.startsWith('nos-cosmetic://image/') || source.startsWith('snr-cosmetic://skin/'));
+	return (
+		source.length <= 512 && (source.startsWith('nos-cosmetic://image/') || source.startsWith('snr-cosmetic://skin/'))
+	);
 }
 
 /** Only current lobby cosmetics are eligible for transfer to the local OBS browser source. */
@@ -92,9 +95,11 @@ export class ObsSkinAssets {
 			if (!response.ok) throw new Error('OBS skin image unavailable');
 			const image = new Uint8Array(await response.arrayBuffer());
 			if (
-				image.length < 24 || image.length > MAX_IMAGE_BYTES ||
+				image.length < 24 ||
+				image.length > MAX_IMAGE_BYTES ||
 				![137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => image[index] === byte)
-			) throw new Error('Invalid OBS skin PNG');
+			)
+				throw new Error('Invalid OBS skin PNG');
 			const chunks: string[] = [];
 			for (let offset = 0; offset < image.length; offset += 0x8000)
 				chunks.push(String.fromCharCode(...image.subarray(offset, offset + 0x8000)));
