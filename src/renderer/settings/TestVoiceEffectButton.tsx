@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { captureMicrophone } from '../lib/captureMicrophone';
 import Button from '@mui/material/Button';
 
 import { ExtendedAudioElement } from '../voice/types';
@@ -57,7 +58,6 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 
 		try {
 			const audioOptions: MediaTrackConstraints & Record<string, unknown> = {
-				deviceId: microphone && microphone.toLowerCase() !== 'default' ? { exact: microphone } : undefined,
 				autoGainControl: false,
 				echoCancellation: false,
 				noiseSuppression: false,
@@ -67,10 +67,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 				googHighpassFilter: false,
 				googTypingNoiseDetection: false,
 			};
-			const stream = await navigator.mediaDevices.getUserMedia({
-				audio: audioOptions,
-				video: false,
-			});
+			const { stream } = await captureMicrophone(audioOptions, microphone);
 			if (stopRequestedRef.current) {
 				stream.getTracks().forEach((track) => track.stop());
 				return;

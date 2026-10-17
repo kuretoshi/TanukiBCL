@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.33
+
+- 保存したマイクIDがWindows側で変わった場合、3.2.32で起動時に`OverconstrainedError`となる問題を修正。指定マイクが見つからないときだけ既定マイクで再試行し、設定表示も既定に切り替えます。
+- マイク入力メーターと音声エフェクトのテストでも、同じ再試行を行うよう変更。
+
 ## v3.2.32
 
 - 指定したマイクが入力されない問題を修正し、マイクの切り替え中に古い取得結果が新しい設定を上書きしないように変更。
