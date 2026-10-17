@@ -71,6 +71,10 @@ const OVERLAY_VOICE_KEYS: (keyof VoiceSnapshot)[] = [
 	'impostorRadioClientIds',
 ];
 
+// Host packets expire after five seconds on clients. Refresh reliable peer data
+// with enough margin for a delayed frame without flooding every peer each second.
+const TOH_SYNC_REFRESH_MS = 3000;
+
 const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	remoteVoiceCode: '',
 	remoteVoiceConnected: false,
@@ -140,6 +144,7 @@ function emptyPrev() {
 		tohRole: null,
 		tohRoleSentSignatures: {} as Record<number, string>,
 		tohLobbySentSignature: '',
+		tohLobbySentAt: 0,
 		tohSession: '',
 		tohRoleSentAt: {} as Record<number, number>,
 		tohRosterSentSignature: '',
@@ -528,8 +533,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				const { gameState } = gameStore.getSnapshot();
 				const myPlayer = gameState?.players?.find((player) => player.isLocal);
 				if (myPlayer) {
-					this.publishToh4eLobby(gameState, true);
-					this.publishToh4eRoster(gameState, true);
+					this.publishToh4eLobby(gameState);
+					this.publishToh4eRoster(gameState);
 					this.publishToh4eRole(gameState);
 				}
 			})
@@ -1029,7 +1034,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			clientId: Number(clientId),
 			name,
 		}));
-		const signature = `${state.lobbyCode}|${JSON.stringify(players)}|${Math.floor(Date.now() / 1000)}`;
+		const signature = `${state.lobbyCode}|${JSON.stringify(players)}`;
 		if (!force && signature === this.prev.tohRosterSentSignature) return;
 		this.prev.tohRosterSentSignature = signature;
 		this.connection.broadcast(JSON.stringify({ type: 'toh4e-roster', lobbyCode: state.lobbyCode, players }));
@@ -1039,9 +1044,15 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		if (!this.host.isHost || state.gameState === GameState.MENU || state.gameState === GameState.UNKNOWN) return;
 		const enabled = state.mod === 'TOH4E' || this.snapshot.toh4eLobby;
 		const roleCatalog = enabled && isTohRoleCatalog(state.tohRoleCatalog) ? state.tohRoleCatalog : [];
-		const signature = `${state.lobbyCode}|${enabled ? 1 : 0}|${JSON.stringify(roleCatalog)}|${Math.floor(Date.now() / 1000)}`;
-		if (!force && signature === this.prev.tohLobbySentSignature) return;
+		const signature = `${state.lobbyCode}|${enabled ? 1 : 0}|${JSON.stringify(roleCatalog)}`;
+		if (
+			!force &&
+			signature === this.prev.tohLobbySentSignature &&
+			Date.now() - this.prev.tohLobbySentAt < TOH_SYNC_REFRESH_MS
+		)
+			return;
 		this.prev.tohLobbySentSignature = signature;
+		this.prev.tohLobbySentAt = Date.now();
 		this.connection.broadcast(
 			JSON.stringify({ type: 'toh4e-lobby', lobbyCode: state.lobbyCode, enabled, roleCatalog })
 		);
@@ -1070,7 +1081,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			const signature = `${state.lobbyCode}|${peerId}|${player.id}|${JSON.stringify({ role, impostors })}`;
 			if (
 				signature === this.prev.tohRoleSentSignatures[player.clientId] &&
-				Date.now() - this.prev.tohRoleSentAt[player.clientId] < 1000
+				Date.now() - this.prev.tohRoleSentAt[player.clientId] < TOH_SYNC_REFRESH_MS
 			)
 				continue;
 			const sent = this.connection.sendToPeers(
