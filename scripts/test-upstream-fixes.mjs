@@ -820,6 +820,20 @@ const context = {
 	createBuffer: (_, length) => ({ getChannelData: () => new Float32Array(length) }),
 };
 const audio = new AudioController();
+const inputSwitch = new AudioController();
+const pendingInputs = [];
+inputSwitch.started = true;
+inputSwitch.context = {};
+inputSwitch.stream = { getAudioTracks: () => [{ id: 'new-microphone' }] };
+inputSwitch.teardownInputChain = () => {};
+inputSwitch.createInputChain = () => new Promise((resolve) => pendingInputs.push(resolve));
+inputSwitch.applyTrackEnabled = () => {};
+const obsoleteInput = inputSwitch.restartInput();
+const selectedInput = inputSwitch.restartInput();
+pendingInputs[1]();
+assert.equal((await selectedInput)?.id, 'new-microphone');
+pendingInputs[0]();
+assert.equal(await obsoleteInput, undefined, 'older microphone requests must not replace the latest selection');
 const localTrack = { enabled: true };
 const outboundTrack = { enabled: true };
 audio.inputStream = { getAudioTracks: () => [localTrack] };

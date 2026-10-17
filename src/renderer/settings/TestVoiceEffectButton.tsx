@@ -57,7 +57,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 
 		try {
 			const audioOptions: MediaTrackConstraints & Record<string, unknown> = {
-				deviceId: microphone ?? 'default',
+				deviceId: microphone && microphone.toLowerCase() !== 'default' ? { exact: microphone } : undefined,
 				autoGainControl: false,
 				echoCancellation: false,
 				noiseSuppression: false,
