@@ -1,7 +1,7 @@
 appId: net.ottomated.crewlinkkai.lite
 extraMetadata:
   name: bettercrewlinkkailite
-  version: 3.2.33
+  version: 3.2.34
 productName: BetterCrewLinkKaiLite
 copyright: Copyright © 2021 OhMyGuus
 directories:
@@ -39,3 +39,4 @@ linux:
       repo: BetterCrewLink
       releaseType: release
       channel: lite
+

@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.34
+
+- タヌキ丼の新モディファイア「ダイイングボイスメッセージ」に対応。死亡後の声を設定秒数だけ録音し、生存者が死亡地点へ近づくとラジオ風に再生します。
+- 録音はメモリにのみ保持し、試合終了・復活・切断時に破棄します。通常版・Lite版ともに対応します。
+
 ## v3.2.33
 
 - 保存したマイクIDがWindows側で変わった場合、3.2.32で起動時に`OverconstrainedError`となる問題を修正。指定マイクが見つからないときだけ既定マイクで再試行し、設定表示も既定に切り替えます。
