@@ -14,6 +14,8 @@ export interface overlayPlayer {
 	colorId?: number;
 	hatId: string;
 	skinId: string;
+	skinSource?: string;
+	bodyMaskSource?: string;
 	visorId: string;
 	petId: number;
 	disconnected: boolean;
@@ -26,6 +28,7 @@ export interface overlayPlayer {
 }
 
 export interface ObsVoiceState {
+	assetSession?: string;
 	overlayState: OverlayState;
 	otherTalking: ClientBoolMap;
 	otherDead: ClientBoolMap;
