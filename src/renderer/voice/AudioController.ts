@@ -45,6 +45,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private started = false;
 	private sourceFilterReady = false;
 	private startToken = 0;
+	private inputToken = 0;
 	private inputStream?: MediaStream;
 	private stream?: MediaStream;
 	private context?: AudioContext;
@@ -95,6 +96,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (this.started) return;
 		this.started = true;
 		const token = ++this.startToken;
+		const inputToken = ++this.inputToken;
 
 		const settings = SettingsStore.store;
 		this.pushToTalkMode = settings.pushToTalkMode;
@@ -115,7 +117,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			} catch (error) {
 				console.warn('NoS source-filter audio is unavailable', error);
 			}
-			await this.createInputChain(settings, token);
+			await this.createInputChain(settings, token, inputToken);
 		} catch (error) {
 			if (token === this.startToken) {
 				this.started = false;
@@ -138,14 +140,15 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	async restartInput(): Promise<MediaStreamTrack | undefined> {
 		if (!this.started || !this.context) return undefined;
 		const token = this.startToken;
+		const inputToken = ++this.inputToken;
 
 		this.teardownInputChain();
 		try {
-			await this.createInputChain(SettingsStore.store, token);
+			await this.createInputChain(SettingsStore.store, token, inputToken);
 		} catch {
 			return undefined;
 		}
-		if (token !== this.startToken) return undefined;
+		if (token !== this.startToken || inputToken !== this.inputToken) return undefined;
 		if (!this.started) {
 			this.teardownInputChain();
 			return undefined;
@@ -155,14 +158,17 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		return this.stream?.getAudioTracks()[0];
 	}
 
-	private async createInputChain(settings: ISettings, token: number): Promise<void> {
+	private async createInputChain(settings: ISettings, token: number, inputToken: number): Promise<void> {
 		const context = this.context;
-		if (!context) return;
+		if (!context || !this.started || token !== this.startToken || inputToken !== this.inputToken) return;
 
-		const constraints = {
-			deviceId: undefined as unknown as string,
+		const constraints: MediaTrackConstraints & Record<string, unknown> = {
+			deviceId:
+				settings.microphone && settings.microphone.toLowerCase() !== 'default'
+					? { exact: settings.microphone }
+					: undefined,
 			autoGainControl: settings.autoGainControl,
-			channelCount: 1,
+			channelCount: 2,
 			echoCancellation: settings.echoCancellation,
 			latency: 0,
 			noiseSuppression: settings.noiseSuppression, // @ts-ignore-line
@@ -172,19 +178,16 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			googTypingNoiseDetection: settings.noiseSuppression, // @ts-ignore-line
 			sampleRate: settings.oldSampleDebug ? 48000 : undefined,
 		};
-		if (settings.microphone.toLowerCase() !== 'default') {
-			constraints.deviceId = settings.microphone;
-		}
-
 		let inputStream: MediaStream;
 		try {
 			inputStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: constraints });
 		} catch (error) {
+			if (token !== this.startToken || inputToken !== this.inputToken) return;
 			this.emit('error', "Couldn't connect to your microphone:\n" + error);
 			throw error;
 		}
 
-		if (!this.started || token !== this.startToken) {
+		if (!this.started || token !== this.startToken || inputToken !== this.inputToken) {
 			inputStream.getTracks().forEach((track) => track.stop());
 			return;
 		}
@@ -236,7 +239,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			this.emit('voiceRoleSample', Math.min(1, Math.sqrt(sum / voiceRoleSamples.length)), active);
 		}, 50);
 
-		if (settings.microphoneGainEnabled || settings.micSensitivityEnabled) {
+		if ((settings.microphoneGainEnabled || settings.micSensitivityEnabled) && !settings.autoGainControl) {
 			const microphoneGain = context.createGain();
 			const destination = context.createMediaStreamDestination();
 			source.connect(microphoneGain);
@@ -250,14 +253,14 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const audioListener = VAD(context, source, undefined, {
 			onVoiceStart: () => {
 				const current = SettingsStore.store;
-				if (this.microphoneGain && current.micSensitivityEnabled) {
-					this.microphoneGain.gain.value = current.microphoneGainEnabled ? current.microphoneGain / 100 : 1;
+				if (this.microphoneGain && current.micSensitivityEnabled && !current.autoGainControl) {
+					openMicrophoneGate(this.microphoneGain, current.microphoneGainEnabled ? current.microphoneGain / 100 : 1);
 				}
 				this.emit('talking', true);
 			},
 			onVoiceStop: () => {
-				if (this.microphoneGain && SettingsStore.store.micSensitivityEnabled) {
-					this.microphoneGain.gain.value = 0;
+				if (this.microphoneGain && SettingsStore.store.micSensitivityEnabled && !SettingsStore.store.autoGainControl) {
+					closeMicrophoneGate(this.microphoneGain);
 				}
 				this.emit('talking', false);
 			},
@@ -265,7 +268,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			stereo: false,
 		}) as VadNode;
 
-		audioListener.options.minNoiseLevel = settings.micSensitivityEnabled ? settings.micSensitivity : 0.15;
+		audioListener.options.minNoiseLevel =
+			settings.micSensitivityEnabled && !settings.autoGainControl ? settings.micSensitivity : 0.15;
 		audioListener.options.maxNoiseLevel = 1;
 		audioListener.init();
 		this.audioListener = audioListener;
@@ -298,6 +302,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	stop(): void {
 		this.startToken++;
+		this.inputToken++;
 		if (!this.started) {
 			this.removeAllListeners();
 			return;
@@ -488,13 +493,14 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	updateMicrophoneSettings(settings: ISettings): void {
 		if (!this.microphoneGain?.gain) return;
+		if (settings.autoGainControl) return;
 		if (!settings.microphoneGainEnabled && !settings.micSensitivityEnabled) return;
 
 		if (!settings.micSensitivityEnabled) {
 			this.microphoneGain.gain.value = settings.microphoneGainEnabled ? settings.microphoneGain / 100 : 1;
 		}
 		if (this.audioListener?.options) {
-			this.audioListener.options.minNoiseLevel = settings.micSensitivity;
+			this.audioListener.options.minNoiseLevel = settings.micSensitivityEnabled ? settings.micSensitivity : 0.15;
 			this.audioListener.init();
 		}
 	}
@@ -913,4 +919,21 @@ function disconnectRadioEcho(effect: RadioEchoNodes): void {
 			/* not connected */
 		}
 	}
+}
+
+const MICROPHONE_RELEASE_SECONDS = 0.02;
+
+function openMicrophoneGate(node: GainNode, level: number): void {
+	const now = node.context.currentTime;
+	node.gain.cancelScheduledValues(now);
+	node.gain.setValueAtTime(level, now);
+}
+
+function closeMicrophoneGate(node: GainNode): void {
+	const current = node.gain.value;
+	if (current === 0) return;
+	const now = node.context.currentTime;
+	node.gain.cancelScheduledValues(now);
+	node.gain.setValueAtTime(current, now);
+	node.gain.linearRampToValueAtTime(0, now + MICROPHONE_RELEASE_SECONDS);
 }

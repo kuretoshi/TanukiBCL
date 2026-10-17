@@ -70,9 +70,9 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, aut
 		};
 
 		const audio_options: LegacyAudioConstraints = {
-			deviceId: microphone ?? 'default',
+			deviceId: microphone && microphone.toLowerCase() !== 'default' ? { exact: microphone } : undefined,
 			autoGainControl,
-			channelCount: 1,
+			channelCount: 2,
 			echoCancellation: false,
 			noiseSuppression: false,
 			googEchoCancellation: false,
@@ -97,8 +97,13 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, aut
 				const src = ctx.createMediaStreamSource(s);
 				src.connect(processor);
 				processor.addEventListener('audioprocess', handleProcess);
+				void ctx.resume().catch(() => {
+					if (!cancelled) setError(true);
+				});
 			})
-			.catch(() => setError(true));
+			.catch(() => {
+				if (!cancelled) setError(true);
+			});
 
 		return () => {
 			cancelled = true;
