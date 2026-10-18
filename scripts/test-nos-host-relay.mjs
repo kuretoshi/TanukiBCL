@@ -32,5 +32,10 @@ try {
  assert.doesNotThrow(()=>assert.equal(sendHostVoice(7,.5,true,123,{...state,players:undefined}),false),
   'host relay must ignore a missing player list during Among Us shutdown');
  mobile.sample(.5,false,state,player,true,10100,10100);await delay(80);assert.equal(packets[1][6],'0');
+ assert.equal(packets[0].length,7,'legacy addon keeps its original packet layout');
+ await writeFile(join(dir,'TanukiBCL','NoS','host-voice-123.json'),JSON.stringify({protocol:1,pid:123,port:socket.address().port,token:'a'.repeat(32),reportVersion:true}));
+ assert(sendHostVoice(7,.5,true,123,state)); await delay(80);
+ assert.equal(packets.at(-1).length,8,'version field is sent only when negotiated');
+ assert.match(packets.at(-1)[7],/^\d+\.\d+\.\d+$/,'host supplies its release version');
  console.log('PASS Web/mobile -> authenticated host admission -> actual loopback UDP; replay, impersonation, non-host, mute');
 } finally {socket.close();if(old===undefined)delete process.env.LOCALAPPDATA;else process.env.LOCALAPPDATA=old;await rm(dir,{recursive:true,force:true});}

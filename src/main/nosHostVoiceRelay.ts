@@ -1,3 +1,4 @@
+import { version as clientVersion } from '../../package.json';
 import { createSocket } from 'node:dgram';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,7 +31,7 @@ export function sendHostVoice(
 	try {
 		const d = JSON.parse(
 			readFileSync(join(process.env.LOCALAPPDATA!, 'TanukiBCL', 'NoS', `host-voice-${pid}.json`), 'utf8')
-		) as { protocol: number; pid: number; port: number; token: string };
+		) as { protocol: number; pid: number; port: number; token: string; reportVersion?: boolean };
 		if (
 			d.protocol !== 1 ||
 			d.pid !== pid ||
@@ -43,7 +44,8 @@ export function sendHostVoice(
 		const now = Date.now();
 		sequence = Math.max(sequence + 1, now * 1000);
 		socket.send(
-			`TBCLH1|${d.token}|${player.id}|${sequence}|${now}|${rms}|${active ? 1 : 0}`,
+			`TBCLH1|${d.token}|${player.id}|${sequence}|${now}|${rms}|${active ? 1 : 0}` +
+				(d.reportVersion === true ? `|${clientVersion}` : ''),
 			d.port,
 			'127.0.0.1',
 			() => {}

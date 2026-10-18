@@ -3,6 +3,7 @@ export interface DyingVoiceState {
 	started: number;
 	seconds: number;
 	range: number;
+	loop?: boolean;
 	x: number;
 	y: number;
 }

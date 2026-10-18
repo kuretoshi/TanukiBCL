@@ -30,7 +30,7 @@ try {
  await save(document); assert.deepEqual(readDyingVoiceState(123, 10000, p), [entry]);
  assert.deepEqual(readDyingVoiceState(124, 10000, p), [], 'wrong process rejected');
  assert.deepEqual(readDyingVoiceState(123, 11001, p), [], 'stale state rejected');
- for (const invalid of [{ ...entry, seconds: 31 }, { ...entry, range: -1 }, { ...entry, started: 20000 }, { ...entry, x: null }]) {
+ for (const invalid of [{ ...entry, seconds: 31 }, { ...entry, range: -1 }, { ...entry, started: 20000 }, { ...entry, x: null }, { ...entry, loop: "true" }]) {
   await save({ ...document, players: [invalid] }); assert.deepEqual(readDyingVoiceState(123, 10000, p), []);
  }
  await save({ ...document, players: [entry, entry] }); assert.deepEqual(readDyingVoiceState(123, 10000, p), [], 'duplicate players rejected');
@@ -71,6 +71,16 @@ try {
   ctx.currentTime = 2; feed([9]); // State callbacks paused, but the audio clock advanced.
   audio.update(third, true, true, 31001);
   assert.deepEqual(Array.from(ctx.played.at(-1).buffer.getChannelData(0)), [.5], 'audio clock prevents recording later ghost speech even if state stalls');
+  audio.cancel(); ctx.currentTime = 0;
+  const looping = { ...entry, started: 40000, loop: true };
+  audio.update(looping, true, false, 40000); feed([.25, .5]);
+  audio.update(looping, true, true, 41000);
+  assert.equal(ctx.played.at(-1).loop, true, 'loop setting reaches native audio source');
+  audio.update(looping, true, false, 41001);
+  assert.equal(ctx.played.at(-1).stopped, true, 'leaving stops loop');
+  audio.update(looping, true, true, 41002);
+  audio.setVolume(0); assert.equal(ctx.played.at(-1).stopped, true, 'mute stops loop');
+  audio.cancel();
  } finally { audio.disconnect(); }
  console.log('Dying voice state, recording window, radio, proximity re-entry, mute and cleanup tests passed.');
 } finally { await rm(dir, { recursive: true, force: true }); }

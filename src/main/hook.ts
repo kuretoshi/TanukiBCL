@@ -103,6 +103,20 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 				? (state.nosRadios?.some((radio) => radio.kind === kind) ?? false)
 				: kind === 0 && (player.isImpostor || (state.mod === 'SUPER_NEW_ROLES' && isSnrJackalTeam(player.snrRole)));
 		};
+		const queuePendingRadio = (kind: number, keyId: number): void => {
+			const state = gameReader.lastState;
+			const player = state.players?.find((value) => value.clientId === state.clientId);
+			if (
+				state.mod === 'NoS' &&
+				(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+				player &&
+				!player.isDead
+			) {
+				pendingRadioKeys.set(keyId, kind);
+				held.delete(keyId);
+				syncRadioPending();
+			}
+		};
 		gameReader = new GameReader((message: IpcRendererMessages, ...args: unknown[]) =>
 			sendToRenderer(event.sender, message, ...args)
 		);
@@ -126,18 +140,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 						radioKeys.set(keyId, message);
 						sendToRenderer(event.sender, message, true);
 					} else if (kind !== undefined) {
-						const state = gameReader.lastState;
-						const player = state.players?.find((value) => value.clientId === state.clientId);
-						if (
-							state.mod === 'NoS' &&
-							(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
-							player &&
-							!player.isDead
-						) {
-							pendingRadioKeys.set(keyId, kind);
-							held.delete(keyId);
-							syncRadioPending();
-						}
+						queuePendingRadio(kind, keyId);
 					}
 					if (held.size) sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, true);
 				} catch (error) {
@@ -168,31 +171,34 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 			console.error('Keyboard watcher failed to start:', error);
 		}
 
+		const reconcileActiveRadios = (): void => {
+			for (const [keyId, message] of radioKeys) {
+				const state = gameReader.lastState;
+				if (state.mod !== 'NoS') continue;
+				const kind = message === IpcRendererMessages.JACKAL_RADIO ? 1 : 0;
+				if (availableRadio(kind)) continue;
+				radioKeys.delete(keyId);
+				held.delete(keyId);
+				const player = state.players?.find((value) => value.clientId === state.clientId);
+				if (
+					player &&
+					!player.isDead &&
+					(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION)
+				)
+					pendingRadioKeys.set(keyId, kind);
+				syncRadioPending();
+				sendToRenderer(event.sender, message, false);
+				if (!held.size) sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, false);
+			}
+		};
+
 		// Read game memory
 		let gotError = false;
 		const frame = async () => {
 			let err: string | null = null;
 			try {
 				err = await gameReader.loop();
-				if (!err)
-					for (const [keyId, message] of radioKeys) {
-						const state = gameReader.lastState;
-						if (state.mod !== 'NoS') continue;
-						const kind = message === IpcRendererMessages.JACKAL_RADIO ? 1 : 0;
-						if (availableRadio(kind)) continue;
-						radioKeys.delete(keyId);
-						held.delete(keyId);
-						const player = state.players?.find((value) => value.clientId === state.clientId);
-						if (
-							player &&
-							!player.isDead &&
-							(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION)
-						)
-							pendingRadioKeys.set(keyId, kind);
-						syncRadioPending();
-						sendToRenderer(event.sender, message, false);
-						if (!held.size) sendToRenderer(event.sender, IpcRendererMessages.PUSH_TO_TALK, false);
-					}
+				if (!err) reconcileActiveRadios();
 				for (const [keyId, kind] of pendingRadioKeys) {
 					const state = gameReader.lastState;
 					const player = state.players?.find((value) => value.clientId === state.clientId);

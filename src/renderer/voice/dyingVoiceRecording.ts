@@ -79,6 +79,7 @@ export function createDyingVoiceRecording(context: AudioContext, source: AudioNo
 		}
 		playback = context.createBufferSource();
 		playback.buffer = buffer;
+		playback.loop = entry?.loop === true;
 		const high = context.createBiquadFilter();
 		high.type = 'highpass';
 		high.frequency.value = 400;

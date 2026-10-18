@@ -37,6 +37,7 @@ export function readDyingVoiceState(
 				!Number.isFinite(p.range) ||
 				p.range < 0.5 ||
 				p.range > 10 ||
+				(p.loop !== undefined && typeof p.loop !== 'boolean') ||
 				!Number.isFinite(p.x) ||
 				!Number.isFinite(p.y) ||
 				Math.abs(p.x) > 10000 ||

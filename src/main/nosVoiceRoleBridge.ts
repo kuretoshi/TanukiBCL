@@ -1,3 +1,4 @@
+import { version as clientVersion } from '../../package.json';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSocket, type Socket } from 'node:dgram';
@@ -9,6 +10,7 @@ import { sendHostVoice } from './nosHostVoiceRelay';
 
 export interface NosVoiceRoleDescriptor {
 	protocol: 1;
+	reportVersion?: boolean;
 	role: 'tanukiMegaphone' | 'tanukiBclBibiri' | 'tanukiTalkative' | 'tanukiMicTest' | 'tanukiVoiceRoles';
 	playerId: number;
 	pid: number;
@@ -140,7 +142,8 @@ export class NosVoiceRoleSender {
 		}
 		// Wall-clock based watermark also increases when BCL is restarted mid-charge.
 		this.sequence = Math.max(this.sequence + 1, now * 1000);
-		const payload = `TBCL1|${descriptor.token}|${this.sequence}|${now}|${rms}|${active ? 1 : 0}`;
+		const payload = `TBCL1|${descriptor.token}|${this.sequence}|${now}|${rms}|${active ? 1 : 0}` +
+			(descriptor.reportVersion === true ? `|${clientVersion}` : '');
 		this.socket.send(payload, descriptor.port, '127.0.0.1', () => {});
 	}
 
