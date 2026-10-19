@@ -13,6 +13,7 @@ import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { createBerserkerEffect } from './berserkerEffect';
 import { createBibiriEcho, updateBibiriEcho, disconnectBibiriEcho, stopBibiriEcho } from './bibiriEcho';
 import { createMegaphoneRecording } from './megaphoneRecording';
+import { createInterviewerRecording } from './interviewerRecording';
 import { createDyingVoiceRecording, inDyingVoiceRange } from './dyingVoiceRecording';
 import { selectVoiceEffect, shouldApplyRainbowStarEcho, type VoiceEffectSetting } from './voiceEffectRules';
 import { createVoiceDisguiseEffect, updateVoiceDisguiseEffect } from '../voiceEffect';
@@ -48,6 +49,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private sourceFilterReady = false;
 	private startToken = 0;
 	private inputToken = 0;
+	private interviewer?: ReturnType<typeof createInterviewerRecording>;
+	private interviewMic?: { stream: MediaStream; source: MediaStreamAudioSourceNode };
+	private interviewMuted = new Set<string>();
 	private inputStream?: MediaStream;
 	private stream?: MediaStream;
 	private context?: AudioContext;
@@ -289,6 +293,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.audioListener?.destroy();
 		this.audioListener = undefined;
 
+		this.interviewer?.removeInput('local');
+		this.interviewMic?.source.disconnect();
+		this.interviewMic = undefined;
 		this.inputSource?.disconnect();
 		this.inputSource = undefined;
 
@@ -337,6 +344,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const masterGain = context.createGain();
 		masterGain.gain.value = 1;
 		this.masterGain = masterGain;
+		this.interviewer = createInterviewerRecording(context, masterGain);
 
 		this.useContextSink = 'setSinkId' in AudioContext.prototype;
 		if (this.useContextSink) {
@@ -356,6 +364,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private teardownGraph(): void {
+		this.interviewer?.disconnect();
+		this.interviewer = undefined;
 		this.masterGain?.disconnect();
 		this.masterGain = undefined;
 		this.masterDestination?.disconnect();
@@ -484,6 +494,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	toggleDeafen(): void {
 		this.deafenedState = !this.deafenedState;
+		if (this.deafenedState) this.interviewer?.silence();
 		if (this.deafenedState) this.localMegaphoneRecording?.cancel();
 		if (this.deafenedState)
 			for (const peer of this.peers.values()) {
@@ -580,6 +591,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	removePeer(peerId: string): void {
+		this.interviewer?.removeInput(peerId);
+		this.interviewMuted.delete(peerId);
 		const peer = this.peers.get(peerId);
 		if (!peer) return;
 		this.peers.delete(peerId);
@@ -625,6 +638,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	silenceAllPeers(): void {
+		this.interviewer?.clear();
 		this.localMegaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) peer.megaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) {
@@ -646,7 +660,36 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 	}
 
+	private updateInterviewer(state: AmongUsState): void {
+		const local = state.players.find((player) => player.isLocal);
+		if (local && this.stream && this.context) {
+			if (this.interviewMic?.stream !== this.stream) {
+				this.interviewMic?.source.disconnect();
+				this.interviewMic = { stream: this.stream, source: this.context.createMediaStreamSource(this.stream) };
+			}
+			this.interviewer?.setInput(
+				'local',
+				this.interviewMic.source,
+				local.id,
+				() =>
+					!this.mutedState &&
+					!this.deafenedState &&
+					!this.jammedState &&
+					!this.remoteVoiceInput &&
+					!!this.stream?.getAudioTracks()[0]?.enabled
+			);
+		}
+		this.interviewer?.update(
+			state.nosInterviews ?? [],
+			state.mod === 'NoS' && (state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
+			state.gameState === GameState.DISCUSSION,
+			this.deafenedState ? 0 : SettingsStore.store.masterVolume / 100,
+			Date.now()
+		);
+	}
+
 	updateGameState(state: AmongUsState): void {
+		this.updateInterviewer(state);
 		if (state.mod !== 'NoS' || (state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION))
 			for (const peer of this.peers.values()) peer.dyingVoiceRecording?.cancel();
 		const local = state.players.find((player) => player.isLocal);
@@ -706,6 +749,12 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
+		this.interviewer?.setInput(
+			peerId,
+			peer.source,
+			other.id,
+			() => !this.deafenedState && !other.disconnected && !this.interviewMuted.has(peerId)
+		);
 		const message = state.nosDyingVoices?.find((entry) => entry.playerId === other.id);
 		const nearMessage = inDyingVoiceRange(message, me, state.gameState === GameState.TASKS);
 		peer.dyingVoiceRecording?.update(
@@ -805,6 +854,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		return result.gain;
 	}
 	setMegaphonePlaybackVolume(peerId: string, volume: number): void {
+		if (volume > 0) this.interviewMuted.delete(peerId);
+		else this.interviewMuted.add(peerId);
 		this.peers.get(peerId)?.dyingVoiceRecording?.setVolume(volume);
 		this.peers.get(peerId)?.megaphoneRecording?.setVolume(volume);
 	}
