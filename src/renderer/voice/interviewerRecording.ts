@@ -131,7 +131,9 @@ export function createInterviewerRecording(context: AudioContext, destination: A
 		update(entries: readonly InterviewState[], active: boolean, meeting: boolean, volume: number, now = Date.now()) {
 			output.gain.value = Number.isFinite(volume) ? Math.max(0, Math.min(2, volume)) : 0;
 			const valid =
-				active && Number.isFinite(now) && Array.isArray(entries) ? entries.filter((entry) => validInterview(entry, now)).slice(0, 32) : [];
+				active && Number.isFinite(now) && Array.isArray(entries)
+					? entries.filter((entry) => validInterview(entry, now)).slice(0, 32)
+					: [];
 			const retained = new Set(valid.map((entry) => entry.playerId));
 			for (const [id, slot] of slots) {
 				if (retained.has(id)) continue;

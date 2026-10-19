@@ -4,7 +4,7 @@ import { AmongUsMaps, CameraLocation, MapType } from '../../common/AmongusMap';
 import { poseCollide } from '../../common/ColliderMap';
 import { isSnrJackal, isSnrSidekick, isSnrNeutralKiller } from '../../common/SnrRole';
 import { canTohHearGhosts } from '../../common/TohGhostRoles';
-import { withImpostorClassification } from '../../common/Impostor';
+import { isPlayerImpostor, withImpostorClassification } from '../../common/Impostor';
 import { chargingMegaphone, megaphoneGain, portableMegaphoneExtraRange } from './megaphoneVoice';
 
 export interface MuffleSetting {
@@ -41,6 +41,14 @@ export interface VoiceAudioResult {
 
 function distance(panPos: [number, number]): number {
 	return Math.sqrt(panPos[0] * panPos[0] + panPos[1] * panPos[1]);
+}
+
+export function voiceHearingDistance(state: AmongUsState, lobby: ILobbySettings, me: Player): number {
+	let maxDistance = lobby.maxDistance;
+	// NoS neutral roles may have a much larger sight radius. Their voice range uses the lobby distance.
+	const nosNeutral = state.mod === 'NoS' && (me.nosPlayer?.isNeutral === true || me.isThirdParty);
+	if (lobby.visionHearing && !nosNeutral && !isPlayerImpostor(state.mod, me)) maxDistance = state.lightRadius + 0.5;
+	return maxDistance <= 0.6 ? 1 : maxDistance;
 }
 
 function cameraPanPosition(state: AmongUsState, other: Player): [number, number] | undefined {
