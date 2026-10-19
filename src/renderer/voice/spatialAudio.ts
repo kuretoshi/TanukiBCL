@@ -47,8 +47,7 @@ export function voiceHearingDistance(state: AmongUsState, lobby: ILobbySettings,
 	let maxDistance = lobby.maxDistance;
 	// NoS neutral roles may have a much larger sight radius. Their voice range uses the lobby distance.
 	const nosNeutral = state.mod === 'NoS' && (me.nosPlayer?.isNeutral === true || me.isThirdParty);
-	if (lobby.visionHearing && !nosNeutral && !isPlayerImpostor(state.mod, me))
-		maxDistance = state.lightRadius + 0.5;
+	if (lobby.visionHearing && !nosNeutral && !isPlayerImpostor(state.mod, me)) maxDistance = state.lightRadius + 0.5;
 	return maxDistance <= 0.6 ? 1 : maxDistance;
 }
 
