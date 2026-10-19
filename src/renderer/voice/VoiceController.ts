@@ -7,6 +7,7 @@ import { MapType } from '../../common/AmongusMap';
 import { GameInfo } from '../../common/GameInfo';
 import { ILobbySettings, ISettings, playerConfigMap } from '../../common/ISettings';
 import { isLiteRuntime } from '../../common/appVariant';
+import { voiceHearingDistance } from './spatialAudio';
 import { IpcMessages, IpcOverlayMessages, IpcRendererMessages } from '../../common/ipc-messages';
 import { ObsVoiceState } from '../../common/ObsOverlay';
 import {
@@ -931,11 +932,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			const activeLobbySettings = this.activeLobbySettings;
 			const effectiveState = this.getEffectiveGameState(state);
 			const effectiveMe = effectiveState.players.find((player) => player.isLocal) ?? myPlayer;
-			let maxDistance = activeLobbySettings.maxDistance;
-			if (activeLobbySettings.visionHearing && !isPlayerImpostor(effectiveState.mod, effectiveMe))
-				maxDistance = state.lightRadius + 0.5;
-			if (maxDistance <= 0.6) maxDistance = 1;
-			this.audio.setMaxDistance(maxDistance);
+			this.audio.setMaxDistance(voiceHearingDistance(effectiveState, activeLobbySettings, effectiveMe));
 		}
 
 		this.connection.setContext({

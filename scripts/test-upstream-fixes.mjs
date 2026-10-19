@@ -40,7 +40,7 @@ for (const password of ['', 'incorrect', null, {}, 'x'.repeat(1025)])
 	assert.equal(verifyDebugPassword(password, authConfig), false);
 for (const config of ['', '{}', 'invalid']) assert.equal(verifyDebugPassword('test-only-password', config), false);
 console.log('ok developer password: correct password only, invalid and missing configuration rejected');
-const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
+const { calculateVoiceAudio, voiceHearingDistance } = await bundle('src/renderer/voice/spatialAudio.ts');
 const { AudioController } = await bundle('src/renderer/voice/AudioController.ts');
 const { pushToTalkOptions } = await bundle('src/common/pushToTalkOptions.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
@@ -119,6 +119,33 @@ const spatial = (changes = {}) =>
 		...changes,
 	});
 assert.equal(spatial().gain, 1);
+const wideSight = { ...state, mod: 'NoS', lightRadius: 35 };
+const visionLobby = { ...lobby, visionHearing: true, maxDistance: 5.32 };
+for (const neutral of [
+	{ ...me, isThirdParty: true },
+	{ ...me, nosPlayer: { isNeutral: true } },
+]) {
+	const radius = voiceHearingDistance(wideSight, visionLobby, neutral);
+	assert.equal(radius, 5.32, 'NoS neutrals use the lobby voice radius even with wide sight');
+	assert.equal(
+		spatial({ state: wideSight, me: neutral, other: { ...other, x: 30 }, maxDistance: radius }).gain,
+		0,
+		'Airship-scale separation stays silent for a NoS neutral'
+	);
+}
+assert.equal(voiceHearingDistance(wideSight, visionLobby, me), 35.5, 'NoS crewmates still follow sight');
+assert.equal(
+	voiceHearingDistance(wideSight, visionLobby, { ...me, isImpostor: true }),
+	5.32,
+	'NoS impostors retain the lobby radius'
+);
+assert.equal(
+	voiceHearingDistance({ ...wideSight, mod: 'SUPER_NEW_ROLES' }, visionLobby, { ...me, isThirdParty: true }),
+	35.5,
+	'Other mods keep their existing vision-hearing behavior'
+);
+assert.equal(voiceHearingDistance(wideSight, lobby, { ...me, isThirdParty: true }), lobby.maxDistance);
+console.log('ok NoS neutral voice range stays within lobby distance when vision hearing is enabled');
 const nosVoice = { ...state, mod: 'NoS' };
 assert.equal(spatial({ state: nosVoice, me: { ...me, nosPlayer: { isJammed: true } } }).gain, 0);
 assert.equal(spatial({ state: nosVoice, other: { ...other, nosPlayer: { isJammed: true } } }).gain, 0);
