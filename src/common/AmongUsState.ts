@@ -7,6 +7,7 @@ import type { NosRole } from './NosRole';
 import type { MegaphoneState } from './MegaphoneState';
 
 export interface AmongUsState {
+	nosVoiceJamming?: import('./VoiceJammingState').VoiceJammingState[];
 	nosInterviews?: import('./InterviewState').InterviewState[];
 	nosDyingVoices?: import('./DyingVoiceState').DyingVoiceState[];
 	gameState: GameState;

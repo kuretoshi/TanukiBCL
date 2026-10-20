@@ -1,3 +1,4 @@
+import { applyVoiceJamming } from '../../common/VoiceJammingState';
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
@@ -797,6 +798,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		});
 
 		// Restore the ordinary attenuation radius when a megaphone charge ends.
+		applyVoiceJamming(state, other.id, result);
 		pan.maxDistance = result.panMaxDistance ?? this.maxDistance;
 
 		if (result.muffle) {

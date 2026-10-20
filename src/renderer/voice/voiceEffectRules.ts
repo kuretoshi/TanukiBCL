@@ -1,3 +1,4 @@
+import { voiceJammingFor } from '../../common/VoiceJammingState';
 import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import type { PitchShiftDirection } from '../voiceEffect';
@@ -40,6 +41,9 @@ export function selectVoiceEffect(
 	radioClientId: number,
 	radioClientIds?: readonly number[]
 ): VoiceEffectSetting | null {
+	const jamming = voiceJammingFor(state, other.id);
+	if (jamming && jamming.pitch !== 1 && !other.disconnected && !other.bugged && !other.isDummy)
+		return { strength: 0, sourceFilter: { pitch: jamming.pitch, formant: 1, squash: 0 } };
 	if (other.isDead || other.disconnected || other.bugged || other.isDummy) return null;
 	const megaphone = chargingMegaphone(state, other);
 	if (megaphone && megaphone.voiceEffect !== false) {

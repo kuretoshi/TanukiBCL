@@ -1,3 +1,4 @@
+import { voiceJammingFor } from '../../common/VoiceJammingState';
 import { HostVoiceAdmission } from '../HostVoiceAdmission';
 import { RemoteVoiceRoleInput, voiceRoleIdentity } from '../../common/RemoteVoiceRole';
 import packageJson from '../../../package.json';
@@ -886,8 +887,8 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const myPlayer = state.players?.find((player) => player.isLocal);
 		this.audio.setJammed(
 			state.mod === 'NoS' &&
-				this.activeLobbySettings.nosFixerJammingVoiceBlock !== false &&
-				myPlayer?.nosPlayer?.isJammed === true
+				((this.activeLobbySettings.nosFixerJammingVoiceBlock !== false && myPlayer?.nosPlayer?.isJammed === true) ||
+					(myPlayer != null && voiceJammingFor(state, myPlayer.id)?.muted === true))
 		);
 		const resolvedHostId = state.hostId > 0 ? state.hostId : this.host.serverHostId;
 		const session = `${state.lobbyCode}|${resolvedHostId}|${state.clientId}|${myPlayer?.id}`;

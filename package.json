@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.37",
+	"version": "3.2.38",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -19,6 +19,7 @@
 		"url": "https://bettercrewlink.app"
 	},
 	"scripts": {
+		"test:voice-jamminger": "node scripts/test-voice-jamminger.mjs",
 		"test:interviewer": "node scripts/test-interviewer.mjs",
 		"test:game-reader-map": "node scripts/test-game-reader-map.mjs",
 		"check:nesting": "node scripts/check-nesting.mjs",
