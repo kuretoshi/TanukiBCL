@@ -576,9 +576,7 @@ export default class GameReader {
 						? readInterviewState(this.pid)
 						: undefined,
 				nosVoiceJamming:
-					this.loadedMod.id === 'NoS' && state === GameState.DISCUSSION
-						? readVoiceJammingState(this.pid)
-						: undefined,
+					this.loadedMod.id === 'NoS' && state === GameState.DISCUSSION ? readVoiceJammingState(this.pid) : undefined,
 				nosDyingVoices:
 					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
 						? readDyingVoiceState(this.pid)
