@@ -218,6 +218,7 @@ export default class GameReader {
 			this.amongUs = null;
 			this.loadedMod = modList[0];
 			this.loadedMods = [];
+			this.nosAddonIds = [];
 			try {
 				this.sendIPC(IpcRendererMessages.NOTIFY_GAME_OPENED, false);
 			} catch {
@@ -237,7 +238,10 @@ export default class GameReader {
 	}
 
 	getInstalledMods(filePath: string): AmongusMod {
-		this.nosAddonIds = readNosAddonIds(path.dirname(filePath));
+		const finishDetection = (mod: AmongusMod): AmongusMod => {
+			this.nosAddonIds = mod.id === 'NoS' ? readNosAddonIds(path.dirname(filePath)) : [];
+			return mod;
+		};
 		this.loadedMods = this.readPluginFiles(filePath);
 		// SNRランチャーやNebulaは通常のpluginsフォルダ外からMODを読み込む。
 		// 接続対象のPIDに実際にロードされたDLLを優先する。
@@ -253,18 +257,18 @@ export default class GameReader {
 				const module = this.getLoadedModModule(dll);
 				if (!module) continue;
 				this.loadedMods = [...new Set([...this.loadedMods, module.szExePath || dll])];
-				return modList.find((mod) => mod.id === id)!;
+				return finishDetection(modList.find((mod) => mod.id === id)!);
 			}
 		}
 		if (/(^|[\\/])[^\\/]*TOH4E(?:[_-]EM)?[^\\/]*([\\/]|$)/i.test(filePath)) {
-			return modList.find((mod) => mod.id === 'TOH4E')!;
+			return finishDetection(modList.find((mod) => mod.id === 'TOH4E')!);
 		}
 		for (const file of this.loadedMods) {
-			if (isToh4eDll(file)) return modList.find((mod) => mod.id === 'TOH4E')!;
+			if (isToh4eDll(file)) return finishDetection(modList.find((mod) => mod.id === 'TOH4E')!);
 			const mod = modList.find((o) => o.dllStartsWith && file.includes(o.dllStartsWith));
-			if (mod) return mod;
+			if (mod) return finishDetection(mod);
 		}
-		return modList[0];
+		return finishDetection(modList[0]);
 	}
 
 	private getLoadedModModule(dll: string): ModuleObject | undefined {
@@ -862,6 +866,7 @@ export default class GameReader {
 		this.nosSnapshot.reset();
 		this.nosRoles.reset();
 		this.nosPalette.reset();
+		this.nosAddonIds = [];
 		this.snrInGame = false;
 		this.amongUs = null;
 		this.gameAssembly = null;

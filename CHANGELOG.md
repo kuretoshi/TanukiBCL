@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.39
+
+- NoSアドオンの一覧はNoSを検知したときだけ読み取るようにしました。別のMODへの切り替えやゲーム終了時には、保持していたアドオンIDを消去します。
+
 ## v3.2.35
 
 - ダイイングボイスメッセージのループ再生設定に対応。範囲内の生存者へ繰り返し再生し、範囲外・会議・ミュート時は停止します。
