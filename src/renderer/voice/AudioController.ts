@@ -775,13 +775,13 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			updateBibiriEcho(
 				peer.bibiriEcho,
 				state.mod === 'NoS' &&
-					(activeLobbySettings?.nosBibiriEchoStrength ?? 100) > 0 &&
+					(settings.nosBibiriEchoStrength ?? 100) > 0 &&
 					!other.disconnected &&
 					(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
 				other.isDead,
 				state.nosBibiriEchoes?.find((e) => e.playerId === other.id)?.unixMs,
 				Date.now(),
-				activeLobbySettings?.nosBibiriEchoStrength ?? 100
+				settings.nosBibiriEchoStrength ?? 100
 			);
 
 		const { pan, muffle } = peer;
@@ -839,14 +839,14 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			disconnectProcessingEffect(peer.voiceEffect);
 			peer.voiceEffect = undefined;
 		}
-		const wantStarEcho = result.gain > 0 && shouldApplyRainbowStarEcho(state, other, activeLobbySettings);
+		const wantStarEcho = result.gain > 0 && shouldApplyRainbowStarEcho(state, other, activeLobbySettings, settings);
 		if (wantStarEcho && !peer.starEcho && this.context) {
 			peer.starEcho = createRadioEcho(this.context);
 			peer.starEcho.delay.delayTime.value = 0.075;
 			peer.starEcho.feedback.gain.value = 0.08;
 		}
 		if (peer.starEcho && wantStarEcho) {
-			const amount = Math.min(1, Math.max(0, (activeLobbySettings?.nosRainbowStarEchoStrength ?? 100) / 100));
+			const amount = Math.min(1, Math.max(0, (settings.nosRainbowStarEchoStrength ?? 100) / 100));
 			peer.starEcho.dry.gain.value = 1 - 0.06 * amount;
 			peer.starEcho.wet.gain.value = 0.08 * amount;
 		}

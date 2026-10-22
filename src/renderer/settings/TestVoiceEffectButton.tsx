@@ -3,18 +3,16 @@ import { captureMicrophone } from '../lib/captureMicrophone';
 import Button from '@mui/material/Button';
 
 import { ExtendedAudioElement } from '../voice/types';
-import {
-	createVoiceDisguiseEffect,
-	disconnectVoiceDisguiseEffect,
-	updateVoiceDisguiseEffect,
-	VoiceDisguiseEffect,
-} from '../voiceEffect';
+import { createVoiceEffectPreview, VoiceEffectPreview, VoiceEffectPreviewKind } from './voiceEffectPreview';
+
+export type { VoiceEffectPreviewKind } from './voiceEffectPreview';
 
 interface TestVoiceEffectButtonProps {
 	t: (key: string) => string;
 	microphone: string;
 	speaker: string;
 	voiceEffectStrength: number;
+	effectKind?: VoiceEffectPreviewKind;
 }
 
 const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
@@ -22,10 +20,11 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	microphone,
 	speaker,
 	voiceEffectStrength,
+	effectKind = 'voiceEffectStrength',
 }: TestVoiceEffectButtonProps) => {
 	const [playing, setPlaying] = useState(false);
 	const cleanupRef = useRef<(() => void) | undefined>(undefined);
-	const effectNodesRef = useRef<VoiceDisguiseEffect | undefined>(undefined);
+	const effectNodesRef = useRef<VoiceEffectPreview | undefined>(undefined);
 	const playingRef = useRef(false);
 	const stopRequestedRef = useRef(false);
 
@@ -42,7 +41,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 
 	useEffect(() => {
 		if (effectNodesRef.current) {
-			updateVoiceDisguiseEffect(effectNodesRef.current, voiceEffectStrength);
+			effectNodesRef.current.update(voiceEffectStrength);
 		}
 	}, [voiceEffectStrength]);
 
@@ -55,6 +54,8 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 		stopRequestedRef.current = false;
 		playingRef.current = true;
 		setPlaying(true);
+		let pendingStream: MediaStream | undefined;
+		let pendingContext: AudioContext | undefined;
 
 		try {
 			const audioOptions: MediaTrackConstraints & Record<string, unknown> = {
@@ -68,14 +69,22 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 				googTypingNoiseDetection: false,
 			};
 			const { stream } = await captureMicrophone(audioOptions, microphone);
+			pendingStream = stream;
 			if (stopRequestedRef.current) {
 				stream.getTracks().forEach((track) => track.stop());
 				return;
 			}
 			const context = new AudioContext();
+			pendingContext = context;
 			const source = context.createMediaStreamSource(stream);
 			const destination = context.createMediaStreamDestination();
-			const effectNodes = createVoiceDisguiseEffect(context, null, voiceEffectStrength);
+			const effectNodes = await createVoiceEffectPreview(context, effectKind, voiceEffectStrength);
+			if (stopRequestedRef.current) {
+				effectNodes.dispose();
+				stream.getTracks().forEach((track) => track.stop());
+				void context.close();
+				return;
+			}
 			effectNodesRef.current = effectNodes;
 			source.connect(effectNodes.input);
 			effectNodes.output.connect(destination);
@@ -89,9 +98,11 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 				audio.remove();
 				stream.getTracks().forEach((track) => track.stop());
 				source.disconnect();
-				disconnectVoiceDisguiseEffect(effectNodes);
-				context.close();
+				effectNodes.dispose();
+				void context.close();
 			};
+			pendingStream = undefined;
+			pendingContext = undefined;
 
 			try {
 				if (speaker.toLowerCase() !== 'default') {
@@ -107,6 +118,8 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 			await audio.play();
 		} catch (error) {
 			console.warn('failed to test voice effect', error);
+			pendingStream?.getTracks().forEach((track) => track.stop());
+			if (pendingContext) void pendingContext.close();
 			stopTest();
 		}
 	};

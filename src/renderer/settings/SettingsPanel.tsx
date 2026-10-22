@@ -299,9 +299,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							settings={settings}
 							setSettings={setSettings}
 							gameState={gameState}
-							activeLobbySettings={activeLobbySettings}
-							myLobbySettings={myLobbyDraft}
-							update={updateMyLobbySettings}
 						/>
 					)}
 					{category === 'keybinds' && (

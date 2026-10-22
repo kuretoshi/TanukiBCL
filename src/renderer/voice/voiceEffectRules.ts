@@ -37,11 +37,11 @@ function scaledFilter(filter: SourceFilterParameters, strength: number | undefin
 		: null;
 }
 
-export function shouldApplyRainbowStarEcho(state: AmongUsState, other: Player, lobby?: ILobbySettings): boolean {
+export function shouldApplyRainbowStarEcho(state: AmongUsState, other: Player, lobby?: ILobbySettings, settings?: ISettings): boolean {
 	return (
 		state.mod === 'NoS' &&
 		lobby?.nosRainbowStarEcho !== false &&
-		effectStrength(lobby?.nosRainbowStarEchoStrength) > 0 &&
+		effectStrength(settings?.nosRainbowStarEchoStrength) > 0 &&
 		(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
 		!other.isDead &&
 		!other.disconnected &&
@@ -62,7 +62,7 @@ export function selectVoiceEffect(
 ): VoiceEffectSetting | null {
 	const jamming = voiceJammingFor(state, other.id);
 	if (jamming && jamming.pitch !== 1 && !other.disconnected && !other.bugged && !other.isDummy)
-		return scaledFilter({ pitch: jamming.pitch, formant: 1, squash: 0 }, lobby.nosVoiceJammingEffectStrength);
+		return scaledFilter({ pitch: jamming.pitch, formant: 1, squash: 0 }, settings.nosVoiceJammingEffectStrength);
 	if (other.isDead || other.disconnected || other.bugged || other.isDummy) return null;
 	const megaphone = chargingMegaphone(state, other);
 	if (megaphone && megaphone.voiceEffect !== false) {
@@ -73,7 +73,7 @@ export function selectVoiceEffect(
 				formant: 0.75 + wave * 0.12,
 				squash: 0.65,
 			},
-			lobby.nosMegaphoneEffectStrength
+			settings.nosMegaphoneEffectStrength
 		);
 	}
 	// Citrus changes the actual outfit at meeting start, rather than BodyType.
@@ -85,7 +85,7 @@ export function selectVoiceEffect(
 		(other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Orange' ||
 			other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Lemon')
 	) {
-		const configured = lobby.nosCitrusVoiceEffectStrength;
+		const configured = settings.nosCitrusVoiceEffectStrength;
 		const strength = Number.isFinite(configured) ? Math.min(100, Math.max(0, configured)) : 100;
 		return strength > 0 ? { strength, direction: 'up' } : null;
 	}
@@ -108,7 +108,7 @@ export function selectVoiceEffect(
 			? other.nosPlayer.bodyType === 2
 			: other.nosRole.bodyType === 2 && other.nosRole.isBerserking === true)
 	) {
-		const strength = effectStrength(lobby.nosBerserkerVoiceEffectStrength) * 100;
+		const strength = effectStrength(settings.nosBerserkerVoiceEffectStrength) * 100;
 		return strength > 0 ? { strength, berserker: true } : null;
 	}
 	if (state.mod === 'NoS' && lobby.nosRokurokubiVoiceEffect !== false && other.nosPlayer?.bodyType === 3) {
@@ -118,7 +118,7 @@ export function selectVoiceEffect(
 			const pitch = 1 + Math.min(1, Math.log1p(length) / Math.log1p(40));
 			const x = other.nosPlayer.bodyRateX;
 			const formant = Number.isFinite(x) && x > 0 ? Math.min(1.7, Math.max(0.55, 1 / x)) : 1;
-			return scaledFilter({ pitch, formant, squash: 0 }, lobby.nosRokurokubiVoiceEffectStrength);
+			return scaledFilter({ pitch, formant, squash: 0 }, settings.nosRokurokubiVoiceEffectStrength);
 		}
 	}
 	if (state.mod === 'NoS' && lobby.nosSizeVoiceEffect !== false && other.nosPlayer) {
@@ -135,7 +135,7 @@ export function selectVoiceEffect(
 			if (Math.abs(bodyRateX - 1) <= 0.02 && bodyRateY < 0.98) {
 				const amount = 1 - bodyRateY;
 				const squash = amount * amount * (3 - 2 * amount);
-				return scaledFilter({ pitch: 1 + squash * 0.25, formant: 1, squash }, lobby.nosSizeVoiceEffectStrength);
+				return scaledFilter({ pitch: 1 + squash * 0.25, formant: 1, squash }, settings.nosSizeVoiceEffectStrength);
 			}
 			const pitch =
 				bodyRateY < 0.98
@@ -144,7 +144,7 @@ export function selectVoiceEffect(
 						? 1 - Math.min(1, Math.log(bodyRateY) / Math.log(5)) * 0.6
 						: 1;
 			if (pitch !== 1 || bodyRateX < 0.98 || bodyRateX > 1.02)
-				return scaledFilter({ pitch, formant, squash: 0 }, lobby.nosSizeVoiceEffectStrength);
+				return scaledFilter({ pitch, formant, squash: 0 }, settings.nosSizeVoiceEffectStrength);
 		}
 	}
 	if (state.mod === 'SUPER_NEW_ROLES' && lobby.snrJumboVoice && hasSnrJumbo(other.snrRole)) {
@@ -159,7 +159,7 @@ export function selectVoiceEffect(
 			const growth = Math.min(1, size.currentSize / size.maxSize);
 			return scaledFilter(
 				{ pitch: 1 - growth * 0.6, formant: 1 - growth * 0.45, squash: 0 },
-				lobby.snrJumboVoiceEffectStrength
+				settings.snrJumboVoiceEffectStrength
 			);
 		}
 		return null;

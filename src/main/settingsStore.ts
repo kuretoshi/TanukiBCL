@@ -196,6 +196,15 @@ export const settingsStore = new Store<ISettings>({
 			type: 'number',
 			default: 100,
 		},
+		snrJumboVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosSizeVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosRokurokubiVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosBerserkerVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosCitrusVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosRainbowStarEchoStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosVoiceJammingEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosMegaphoneEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
+		nosBibiriEchoStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
 		micSensitivity: {
 			type: 'number',
 			default: 0.15,
@@ -434,6 +443,25 @@ export const settingsStore = new Store<ISettings>({
 		},
 	},
 });
+
+// Preserve a host's existing strengths when the controls become personal settings.
+const personalEffectStrengthKeys = [
+	'snrJumboVoiceEffectStrength',
+	'nosSizeVoiceEffectStrength',
+	'nosRokurokubiVoiceEffectStrength',
+	'nosBerserkerVoiceEffectStrength',
+	'nosCitrusVoiceEffectStrength',
+	'nosRainbowStarEchoStrength',
+	'nosVoiceJammingEffectStrength',
+	'nosMegaphoneEffectStrength',
+	'nosBibiriEchoStrength',
+] as const;
+const previousLobbyEffects = settingsStore.get('myLobbySettings');
+for (const key of personalEffectStrengthKeys) {
+	if (settingsStore.has(key)) continue;
+	const previous = previousLobbyEffects?.[key];
+	if (Number.isFinite(previous)) settingsStore.set(key, Math.min(100, Math.max(0, previous)));
+}
 
 const LEGACY_LOBBY_SETTINGS_KEY = 'localLobbySettings' as keyof ISettings;
 

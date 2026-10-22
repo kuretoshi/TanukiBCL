@@ -93,6 +93,7 @@ export const SettingRow: React.FC<SettingRowProps> = function ({
 					minWidth: 0,
 					width: stack ? '100%' : controlWidth,
 					maxWidth: stack ? '100%' : '60%',
+					flexShrink: 0,
 				}}
 			>
 				{control}

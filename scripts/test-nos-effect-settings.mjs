@@ -32,22 +32,21 @@ const { default: VoiceEffectsSection } = await bundle('src/renderer/settings/sec
 const state = { mod: 'NoS', gameState: 1, map: 0, players: [] };
 const player = { id: 0, name: 'speaker', nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } };
 assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, player, -1), { strength: 100, direction: 'up' });
-assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: 35 }, { id: 1 }, player, -1), { strength: 35, direction: 'up' });
-assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: 0 }, { id: 1 }, player, -1), null);
-assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: undefined }, { id: 1 }, player, -1), { strength: 100, direction: 'up' });
+assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0, nosCitrusVoiceEffectStrength: 35 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: 0 }, { id: 1 }, player, -1), { strength: 35, direction: 'up' });
+assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0, nosCitrusVoiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, player, -1), null);
 assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffect: false }, { id: 1 }, player, -1), null);
 const rainbow = { ...player, nosRole: { isRainbowStar: true } };
 assert.equal(shouldApplyRainbowStarEcho(state, rainbow, defaultLobbySettings), true);
 assert.equal(shouldApplyRainbowStarEcho(state, rainbow, { ...defaultLobbySettings, nosRainbowStarEcho: false }), false);
-assert.equal(shouldApplyRainbowStarEcho(state, rainbow, { ...defaultLobbySettings, nosRainbowStarEchoStrength: 0 }), false);
+assert.equal(shouldApplyRainbowStarEcho(state, rainbow, defaultLobbySettings, { nosRainbowStarEchoStrength: 0 }), false);
 const sizePlayer = { id: 2, name: 'size', nosPlayer: { bodyRateX: 1, bodyRateY: 2 } };
 const fullSize = selectVoiceEffect(state, { voiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, sizePlayer, -1);
-const halfSize = selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosSizeVoiceEffectStrength: 50 }, { id: 1 }, sizePlayer, -1);
+const halfSize = selectVoiceEffect(state, { voiceEffectStrength: 0, nosSizeVoiceEffectStrength: 50 }, { ...defaultLobbySettings, nosSizeVoiceEffectStrength: 0 }, { id: 1 }, sizePlayer, -1);
 assert.ok(fullSize?.sourceFilter && halfSize?.sourceFilter);
 assert.equal(halfSize.sourceFilter.pitch, 1 + (fullSize.sourceFilter.pitch - 1) / 2);
-assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosSizeVoiceEffectStrength: 0 }, { id: 1 }, sizePlayer, -1), null);
+assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0, nosSizeVoiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, sizePlayer, -1), null);
 const berserker = { id: 3, name: 'berserker', nosRole: { roleName: 'berserker' }, nosPlayer: { bodyType: 2 } };
-assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosBerserkerVoiceEffectStrength: 40 }, { id: 1 }, berserker, -1), { strength: 40, berserker: true });
+assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0, nosBerserkerVoiceEffectStrength: 40 }, { ...defaultLobbySettings, nosBerserkerVoiceEffectStrength: 0 }, { id: 1 }, berserker, -1), { strength: 40, berserker: true });
 const noOp = () => {};
 function render(mod, nosAddonIds, active = false) {
 	return renderToStaticMarkup(React.createElement(LobbySection, {
@@ -64,8 +63,6 @@ function renderEffects(mod, nosAddonIds, active = false) {
 		settings: { voiceEffectStrength: 100, microphone: 'default', speaker: 'default' },
 		setSettings: noOp,
 		gameState: { ...state, mod, nosAddonIds, lobbyCode: active ? 'ABCDEF' : 'MENU', isHost: !active },
-		activeLobbySettings: active ? defaultLobbySettings : null,
-		myLobbySettings: defaultLobbySettings, canEditMine: true, update: noOp,
 	}));
 }
 for (const active of [false, true]) {
@@ -74,8 +71,8 @@ for (const active of [false, true]) {
 	for (const key of ['nos_fixer_jamming_lowpass', 'nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_rainbow_star_echo'])
 		assert.ok(lobby.includes(key), `${key} appears in the lobby settings`);
 	assert.ok(!lobby.includes('nos_voice_effects'));
-	for (const key of ['nos_voice_effects', 'nos_berserker_strength', 'nos_rokurokubi_strength', 'nos_citrus_strength', 'nos_rainbow_star_strength', 'nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
-		assert.ok(visible.includes(key), `${key} appears in ${active ? 'current' : 'mine'} settings`);
+	for (const key of ['nos_voice_effects', 'nos_berserker_strength', 'nos_rokurokubi_strength', 'nos_citrus_strength', 'nos_rainbow_star_strength', 'nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo', 'preview_target'])
+		assert.ok(visible.includes(key), `${key} appears in personal settings`);
 	assert.ok(renderEffects('SUPER_NEW_ROLES', [], active).includes('snr_voice_effects'));
 	assert.ok(render('SUPER_NEW_ROLES', [], active).includes('snr_jumbo_voice'));
 	assert.ok(!renderEffects('SUPER_NEW_ROLES', [], active).includes('nos_voice_effects'));
@@ -104,4 +101,4 @@ try {
 	await copyFile(release, resolve(directory, 'game/Addons/unrelated-filename.zip'));
 	assert.deepEqual(readNosAddonIds(resolve(directory, 'game')), ['UchuAddon']);
 } catch (error) { if (error.code !== 'ENOENT') throw error; }
-console.log('PASS NoS effect settings: addon recognition, conditional UI in both tabs, and effect switches');
+console.log('PASS NoS effect settings: local strengths, addon recognition, conditional UI, and effect switches');

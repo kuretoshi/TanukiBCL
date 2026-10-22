@@ -27,6 +27,15 @@ export interface ISettings {
 	microphoneGain: number;
 	microphoneGainEnabled: boolean;
 	voiceEffectStrength: number;
+	snrJumboVoiceEffectStrength: number;
+	nosSizeVoiceEffectStrength: number;
+	nosRokurokubiVoiceEffectStrength: number;
+	nosBerserkerVoiceEffectStrength: number;
+	nosCitrusVoiceEffectStrength: number;
+	nosRainbowStarEchoStrength: number;
+	nosVoiceJammingEffectStrength: number;
+	nosMegaphoneEffectStrength: number;
+	nosBibiriEchoStrength: number;
 	micSensitivity: number;
 	micSensitivityEnabled: boolean;
 	mobileHost: boolean;
