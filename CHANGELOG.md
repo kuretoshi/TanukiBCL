@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.41
+
+- ボイスエフェクトの設定を「オーディオ」から独立した項目に移動しました。
+- キノコカオス・変装の共通エフェクト、SNRジャンボ、NoSの役職・状態ごとに強さを調整できます。
+
 ## v3.2.40
 
 - NoS UchuAddonのシトラス感染時ボイスチェンジャーを、ロビー設定で0～100%の範囲で調整できるようにしました。0%は効果なし、100%は従来の強さです。
