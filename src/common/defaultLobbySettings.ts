@@ -17,6 +17,7 @@ export const defaultLobbySettings: ILobbySettings = {
 	nosBerserkerVoiceEffect: true,
 	nosRokurokubiVoiceEffect: true,
 	nosCitrusVoiceEffect: true,
+	nosCitrusVoiceEffectStrength: 100,
 	nosRainbowStarEcho: true,
 	nosFixerJammingVoiceBlock: true,
 	nosFixerJammingLowpass: false,

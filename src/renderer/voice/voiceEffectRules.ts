@@ -66,7 +66,9 @@ export function selectVoiceEffect(
 		(other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Orange' ||
 			other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Lemon')
 	) {
-		return { strength: 100, direction: 'up' };
+		const configured = lobby.nosCitrusVoiceEffectStrength;
+		const strength = Number.isFinite(configured) ? Math.min(100, Math.max(0, configured)) : 100;
+		return strength > 0 ? { strength, direction: 'up' } : null;
 	}
 	if (state.gameState !== GameState.TASKS) return null;
 	if (

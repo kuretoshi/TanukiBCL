@@ -31,6 +31,9 @@ const { default: LobbySection } = await bundle('src/renderer/settings/sections/L
 const state = { mod: 'NoS', gameState: 1, map: 0, players: [] };
 const player = { id: 0, name: 'speaker', nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } };
 assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, player, -1), { strength: 100, direction: 'up' });
+assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: 35 }, { id: 1 }, player, -1), { strength: 35, direction: 'up' });
+assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: 0 }, { id: 1 }, player, -1), null);
+assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffectStrength: undefined }, { id: 1 }, player, -1), { strength: 100, direction: 'up' });
 assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosCitrusVoiceEffect: false }, { id: 1 }, player, -1), null);
 const rainbow = { ...player, nosRole: { isRainbowStar: true } };
 assert.equal(shouldApplyRainbowStarEcho(state, rainbow, defaultLobbySettings), true);
@@ -48,7 +51,7 @@ function render(mod, nosAddonIds, active = false) {
 for (const active of [false, true]) {
 	const visible = render('NoS', ['UchuAddon'], active);
 	assert.ok(visible.includes('nos_fixer_jamming_lowpass'));
-	for (const key of ['nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_rainbow_star_echo'])
+	for (const key of ['nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_citrus_voice_effect_strength', 'nos_rainbow_star_echo'])
 		assert.ok(visible.includes(key), `${key} appears in ${active ? 'current' : 'mine'} settings`);
 	for (const ids of [undefined, [], ['OtherAddon']]) {
 		const hidden = render('NoS', ids, active);

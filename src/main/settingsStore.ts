@@ -287,6 +287,7 @@ export const settingsStore = new Store<ISettings>({
 				nosRokurokubiVoiceEffect: { type: 'boolean', default: true },
 				nosBerserkerVoiceEffect: { type: 'boolean', default: true },
 				nosCitrusVoiceEffect: { type: 'boolean', default: true },
+				nosCitrusVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
 				nosRainbowStarEcho: { type: 'boolean', default: true },
 				nosFixerJammingVoiceBlock: { type: 'boolean', default: true },
 				nosFixerJammingLowpass: { type: 'boolean', default: false },

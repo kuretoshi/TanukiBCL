@@ -264,6 +264,19 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 								checked={values.nosCitrusVoiceEffect !== false}
 								onChange={(checked) => update({ nosCitrusVoiceEffect: checked })}
 							/>
+							<SliderRow
+								label={t('settings.lobbysettings.nos_citrus_voice_effect_strength')}
+								disabled={disabled}
+								disabledReason={disabledReason}
+								sliderDisabled={values.nosCitrusVoiceEffect === false}
+								value={values.nosCitrusVoiceEffectStrength ?? 100}
+								min={0}
+								max={100}
+								step={5}
+								format={(value) => `${value}%`}
+								commitOnly
+								onChange={(nosCitrusVoiceEffectStrength) => update({ nosCitrusVoiceEffectStrength })}
+							/>
 							<SwitchRow
 								label={t('settings.lobbysettings.nos_rainbow_star_echo')}
 								disabled={disabled}

@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.40
+
+- NoS UchuAddonのシトラス感染時ボイスチェンジャーを、ロビー設定で0～100%の範囲で調整できるようにしました。0%は効果なし、100%は従来の強さです。
+
 ## v3.2.39
 
 - NoSアドオンの一覧はNoSを検知したときだけ読み取るようにしました。別のMODへの切り替えやゲーム終了時には、保持していたアドオンIDを消去します。

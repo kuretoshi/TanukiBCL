@@ -30,6 +30,7 @@
 			"nos_size_voice_effect": "大きさが変化した場合にエフェクトをかける",
 			"nos_rokurokubi_voice_effect": "ろくろ首の首が伸びるほど声を高くする",
 			"nos_citrus_voice_effect": "シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）",
+			"nos_citrus_voice_effect_strength": "シトラス感染時のボイスチェンジャーの強さ",
 			"nos_rainbow_star_echo": "虹色スターの声に薄いエコーを加える（UchuAddon）",
 			"nos_berserker_voice_effect": "バーサーカーの暴走中に声へゆがみと残響を加える",
 			"nos_fixer_jamming_voice_block": "フィクサーの妨害を受けた際に音声を遮断する",
