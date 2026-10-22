@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.42
+
+- 「ボイスエフェクト」のNoS・SNR項目を対応MOD検出時だけ表示するようにしました。NoSのボイスジャミンガー・メガホン・ビビリの強さ設定は、タヌキ丼アドオン検出時だけ表示します。
+- エフェクトの有効／無効はロビー設定へ戻し、強さはホストがゲーム中にも調整できるようにしました。
+
 ## v3.2.41
 
 - ボイスエフェクトの設定を「オーディオ」から独立した項目に移動しました。

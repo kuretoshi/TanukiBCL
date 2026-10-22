@@ -36,6 +36,7 @@ interface RowsProps {
 	catalog: readonly TohRoleDefinition[];
 	t: TFunction;
 	mod: AmongUsState['mod'];
+	nosAddonIds?: string[];
 	values: ILobbySettings;
 	disabled: boolean;
 	disabledReason?: string;
@@ -48,6 +49,7 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 	catalog,
 	t,
 	mod,
+	nosAddonIds,
 	values,
 	disabled,
 	disabledReason,
@@ -168,6 +170,12 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 
 			{mod === 'SUPER_NEW_ROLES' && (
 				<SettingsSection title={t('settings.lobbysettings.snr_section')}>
+					<SwitchRow
+						label={t('settings.lobbysettings.snr_jumbo_voice')}
+						disabled={voiceSettingDisabled}
+						checked={values.snrJumboVoice === true}
+						onChange={(checked) => update({ snrJumboVoice: checked })}
+					/>
 					{modToggles.map(({ key, label }) => {
 						const remainsAvailable = key === 'jackalHaunting' || key === 'sidekickHaunting';
 						return (
@@ -195,6 +203,23 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 			)}
 			{mod === 'NoS' && (
 				<SettingsSection title={t('settings.lobbysettings.nos_section')}>
+					{([
+						['nosSizeVoiceEffect', 'nos_size_voice_effect'],
+						['nosRokurokubiVoiceEffect', 'nos_rokurokubi_voice_effect'],
+						['nosBerserkerVoiceEffect', 'nos_berserker_voice_effect'],
+						...(nosAddonIds?.includes('UchuAddon') ? [
+							['nosCitrusVoiceEffect', 'nos_citrus_voice_effect'],
+							['nosRainbowStarEcho', 'nos_rainbow_star_echo'],
+						] : []),
+					] as Array<[keyof ILobbySettings, string]>).map(([key, label]) => (
+						<SwitchRow
+							key={key}
+							label={t(`settings.lobbysettings.${label}`)}
+							disabled={disabled}
+							checked={values[key] !== false}
+							onChange={(checked) => update({ [key]: checked })}
+						/>
+					))}
 					<SwitchRow
 						label={t('settings.lobbysettings.jackal_radio')}
 						disabled={voiceSettingDisabled}
@@ -353,6 +378,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 							catalog={gameState?.tohRoleCatalog ?? []}
 							t={t}
 							mod={hostIsToh4e ? 'TOH4E' : gameState?.mod}
+							nosAddonIds={gameState?.nosAddonIds}
 							values={activeLobbySettings}
 							disabled
 							update={noop}
@@ -373,6 +399,7 @@ const LobbySection: React.FC<LobbySectionProps> = function ({
 						catalog={gameState?.tohRoleCatalog ?? []}
 						t={t}
 						mod={gameState?.mod}
+						nosAddonIds={gameState?.nosAddonIds}
 						values={myLobbySettings ?? defaultLobbySettings}
 						disabled={!canEditMine}
 						disabledReason={editDisabledReason}

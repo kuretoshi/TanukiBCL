@@ -69,19 +69,32 @@ function renderEffects(mod, nosAddonIds, active = false) {
 	}));
 }
 for (const active of [false, true]) {
-	const visible = renderEffects('NoS', ['UchuAddon'], active);
-	assert.ok(render('NoS', ['UchuAddon'], active).includes('nos_fixer_jamming_lowpass'));
-	assert.ok(!render('NoS', ['UchuAddon'], active).includes('nos_voice_effects'));
-	for (const key of ['nos_voice_effects', 'nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_rainbow_star_echo', 'nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
+	const visible = renderEffects('NoS', ['UchuAddon', 'tanuki.bcl.roles'], active);
+	const lobby = render('NoS', ['UchuAddon'], active);
+	for (const key of ['nos_fixer_jamming_lowpass', 'nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_rainbow_star_echo'])
+		assert.ok(lobby.includes(key), `${key} appears in the lobby settings`);
+	assert.ok(!lobby.includes('nos_voice_effects'));
+	for (const key of ['nos_voice_effects', 'nos_berserker_strength', 'nos_rokurokubi_strength', 'nos_citrus_strength', 'nos_rainbow_star_strength', 'nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
 		assert.ok(visible.includes(key), `${key} appears in ${active ? 'current' : 'mine'} settings`);
 	assert.ok(renderEffects('SUPER_NEW_ROLES', [], active).includes('snr_voice_effects'));
+	assert.ok(render('SUPER_NEW_ROLES', [], active).includes('snr_jumbo_voice'));
+	assert.ok(!renderEffects('SUPER_NEW_ROLES', [], active).includes('nos_voice_effects'));
+	assert.ok(!renderEffects('NoS', [], active).includes('snr_voice_effects'));
+	assert.ok(!renderEffects('TOH4E', [], active).includes('nos_voice_effects'));
+	assert.ok(!renderEffects('TOH4E', [], active).includes('snr_voice_effects'));
 	for (const ids of [undefined, [], ['OtherAddon']]) {
 		const hidden = renderEffects('NoS', ids, active);
-		assert.ok(!hidden.includes('nos_citrus_voice_effect'));
-		assert.ok(!hidden.includes('nos_rainbow_star_echo'));
-		assert.ok(hidden.includes('nos_berserker_voice_effect'));
+		assert.ok(!hidden.includes('nos_citrus_strength'));
+		assert.ok(!hidden.includes('nos_rainbow_star_strength'));
+		for (const key of ['nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
+			assert.ok(!hidden.includes(key), `${key} is hidden without the Tanuki addon`);
+		assert.ok(hidden.includes('nos_berserker_strength'));
 	}
-	assert.ok(!renderEffects('TOH4E', ['UchuAddon'], active).includes('nos_citrus_voice_effect'));
+	const tanukiOnly = renderEffects('NoS', ['tanuki.bcl.roles'], active);
+	for (const key of ['nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
+		assert.ok(tanukiOnly.includes(key), `${key} appears with the Tanuki addon`);
+	assert.ok(!tanukiOnly.includes('nos_citrus_strength'));
+	assert.ok(!renderEffects('TOH4E', ['UchuAddon'], active).includes('nos_citrus_strength'));
 }
 assert.deepEqual(readNosAddonIds(resolve(directory, 'missing')), []);
 // Optional local integration: recognition must survive a renamed release ZIP.

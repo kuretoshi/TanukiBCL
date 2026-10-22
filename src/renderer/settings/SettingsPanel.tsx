@@ -301,7 +301,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							gameState={gameState}
 							activeLobbySettings={activeLobbySettings}
 							myLobbySettings={myLobbyDraft}
-							canEditMine={canEditMyLobbySettings}
 							update={updateMyLobbySettings}
 						/>
 					)}

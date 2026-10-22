@@ -9,7 +9,7 @@ import { ILobbySettings, ISettings } from '../../../common/ISettings';
 import { isLiteRuntime } from '../../../common/appVariant';
 import { defaultLobbySettings } from '../../voice/types';
 import TestVoiceEffectButton from '../TestVoiceEffectButton';
-import { SettingsSection, SliderRow, SwitchRow } from '../SettingsControls';
+import { SettingsSection, SliderRow } from '../SettingsControls';
 
 interface Props {
 	t: TFunction;
@@ -18,7 +18,6 @@ interface Props {
 	gameState: AmongUsState;
 	activeLobbySettings: ILobbySettings | null;
 	myLobbySettings: ILobbySettings;
-	canEditMine: boolean;
 	update: (partial: Partial<ILobbySettings>) => void;
 }
 
@@ -29,7 +28,6 @@ const VoiceEffectsSection: React.FC<Props> = ({
 	gameState,
 	activeLobbySettings,
 	myLobbySettings,
-	canEditMine,
 	update,
 }) => {
 	const [selectedTab, setTab] = useState<'current' | 'mine'>(gameState?.isHost ? 'mine' : 'current');
@@ -38,11 +36,12 @@ const VoiceEffectsSection: React.FC<Props> = ({
 	const current = tab === 'current';
 	const inLobby = activeLobbySettings !== null && !!gameState?.lobbyCode && gameState.lobbyCode !== 'MENU';
 	const values = current ? activeLobbySettings : (myLobbySettings ?? defaultLobbySettings);
-	const disabled = current || !canEditMine;
+	const disabled = current;
 	const mod = gameState?.mod;
-	const showSnr = !current || mod === 'SUPER_NEW_ROLES';
-	const showNos = !current || mod === 'NoS';
+	const showSnr = mod === 'SUPER_NEW_ROLES';
+	const showNos = mod === 'NoS';
 	const uchuAddonDetected = gameState?.mod === 'NoS' && gameState.nosAddonIds?.includes('UchuAddon') === true;
+	const tanukiAddonDetected = gameState?.mod === 'NoS' && gameState.nosAddonIds?.includes('tanuki.bcl.roles') === true;
 	const updateSetting = current ? (_: Partial<ILobbySettings>) => {} : update;
 
 	return (
@@ -74,21 +73,13 @@ const VoiceEffectsSection: React.FC<Props> = ({
 				{!lite && <Tab value="mine" label={t('settings.lobbysettings.tab_mine')} sx={{ minHeight: 36, py: 0 }} />}
 			</Tabs>
 			{current && !inLobby && <Alert severity="info">{t('settings.lobbysettings.no_lobby')}</Alert>}
-			{!current && !canEditMine && <Alert severity="warning">{t('settings.lobbysettings.inlobbyonly')}</Alert>}
 			{values && (!current || inLobby) && (
 				<>
 					{showSnr && (
 						<SettingsSection title={t('settings.lobbysettings.snr_voice_effects')}>
-							<SwitchRow
-								label={t('settings.lobbysettings.snr_jumbo_voice')}
-								disabled={disabled || values.impostorRadioOnlyMode}
-								checked={values.snrJumboVoice === true}
-								onChange={(checked) => updateSetting({ snrJumboVoice: checked })}
-							/>
 							<SliderRow
-								label={t('settings.lobbysettings.effect_strength')}
-								disabled={disabled || values.impostorRadioOnlyMode}
-								sliderDisabled={!values.snrJumboVoice}
+								label={t('settings.voice_effects.snr_jumbo_strength')}
+								disabled={disabled}
 								value={values.snrJumboVoiceEffectStrength ?? 100}
 								min={0}
 								max={100}
@@ -103,28 +94,21 @@ const VoiceEffectsSection: React.FC<Props> = ({
 						<SettingsSection title={t('settings.lobbysettings.nos_voice_effects')}>
 							{(
 								[
-									['nosSizeVoiceEffect', 'nosSizeVoiceEffectStrength', 'nos_size_voice_effect'],
-									['nosRokurokubiVoiceEffect', 'nosRokurokubiVoiceEffectStrength', 'nos_rokurokubi_voice_effect'],
-									['nosBerserkerVoiceEffect', 'nosBerserkerVoiceEffectStrength', 'nos_berserker_voice_effect'],
+									['nosSizeVoiceEffectStrength', 'nos_size_strength'],
+									['nosRokurokubiVoiceEffectStrength', 'nos_rokurokubi_strength'],
+									['nosBerserkerVoiceEffectStrength', 'nos_berserker_strength'],
 									...(uchuAddonDetected
 										? [
-												['nosCitrusVoiceEffect', 'nosCitrusVoiceEffectStrength', 'nos_citrus_voice_effect'],
-												['nosRainbowStarEcho', 'nosRainbowStarEchoStrength', 'nos_rainbow_star_echo'],
+												['nosCitrusVoiceEffectStrength', 'nos_citrus_strength'],
+												['nosRainbowStarEchoStrength', 'nos_rainbow_star_strength'],
 											]
 										: []),
-								] as Array<[keyof ILobbySettings, keyof ILobbySettings, string]>
-							).map(([enabledKey, strengthKey, label]) => (
-								<React.Fragment key={enabledKey}>
-									<SwitchRow
-										label={t(`settings.lobbysettings.${label}`)}
-										disabled={disabled}
-										checked={values[enabledKey] !== false}
-										onChange={(checked) => updateSetting({ [enabledKey]: checked })}
-									/>
+								] as Array<[keyof ILobbySettings, string]>
+							).map(([strengthKey, label]) => (
 									<SliderRow
-										label={t('settings.lobbysettings.effect_strength')}
+										key={strengthKey}
+										label={t(`settings.voice_effects.${label}`)}
 										disabled={disabled}
-										sliderDisabled={values[enabledKey] === false}
 										value={(values[strengthKey] as number) ?? 100}
 										min={0}
 										max={100}
@@ -133,14 +117,13 @@ const VoiceEffectsSection: React.FC<Props> = ({
 										commitOnly
 										onChange={(value) => updateSetting({ [strengthKey]: value })}
 									/>
-								</React.Fragment>
 							))}
 							{(
-								[
+								(tanukiAddonDetected ? [
 									['nosVoiceJammingEffectStrength', 'nos_voice_jamming_effect'],
 									['nosMegaphoneEffectStrength', 'nos_megaphone_effect'],
 									['nosBibiriEchoStrength', 'nos_bibiri_echo'],
-								] as Array<[keyof ILobbySettings, string]>
+								] : []) as Array<[keyof ILobbySettings, string]>
 							).map(([strengthKey, label]) => (
 								<SliderRow
 									key={strengthKey}

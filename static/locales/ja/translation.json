@@ -1,6 +1,6 @@
 {
 	"settings": {
-		"voice_effects": { "title": "ボイスエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ" },
+		"voice_effects": { "title": "ボイスエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ", "snr_jumbo_strength": "ジャンボの強さ", "nos_size_strength": "サイズ変化の強さ", "nos_rokurokubi_strength": "ろくろ首の強さ", "nos_berserker_strength": "バーサーカーの強さ", "nos_citrus_strength": "シトラス感染時のボイスチェンジャーの強さ", "nos_rainbow_star_strength": "虹色スターのエコーの強さ" },
 		"title": "設定",
 		"language": "言語",
 		"warning": "よろしいですか？",
