@@ -9,7 +9,6 @@ import TextField from '@mui/material/TextField';
 import { ISettings } from '../../../common/ISettings';
 import MicrophoneSoundBar from '../MicrophoneSoundBar';
 import TestSpeakersButton from '../TestSpeakersButton';
-import TestVoiceEffectButton from '../TestVoiceEffectButton';
 import { pushToTalkOptions } from '../SettingsStore';
 import { ConfirmApi, SettingRow, SettingsSection, SliderRow } from '../SettingsControls';
 
@@ -182,23 +181,6 @@ const AudioSection: React.FC<AudioSectionProps> = function ({
 					format={(value) => `${value}%`}
 					onChange={(value, persist) => setSettings('ghostVolumeAsImpostor', value, persist)}
 				/>
-			</SettingsSection>
-			<SettingsSection>
-				<SliderRow
-					label={t('settings.audio.voice_effect_strength')}
-					value={settings.voiceEffectStrength}
-					max={100}
-					format={(value) => `${value}%`}
-					onChange={(value, persist) => setSettings('voiceEffectStrength', value, persist)}
-				/>
-				<Box sx={{ display: 'flex', justifyContent: 'center', px: 2, py: 2 }}>
-					<TestVoiceEffectButton
-						t={t}
-						microphone={settings.microphone}
-						speaker={settings.speaker}
-						voiceEffectStrength={settings.voiceEffectStrength}
-					/>
-				</Box>
 			</SettingsSection>
 		</>
 	);

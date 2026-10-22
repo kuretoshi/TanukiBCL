@@ -21,7 +21,8 @@ export function updateBibiriEcho(
 	active: boolean,
 	dead: boolean,
 	event: number | undefined,
-	now = Date.now()
+	now = Date.now(),
+	strength = 100
 ): void {
 	const time = effect.output.context.currentTime;
 	if (!active) {
@@ -34,7 +35,7 @@ export function updateBibiriEcho(
 		effect.until = time + 2.4;
 		effect.input.gain.value = 0;
 		effect.output.gain.cancelScheduledValues(time);
-		effect.output.gain.setValueAtTime(0.65, time);
+		effect.output.gain.setValueAtTime(Math.max(0.001, 0.65 * Math.min(1, Math.max(0, strength / 100))), time);
 		effect.output.gain.exponentialRampToValueAtTime(0.001, effect.until);
 		effect.output.gain.setValueAtTime(0, effect.until);
 	}

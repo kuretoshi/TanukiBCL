@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"voice_effects": { "title": "ボイスエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ" },
 		"title": "設定",
 		"language": "言語",
 		"warning": "よろしいですか？",
@@ -22,7 +23,13 @@
 			"sidekick_hear_outside_vents": "サイドキックはベント内にいても声が聞こえる",
 			"sidekick_talk_in_vents": "サイドキックもジャッカル陣営同士でベント内で会話ができる",
 			"snr_section": "【MOD】SNR設定",
+			"snr_voice_effects": "SNRボイスエフェクト",
 			"nos_section": "【MOD】NoS設定",
+			"nos_voice_effects": "NoSボイスエフェクト",
+			"effect_strength": "エフェクトの強さ",
+			"nos_voice_jamming_effect": "ボイスジャミンガーの強さ",
+			"nos_megaphone_effect": "メガホン充電中の声の強さ",
+			"nos_bibiri_echo": "ビビリ死亡時のエコーの強さ",
 			"toh_section": "【MOD】TOH4E／TOH4E_EM設定",
 			"toh_neutral_killer_haunting": "第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる",
 			"nos_neutral_killer_haunting": "第三陣営のキルできる役職が幽霊の声も聞こえる",

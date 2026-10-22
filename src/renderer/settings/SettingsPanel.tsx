@@ -9,6 +9,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import GroupsIcon from '@mui/icons-material/Groups';
 import PersonIcon from '@mui/icons-material/Person';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import LayersIcon from '@mui/icons-material/Layers';
 import ScienceIcon from '@mui/icons-material/Science';
@@ -28,13 +29,24 @@ import GeneralSection from './sections/GeneralSection';
 import LobbySection from './sections/LobbySection';
 import PlayersSection from './sections/PlayersSection';
 import AudioSection, { MediaDevice } from './sections/AudioSection';
+import VoiceEffectsSection from './sections/VoiceEffectsSection';
 import KeybindsSection, { ShortcutSetting } from './sections/KeybindsSection';
 import OverlaySection from './sections/OverlaySection';
 import AdvancedSection from './sections/AdvancedSection';
 import StreamingSection from './sections/StreamingSection';
 
 type CategoryId =
-	'general' | 'lobby' | 'players' | 'audio' | 'keybinds' | 'overlay' | 'advanced' | 'streaming' | 'update' | 'inquiry';
+	| 'general'
+	| 'lobby'
+	| 'players'
+	| 'audio'
+	| 'voiceEffects'
+	| 'keybinds'
+	| 'overlay'
+	| 'advanced'
+	| 'streaming'
+	| 'update'
+	| 'inquiry';
 
 const MY_LOBBY_COMMIT_DELAY = 750;
 const RADIO_ONLY_BACKUP_KEY = 'tanukibcl.impostorRadioOnlyBackup';
@@ -192,6 +204,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 				{ id: 'lobby', label: t('settings.lobbysettings.title'), icon: <GroupsIcon fontSize="small" /> },
 				{ id: 'players', label: t('settings.players.title'), icon: <PersonIcon fontSize="small" /> },
 				{ id: 'audio', label: t('settings.audio.title'), icon: <VolumeUpIcon fontSize="small" /> },
+				{ id: 'voiceEffects', label: t('settings.voice_effects.title'), icon: <GraphicEqIcon fontSize="small" /> },
 				{ id: 'keybinds', label: t('settings.keyboard.title'), icon: <KeyboardIcon fontSize="small" /> },
 				{ id: 'overlay', label: t('settings.overlay.title'), icon: <LayersIcon fontSize="small" /> },
 				{ id: 'advanced', label: t('settings.advanced.title'), icon: <ScienceIcon fontSize="small" /> },
@@ -278,6 +291,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							devices={devices}
 							refreshDevices={refreshDevices}
 							confirm={confirm}
+						/>
+					)}
+					{category === 'voiceEffects' && (
+						<VoiceEffectsSection
+							t={t}
+							settings={settings}
+							setSettings={setSettings}
+							gameState={gameState}
+							activeLobbySettings={activeLobbySettings}
+							myLobbySettings={myLobbyDraft}
+							canEditMine={canEditMyLobbySettings}
+							update={updateMyLobbySettings}
 						/>
 					)}
 					{category === 'keybinds' && (

@@ -51,6 +51,7 @@ export interface ILobbySettings {
 	visionHearing: boolean;
 	haunting: boolean;
 	snrJumboVoice: boolean;
+	snrJumboVoiceEffectStrength: number;
 	jackalHaunting: boolean;
 	jackalHearOutsideVents: boolean;
 	jackalTalkInVents: boolean;
@@ -61,11 +62,18 @@ export interface ILobbySettings {
 	nosNeutralKillerHaunting: boolean;
 	nosVoicePositions: boolean;
 	nosSizeVoiceEffect: boolean;
+	nosSizeVoiceEffectStrength: number;
 	nosBerserkerVoiceEffect: boolean;
+	nosBerserkerVoiceEffectStrength: number;
 	nosRokurokubiVoiceEffect: boolean;
+	nosRokurokubiVoiceEffectStrength: number;
 	nosCitrusVoiceEffect: boolean;
 	nosCitrusVoiceEffectStrength: number;
 	nosRainbowStarEcho: boolean;
+	nosRainbowStarEchoStrength: number;
+	nosVoiceJammingEffectStrength: number;
+	nosMegaphoneEffectStrength: number;
+	nosBibiriEchoStrength: number;
 	nosFixerJammingVoiceBlock: boolean;
 	nosFixerJammingLowpass: boolean;
 	tohNeutralKillerHaunting: boolean;

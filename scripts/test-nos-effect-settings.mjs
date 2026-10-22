@@ -28,6 +28,7 @@ fixerSettings = { ...fixerSettings, ...changeNosFixerMode('block', false) };
 assert.equal(fixerSettings.nosFixerJammingLowpass, false);
 assert.equal(fixerSettings.nosFixerJammingVoiceBlock, false);
 const { default: LobbySection } = await bundle('src/renderer/settings/sections/LobbySection.tsx');
+const { default: VoiceEffectsSection } = await bundle('src/renderer/settings/sections/VoiceEffectsSection.tsx');
 const state = { mod: 'NoS', gameState: 1, map: 0, players: [] };
 const player = { id: 0, name: 'speaker', nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } };
 assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, player, -1), { strength: 100, direction: 'up' });
@@ -38,6 +39,15 @@ assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLo
 const rainbow = { ...player, nosRole: { isRainbowStar: true } };
 assert.equal(shouldApplyRainbowStarEcho(state, rainbow, defaultLobbySettings), true);
 assert.equal(shouldApplyRainbowStarEcho(state, rainbow, { ...defaultLobbySettings, nosRainbowStarEcho: false }), false);
+assert.equal(shouldApplyRainbowStarEcho(state, rainbow, { ...defaultLobbySettings, nosRainbowStarEchoStrength: 0 }), false);
+const sizePlayer = { id: 2, name: 'size', nosPlayer: { bodyRateX: 1, bodyRateY: 2 } };
+const fullSize = selectVoiceEffect(state, { voiceEffectStrength: 0 }, defaultLobbySettings, { id: 1 }, sizePlayer, -1);
+const halfSize = selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosSizeVoiceEffectStrength: 50 }, { id: 1 }, sizePlayer, -1);
+assert.ok(fullSize?.sourceFilter && halfSize?.sourceFilter);
+assert.equal(halfSize.sourceFilter.pitch, 1 + (fullSize.sourceFilter.pitch - 1) / 2);
+assert.equal(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosSizeVoiceEffectStrength: 0 }, { id: 1 }, sizePlayer, -1), null);
+const berserker = { id: 3, name: 'berserker', nosRole: { roleName: 'berserker' }, nosPlayer: { bodyType: 2 } };
+assert.deepEqual(selectVoiceEffect(state, { voiceEffectStrength: 0 }, { ...defaultLobbySettings, nosBerserkerVoiceEffectStrength: 40 }, { id: 1 }, berserker, -1), { strength: 40, berserker: true });
 const noOp = () => {};
 function render(mod, nosAddonIds, active = false) {
 	return renderToStaticMarkup(React.createElement(LobbySection, {
@@ -48,18 +58,30 @@ function render(mod, nosAddonIds, active = false) {
 		editDisabledReason: '', update: noOp, onRadioOnlyModeChange: noOp, confirm: noOp,
 	}));
 }
+function renderEffects(mod, nosAddonIds, active = false) {
+	return renderToStaticMarkup(React.createElement(VoiceEffectsSection, {
+		t: (key) => key,
+		settings: { voiceEffectStrength: 100, microphone: 'default', speaker: 'default' },
+		setSettings: noOp,
+		gameState: { ...state, mod, nosAddonIds, lobbyCode: active ? 'ABCDEF' : 'MENU', isHost: !active },
+		activeLobbySettings: active ? defaultLobbySettings : null,
+		myLobbySettings: defaultLobbySettings, canEditMine: true, update: noOp,
+	}));
+}
 for (const active of [false, true]) {
-	const visible = render('NoS', ['UchuAddon'], active);
-	assert.ok(visible.includes('nos_fixer_jamming_lowpass'));
-	for (const key of ['nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_citrus_voice_effect_strength', 'nos_rainbow_star_echo'])
+	const visible = renderEffects('NoS', ['UchuAddon'], active);
+	assert.ok(render('NoS', ['UchuAddon'], active).includes('nos_fixer_jamming_lowpass'));
+	assert.ok(!render('NoS', ['UchuAddon'], active).includes('nos_voice_effects'));
+	for (const key of ['nos_voice_effects', 'nos_berserker_voice_effect', 'nos_rokurokubi_voice_effect', 'nos_citrus_voice_effect', 'nos_rainbow_star_echo', 'nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])
 		assert.ok(visible.includes(key), `${key} appears in ${active ? 'current' : 'mine'} settings`);
+	assert.ok(renderEffects('SUPER_NEW_ROLES', [], active).includes('snr_voice_effects'));
 	for (const ids of [undefined, [], ['OtherAddon']]) {
-		const hidden = render('NoS', ids, active);
+		const hidden = renderEffects('NoS', ids, active);
 		assert.ok(!hidden.includes('nos_citrus_voice_effect'));
 		assert.ok(!hidden.includes('nos_rainbow_star_echo'));
 		assert.ok(hidden.includes('nos_berserker_voice_effect'));
 	}
-	assert.ok(!render('TOH4E', ['UchuAddon'], active).includes('nos_citrus_voice_effect'));
+	assert.ok(!renderEffects('TOH4E', ['UchuAddon'], active).includes('nos_citrus_voice_effect'));
 }
 assert.deepEqual(readNosAddonIds(resolve(directory, 'missing')), []);
 // Optional local integration: recognition must survive a renamed release ZIP.

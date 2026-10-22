@@ -3,6 +3,8 @@ export interface BerserkerEffect {
 	kind: 'berserker';
 	input: GainNode;
 	output: GainNode;
+	bypass: GainNode;
+	processed: GainNode;
 	nodes: AudioNode[];
 }
 
@@ -46,7 +48,10 @@ export function createBerserkerEffect(context: AudioContext): BerserkerEffect {
 	compressor.ratio.value = 3;
 	compressor.attack.value = 0.005;
 	compressor.release.value = 0.08;
-	output.gain.value = 0.78;
+	const bypass = context.createGain(),
+		processed = context.createGain();
+	input.connect(bypass);
+	bypass.connect(output);
 	input.connect(highpass);
 	highpass.connect(dry);
 	dry.connect(mix);
@@ -59,13 +64,23 @@ export function createBerserkerEffect(context: AudioContext): BerserkerEffect {
 	room.connect(wet);
 	wet.connect(mix);
 	mix.connect(compressor);
-	compressor.connect(output);
+	compressor.connect(processed);
+	processed.connect(output);
+	updateBerserkerEffect({ bypass, processed }, 100);
 	return {
 		kind: 'berserker',
 		input,
 		output,
-		nodes: [highpass, shape, lowpass, dry, grit, wet, preDelay, room, mix, compressor],
+		bypass,
+		processed,
+		nodes: [highpass, shape, lowpass, dry, grit, wet, preDelay, room, mix, compressor, bypass, processed],
 	};
+}
+
+export function updateBerserkerEffect(effect: Pick<BerserkerEffect, 'bypass' | 'processed'>, strength: number): void {
+	const amount = Math.min(1, Math.max(0, strength / 100));
+	effect.bypass.gain.value = 1 - amount;
+	effect.processed.gain.value = 0.78 * amount;
 }
 
 export function disconnectBerserkerEffect(effect: BerserkerEffect) {

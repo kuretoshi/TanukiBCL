@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"voice_effects": { "title": "Voice Effects", "disguise_strength": "Disguise and mushroom effect strength" },
 		"title": "Settings",
 		"language": "Language",
 		"warning": "Are you sure?",
@@ -22,7 +23,13 @@
 			"sidekick_hear_outside_vents": "Sidekicks can hear outside voices while venting",
 			"sidekick_talk_in_vents": "Sidekicks can talk with Jackals and other Sidekicks inside vents",
 			"snr_section": "[MOD] SNR Settings",
+			"snr_voice_effects": "SNR Voice Effects",
 			"nos_section": "[MOD] NoS Settings",
+			"nos_voice_effects": "NoS Voice Effects",
+			"effect_strength": "Effect strength",
+			"nos_voice_jamming_effect": "Voice Jamminger strength",
+			"nos_megaphone_effect": "Megaphone charging voice strength",
+			"nos_bibiri_echo": "Bibiri death echo strength",
 			"toh_section": "[MOD] TOH4E / TOH4E_EM Settings",
 			"toh_neutral_killer_haunting": "Roles implementing IKiller can hear ghosts",
 			"nos_neutral_killer_haunting": "Neutral killing roles can hear ghosts",
