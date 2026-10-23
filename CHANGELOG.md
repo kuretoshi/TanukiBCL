@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.46
+
+- SNRの残響の強さが翻訳キーで表示される問題を修正。
+
 ## v3.2.45
 
 - Windows通常版・Lite版で、registry.nodeの欠落により起動できない問題を修正。
