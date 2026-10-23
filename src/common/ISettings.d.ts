@@ -27,6 +27,7 @@ export interface ISettings {
 	microphoneGain: number;
 	microphoneGainEnabled: boolean;
 	voiceEffectStrength: number;
+	snrPushReverbStrength: number;
 	snrJumboVoiceEffectStrength: number;
 	nosSizeVoiceEffectStrength: number;
 	nosRokurokubiVoiceEffectStrength: number;
@@ -60,6 +61,7 @@ export interface ILobbySettings {
 	visionHearing: boolean;
 	haunting: boolean;
 	snrJumboVoice: boolean;
+	snrPushReverb: boolean;
 	snrJumboVoiceEffectStrength: number;
 	jackalHaunting: boolean;
 	jackalHearOutsideVents: boolean;

@@ -25,7 +25,10 @@ const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameSt
 	const tanukiAddonDetected = showNos && gameState.nosAddonIds?.includes('tanuki.bcl.roles') === true;
 	const common: EffectRow[] = [{ key: 'voiceEffectStrength', label: t('settings.voice_effects.disguise_strength') }];
 	const snr: EffectRow[] = showSnr
-		? [{ key: 'snrJumboVoiceEffectStrength', label: t('settings.voice_effects.snr_jumbo_strength') }]
+		? [
+				{ key: 'snrJumboVoiceEffectStrength', label: t('settings.voice_effects.snr_jumbo_strength') },
+				{ key: 'snrPushReverbStrength', label: t('settings.voice_effects.snr_push_reverb_strength') },
+			]
 		: [];
 	const nos: EffectRow[] = showNos
 		? [
@@ -35,12 +38,18 @@ const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameSt
 				...(uchuAddonDetected
 					? [
 							{ key: 'nosCitrusVoiceEffectStrength' as const, label: t('settings.voice_effects.nos_citrus_strength') },
-							{ key: 'nosRainbowStarEchoStrength' as const, label: t('settings.voice_effects.nos_rainbow_star_strength') },
+							{
+								key: 'nosRainbowStarEchoStrength' as const,
+								label: t('settings.voice_effects.nos_rainbow_star_strength'),
+							},
 						]
 					: []),
 				...(tanukiAddonDetected
 					? [
-							{ key: 'nosVoiceJammingEffectStrength' as const, label: t('settings.lobbysettings.nos_voice_jamming_effect') },
+							{
+								key: 'nosVoiceJammingEffectStrength' as const,
+								label: t('settings.lobbysettings.nos_voice_jamming_effect'),
+							},
 							{ key: 'nosMegaphoneEffectStrength' as const, label: t('settings.lobbysettings.nos_megaphone_effect') },
 							{ key: 'nosBibiriEchoStrength' as const, label: t('settings.lobbysettings.nos_bibiri_echo') },
 						]
@@ -64,13 +73,25 @@ const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameSt
 
 	return (
 		<>
-			<SettingsSection title={t('settings.voice_effects.title')}>
-				{common.map(slider)}
-			</SettingsSection>
-			{showSnr && <SettingsSection title={t('settings.lobbysettings.snr_voice_effects')}>{snr.map(slider)}</SettingsSection>}
-			{showNos && <SettingsSection title={t('settings.lobbysettings.nos_voice_effects')}>{nos.map(slider)}</SettingsSection>}
+			<SettingsSection title={t('settings.voice_effects.title')}>{common.map(slider)}</SettingsSection>
+			{showSnr && (
+				<SettingsSection title={t('settings.lobbysettings.snr_voice_effects')}>{snr.map(slider)}</SettingsSection>
+			)}
+			{showNos && (
+				<SettingsSection title={t('settings.lobbysettings.nos_voice_effects')}>{nos.map(slider)}</SettingsSection>
+			)}
 			<SettingsSection title={t('settings.voice_effects.preview_title')}>
-				<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 1, px: 2, py: 2 }}>
+				<Box
+					sx={{
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						flexWrap: 'wrap',
+						gap: 1,
+						px: 2,
+						py: 2,
+					}}
+				>
 					<TextField
 						select
 						size="small"
@@ -80,7 +101,11 @@ const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameSt
 						slotProps={{ select: { native: true } }}
 						sx={{ minWidth: 180, flex: '1 1 240px', maxWidth: 320 }}
 					>
-						{available.map((row) => <option key={row.key} value={row.key}>{row.label}</option>)}
+						{available.map((row) => (
+							<option key={row.key} value={row.key}>
+								{row.label}
+							</option>
+						))}
 					</TextField>
 					<TestVoiceEffectButton
 						key={preview}

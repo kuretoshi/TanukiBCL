@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.44
+
+- SNRの突き落とし時の残響をロビー設定でオン・オフできるようにしました。
+- ボイスエフェクト設定に突き落とし時の残響の強さ（0〜100%）と試聴を追加。0%でも落下中の声は聞こえます。
+
 ## v3.2.42
 
 - 「ボイスエフェクト」のNoS・SNR項目を対応MOD検出時だけ表示するようにしました。NoSのボイスジャミンガー・メガホン・ビビリの強さ設定は、タヌキ丼アドオン検出時だけ表示します。

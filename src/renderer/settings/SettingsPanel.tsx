@@ -63,6 +63,7 @@ const RADIO_ONLY_FORCED_SETTINGS: Partial<ILobbySettings> = {
 	commsSabotage: false,
 	hearThroughCameras: false,
 	snrJumboVoice: false,
+	snrPushReverb: true,
 	jackalHearOutsideVents: false,
 	jackalTalkInVents: false,
 	jackalRadioEnabled: false,
@@ -294,12 +295,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 						/>
 					)}
 					{category === 'voiceEffects' && (
-						<VoiceEffectsSection
-							t={t}
-							settings={settings}
-							setSettings={setSettings}
-							gameState={gameState}
-						/>
+						<VoiceEffectsSection t={t} settings={settings} setSettings={setSettings} gameState={gameState} />
 					)}
 					{category === 'keybinds' && (
 						<KeybindsSection t={t} settings={settings} mod={gameState?.mod} setShortcut={setShortcut} />

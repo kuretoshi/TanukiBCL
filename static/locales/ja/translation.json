@@ -1,6 +1,7 @@
 {
 	"settings": {
 		"voice_effects": { "title": "ボイスエフェクト", "preview_title": "エフェクトテスト", "preview_target": "テストするエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ", "snr_jumbo_strength": "ジャンボの強さ", "nos_size_strength": "サイズ変化の強さ", "nos_rokurokubi_strength": "ろくろ首の強さ", "nos_berserker_strength": "バーサーカーの強さ", "nos_citrus_strength": "シトラス感染時の強さ", "nos_rainbow_star_strength": "虹色スターのエコーの強さ" },
+			"snr_push_reverb_strength": "突き落とし時の残響の強さ",
 		"title": "設定",
 		"language": "言語",
 		"warning": "よろしいですか？",
@@ -15,6 +16,7 @@
 			"impostorshearsghost": "インポスターが幽霊の声も聞こえる",
 			"voice_effect_enabled": "ボイスエフェクトを有効化",
 			"snr_jumbo_voice": "ジャンボ役職の時、大きくなるほど声を太くする",
+			"snr_push_reverb": "突き落とされて落下中の声に残響を付ける",
 			"jackal_haunting": "第三陣営のキルできる役職が幽霊の声も聞こえる",
 			"jackal_hear_outside_vents": "ジャッカル、波動砲ジャッカルはベント内にいても声が聞こえる",
 			"jackal_talk_in_vents": "ジャッカル、波動砲ジャッカル同士でベント内で会話ができる",

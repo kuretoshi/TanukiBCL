@@ -1,3 +1,4 @@
+import { connectReverbMix, createReverbMix, reverbLevels } from './reverbMix';
 import { applyVoiceJamming } from '../../common/VoiceJammingState';
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
 import { MapType } from '../../common/AmongusMap';
@@ -606,6 +607,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		peer.pan.disconnect();
 		peer.gain.disconnect();
 		peer.reverb?.disconnect();
+		if (peer.reverbMix) for (const node of Object.values(peer.reverbMix)) node.disconnect();
 		peer.muffle?.disconnect();
 		disconnectRadioEcho(peer.radioEcho);
 		if (peer.starEcho) disconnectRadioEcho(peer.starEcho);
@@ -811,6 +813,12 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 
 		const wantReverb = result.reverb === null ? peer.reverbConnected : result.reverb;
+		if (wantReverb && this.context) {
+			peer.reverbMix ??= createReverbMix(this.context);
+			const levels = reverbLevels(result.reverbStrength);
+			peer.reverbMix.dry.gain.value = levels.dry;
+			peer.reverbMix.wet.gain.value = levels.wet;
+		}
 		const wantMuffle = result.muffle === null ? peer.muffleConnected : result.muffle !== false;
 		const wantRadioEcho = result.radioEcho;
 		let effect =
@@ -932,13 +940,19 @@ function rebuildEffectChain(
 		chain[0] = peer.voiceEffect.output;
 	}
 	if (wantMuffle) chain.push(peer.muffle);
-	if (wantReverb) chain.push(peer.reverb);
+	if (peer.reverbMix) for (const node of Object.values(peer.reverbMix)) node.disconnect();
 
 	try {
 		for (let index = 0; index < chain.length - 1; index++) {
 			chain[index].connect(chain[index + 1]);
 		}
 		let chainOutput = chain[chain.length - 1];
+		if (wantReverb && peer.reverbMix) {
+			chainOutput = connectReverbMix(chainOutput, peer.reverb, peer.reverbMix);
+		} else if (wantReverb) {
+			chainOutput.connect(peer.reverb);
+			chainOutput = peer.reverb;
+		}
 		if (wantStarEcho && peer.starEcho) {
 			chainOutput.connect(peer.starEcho.input);
 			chainOutput = peer.starEcho.output;

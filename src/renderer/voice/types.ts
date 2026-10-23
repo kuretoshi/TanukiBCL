@@ -20,6 +20,7 @@ export interface PeerAudioNodes {
 	gain: GainNode;
 	pan: PannerNode;
 	reverb: ConvolverNode;
+	reverbMix?: { dry: GainNode; wet: GainNode; output: GainNode };
 	radioEcho: RadioEchoNodes;
 	starEcho?: RadioEchoNodes;
 	starEchoConnected?: boolean;

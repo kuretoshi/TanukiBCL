@@ -4,6 +4,7 @@ export const defaultLobbySettings: ILobbySettings = {
 	maxDistance: 5.32,
 	haunting: false,
 	snrJumboVoice: false,
+	snrPushReverb: true,
 	snrJumboVoiceEffectStrength: 100,
 	jackalHaunting: false,
 	jackalHearOutsideVents: false,

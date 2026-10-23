@@ -176,6 +176,12 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						checked={values.snrJumboVoice === true}
 						onChange={(checked) => update({ snrJumboVoice: checked })}
 					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.snr_push_reverb')}
+						disabled={disabled}
+						checked={values.snrPushReverb !== false}
+						onChange={(checked) => update({ snrPushReverb: checked })}
+					/>
 					{modToggles.map(({ key, label }) => {
 						const remainsAvailable = key === 'jackalHaunting' || key === 'sidekickHaunting';
 						return (
@@ -203,15 +209,19 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 			)}
 			{mod === 'NoS' && (
 				<SettingsSection title={t('settings.lobbysettings.nos_section')}>
-					{([
-						['nosSizeVoiceEffect', 'nos_size_voice_effect'],
-						['nosRokurokubiVoiceEffect', 'nos_rokurokubi_voice_effect'],
-						['nosBerserkerVoiceEffect', 'nos_berserker_voice_effect'],
-						...(nosAddonIds?.includes('UchuAddon') ? [
-							['nosCitrusVoiceEffect', 'nos_citrus_voice_effect'],
-							['nosRainbowStarEcho', 'nos_rainbow_star_echo'],
-						] : []),
-					] as Array<[keyof ILobbySettings, string]>).map(([key, label]) => (
+					{(
+						[
+							['nosSizeVoiceEffect', 'nos_size_voice_effect'],
+							['nosRokurokubiVoiceEffect', 'nos_rokurokubi_voice_effect'],
+							['nosBerserkerVoiceEffect', 'nos_berserker_voice_effect'],
+							...(nosAddonIds?.includes('UchuAddon')
+								? [
+										['nosCitrusVoiceEffect', 'nos_citrus_voice_effect'],
+										['nosRainbowStarEcho', 'nos_rainbow_star_echo'],
+									]
+								: []),
+						] as Array<[keyof ILobbySettings, string]>
+					).map(([key, label]) => (
 						<SwitchRow
 							key={key}
 							label={t(`settings.lobbysettings.${label}`)}

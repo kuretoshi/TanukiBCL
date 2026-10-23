@@ -36,6 +36,7 @@ export interface VoiceAudioResult {
 	panMaxDistance: number | null;
 	muffle: MuffleSetting | false | null;
 	reverb: boolean | null;
+	reverbStrength?: number;
 	radioEcho: boolean;
 }
 
@@ -305,7 +306,10 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	if (!other.isDead || state.gameState !== GameState.TASKS || !canHearGhosts || me.isDead) {
 		result.reverb = false;
 	}
-	if (falling(remotePlayer) && !meetingFallback) result.reverb = true;
+	if (falling(remotePlayer) && !meetingFallback) {
+		result.reverb = activeLobbySettings.snrPushReverb !== false;
+		result.reverbStrength = settings.snrPushReverbStrength ?? 100;
+	}
 
 	if (activeLobbySettings.deadOnly) {
 		panPos = [0, 0];
