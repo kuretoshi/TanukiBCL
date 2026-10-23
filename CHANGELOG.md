@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.45
+
+- Windows通常版・Lite版で、registry.nodeの欠落により起動できない問題を修正。
+- 配布用Electronからレジストリ読取りと全ネイティブ依存の読込みを検証し、失敗した場合はパッケージ作成を停止するようにしました。
+
 ## v3.2.44
 
 - SNRの突き落とし時の残響をロビー設定でオン・オフできるようにしました。

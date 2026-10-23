@@ -14,6 +14,7 @@ asarUnpack:
   - "out/nos-reader/**"
   - "**/*.node"
 npmRebuild: false
+afterPack: ./scripts/verify-packaged-native.cjs
 extraFiles:
   - from: Better-CrewLinkKai-target-pid.ps1
     to: TanukiBCL-target-pid.ps1
