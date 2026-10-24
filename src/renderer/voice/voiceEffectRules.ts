@@ -38,7 +38,12 @@ function scaledFilter(filter: SourceFilterParameters, strength: number | undefin
 		: null;
 }
 
-export function shouldApplyRainbowStarEcho(state: AmongUsState, other: Player, lobby?: ILobbySettings, settings?: ISettings): boolean {
+export function shouldApplyRainbowStarEcho(
+	state: AmongUsState,
+	other: Player,
+	lobby?: ILobbySettings,
+	settings?: ISettings
+): boolean {
 	return (
 		state.mod === 'NoS' &&
 		lobby?.nosRainbowStarEcho !== false &&

@@ -3,6 +3,7 @@
 // (default import + destructure). Catches CJS/ESM interop regressions — e.g.
 // "Named export 'X' not found" — at build time instead of at runtime.
 import { basename } from 'node:path';
+import { readFileSync } from 'node:fs';
 const checks = [
 	['electron-log/main.js', ['transports', 'functions']],
 	[
@@ -31,8 +32,10 @@ function verifyMemoryRead(memory) {
 	const handle = memory.openProcess(process.pid);
 	try {
 		const executable = memory.findModule(basename(process.execPath), process.pid);
-		const bytes = memory.readBuffer(handle.handle, executable.modBaseAddr, 2);
-		if (bytes.toString() !== 'MZ') throw new Error('readBuffer returned an invalid executable header');
+		// The Linux CI executable has an ELF header; Windows has a PE header.
+		const expected = readFileSync(process.execPath).subarray(0, 4);
+		const bytes = memory.readBuffer(handle.handle, executable.modBaseAddr, expected.length);
+		if (!bytes.equals(expected)) throw new Error('readBuffer returned an invalid executable header');
 		console.log('ok memoryjs readBuffer (own process)');
 	} finally {
 		memory.closeProcess(handle.handle);

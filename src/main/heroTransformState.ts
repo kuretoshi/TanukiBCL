@@ -10,8 +10,16 @@ export function readHeroTransformState(
 	try {
 		if (statSync(path).size > 8192) return [];
 		const data = JSON.parse(readFileSync(path, 'utf8'));
-		if (!data || data.protocol !== 1 || data.pid !== pid || !Number.isSafeInteger(data.unixMs) ||
-			now - data.unixMs > 1000 || data.unixMs - now > 100 || !Array.isArray(data.players) || data.players.length > 24)
+		if (
+			!data ||
+			data.protocol !== 1 ||
+			data.pid !== pid ||
+			!Number.isSafeInteger(data.unixMs) ||
+			now - data.unixMs > 1000 ||
+			data.unixMs - now > 100 ||
+			!Array.isArray(data.players) ||
+			data.players.length > 24
+		)
 			return [];
 		const ids = new Set<number>();
 		for (const entry of data.players) {
