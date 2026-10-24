@@ -1,4 +1,5 @@
 import { voiceJammingFor } from '../../common/VoiceJammingState';
+import { isHeroTransformed } from '../../common/HeroTransformState';
 import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import type { PitchShiftDirection } from '../voiceEffect';
@@ -76,6 +77,8 @@ export function selectVoiceEffect(
 			settings.nosMegaphoneEffectStrength
 		);
 	}
+	// Hero costumes change appearance without changing the speaker's voice.
+	if (isHeroTransformed(state, other.id)) return null;
 	// Citrus changes the actual outfit at meeting start, rather than BodyType.
 	// Keep the disguise throughout tasks and meetings while that outfit is visible.
 	if (

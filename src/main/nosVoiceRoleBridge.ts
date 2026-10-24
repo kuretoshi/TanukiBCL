@@ -7,6 +7,7 @@ import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { IpcMessages } from '../common/ipc-messages';
 import { sendHostVoice } from './nosHostVoiceRelay';
+import { registerHeroSpeechBridge } from './heroSpeechBridge';
 
 export interface NosVoiceRoleDescriptor {
 	protocol: 1;
@@ -167,6 +168,7 @@ export function registerNosVoiceRoleBridge(
 	isMainRenderer: (senderId: number) => boolean
 ): NosVoiceRoleSender | undefined {
 	if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) return;
+	registerHeroSpeechBridge(ipcMain, getContext, isMainRenderer);
 	const sender = new NosVoiceRoleSender(join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS', 'voice-role.json'));
 	ipcMain.on('NOS_HOST_VOICE_SAMPLE', (event, player: unknown, rms: unknown, active: unknown) => {
 		if (!isMainRenderer(event.sender.id)) return;

@@ -4,6 +4,7 @@ import { readMegaphoneState } from './megaphoneState';
 import { readDyingVoiceState } from './dyingVoiceState';
 import { readInterviewState } from './interviewState';
 import { readVoiceJammingState } from './voiceJammingState';
+import { readHeroTransformState } from './heroTransformState';
 import { readPortableMegaphoneState } from './portableMegaphoneState';
 import { readBibiriEchoState } from './bibiriEchoState';
 import { GameInfo } from '../common/GameInfo';
@@ -581,6 +582,8 @@ export default class GameReader {
 						: undefined,
 				nosVoiceJamming:
 					this.loadedMod.id === 'NoS' && state === GameState.DISCUSSION ? readVoiceJammingState(this.pid) : undefined,
+				nosHeroTransforms:
+					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readHeroTransformState(this.pid) : undefined,
 				nosDyingVoices:
 					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
 						? readDyingVoiceState(this.pid)

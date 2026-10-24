@@ -677,6 +677,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			)
 				return;
 			this.peerVersions[peerId] = data.version;
+			this.audio.setSpeechPlatform(peerId, data.platform);
 			this.updateVersionWarning();
 			return;
 		}
@@ -952,7 +953,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		}
 		if (!inactive && Date.now() - this.versionSentAt >= 3000) {
 			this.connection.broadcast(
-				JSON.stringify({ type: 'app-version', lobbyCode: state.lobbyCode, version: packageJson.version })
+				JSON.stringify({
+					type: 'app-version',
+					lobbyCode: state.lobbyCode,
+					version: packageJson.version,
+					platform: 'desktop',
+				})
 			);
 			this.versionSentAt = Date.now();
 		}

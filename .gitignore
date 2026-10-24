@@ -30,6 +30,8 @@ out/
 *.log
 *.tsbuildinfo
 /.cache/
+/static/speech/vosk.js
+/static/speech/model-ja.tar.gz
 /coverage/
 /.eslintcache
 __pycache__/
@@ -56,3 +58,5 @@ __pycache__/
 /scripts/fixtures/nos-reader/**/obj/
 /scripts/fixtures/toh-reader/**/bin/
 /scripts/fixtures/toh-reader/**/obj/
+/src/renderer/public/speech/vosk.js
+/src/renderer/public/speech/model-ja.tar.gz
