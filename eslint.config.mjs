@@ -6,7 +6,7 @@ import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
-	{ ignores: ['out/**', 'dist/**', 'vendor/**', 'node_modules/**'] },
+	{ ignores: ['out/**', 'dist/**', 'vendor/**', 'node_modules/**', 'src/renderer/public/speech/**'] },
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	react.configs.flat.recommended,
