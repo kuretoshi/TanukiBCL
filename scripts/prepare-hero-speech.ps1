@@ -7,7 +7,13 @@ $heroTar = Join-Path $env:SystemRoot 'System32/tar.exe'
 function Get-HeroAsset([string]$Name, [string]$Url, [string]$Sha256) {
     $heroFile = Join-Path $heroCache $Name
     if (!(Test-Path -LiteralPath $heroFile)) { Invoke-WebRequest -Uri $Url -OutFile $heroFile }
-    if ((Get-FileHash -LiteralPath $heroFile -Algorithm SHA256).Hash -ne $Sha256) {
+    # Use .NET directly: CI can inherit a PowerShell 7 module path while this
+    # helper runs in Windows PowerShell, where Get-FileHash may be unavailable.
+    $heroHasher = [Security.Cryptography.SHA256]::Create()
+    $heroInput = [IO.File]::OpenRead($heroFile)
+    try { $heroDigest = [BitConverter]::ToString($heroHasher.ComputeHash($heroInput)).Replace('-', '') }
+    finally { $heroInput.Dispose(); $heroHasher.Dispose() }
+    if ($heroDigest -ne $Sha256) {
         throw "Speech asset checksum mismatch: $Name"
     }
     return $heroFile
@@ -20,7 +26,10 @@ if (!(Test-Path -LiteralPath (Join-Path $heroAssets 'vosk.js'))) {
     Copy-Item -LiteralPath (Join-Path $heroCache 'package/dist/vosk.js') -Destination (Join-Path $heroAssets 'vosk.js')
 }
 if (!(Test-Path -LiteralPath (Join-Path $heroAssets 'model-ja.tar.gz'))) {
-    Expand-Archive -LiteralPath $heroModel -DestinationPath (Join-Path $heroCache 'extracted') -Force
+    $heroExtracted = Join-Path $heroCache 'extracted'
+    New-Item -ItemType Directory -Path $heroExtracted -Force | Out-Null
+    & $heroTar -xf $heroModel -C $heroExtracted
+    if ($LASTEXITCODE -ne 0) { throw 'Could not extract the Japanese speech model.' }
     $heroModelRoot = Join-Path $heroCache 'model'
     New-Item -ItemType Directory -Path $heroModelRoot -Force | Out-Null
     Copy-Item -Path (Join-Path $heroCache 'extracted/vosk-model-small-ja-0.22/*') -Destination $heroModelRoot -Recurse -Force
