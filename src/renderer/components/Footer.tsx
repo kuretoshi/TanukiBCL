@@ -2,7 +2,7 @@ import { shell } from '../lib/electron-bridge';
 import React from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import { Tooltip } from '@mui/material';
+import { Menu, MenuItem, Tooltip } from '@mui/material';
 
 const useStyles = () => ({
 	footer: {
@@ -31,6 +31,12 @@ const useStyles = () => ({
 
 const RawFooter: React.FC = function () {
 	const classes = useStyles();
+	const [supportMenuAnchor, setSupportMenuAnchor] = React.useState<HTMLElement | null>(null);
+	const closeSupportMenu = () => setSupportMenuAnchor(null);
+	const openSupportSite = (url: string) => {
+		closeSupportMenu();
+		void shell.openExternal(url);
+	};
 	return (
 		<Box sx={classes.footer}>
 			<Box sx={classes.row}>
@@ -70,10 +76,13 @@ const RawFooter: React.FC = function () {
 				</Button>
 				<Button
 					color="grey"
-					aria-label="支援する（Ko-fi）"
-					onClick={() => shell.openExternal('https://ko-fi.com/kuretoshi')}
+					aria-label="支援先を選ぶ"
+					aria-controls={supportMenuAnchor ? 'support-site-menu' : undefined}
+					aria-haspopup="menu"
+					aria-expanded={Boolean(supportMenuAnchor)}
+					onClick={(event) => setSupportMenuAnchor(event.currentTarget)}
 				>
-					<Tooltip title="お賽銭で開発を支援する" arrow>
+					<Tooltip title="開発の支援先を選ぶ" arrow>
 						<svg width={36} height={36} viewBox="0 0 48 48" role="img" aria-hidden="true">
 							<circle cx="24" cy="7" r="5" fill="#f6d46b" stroke="#5b371f" strokeWidth="1.5" />
 							<path d="M24 4v6m-2-4h4m-4 2h4" stroke="#5b371f" strokeWidth="1.2" strokeLinecap="round" />
@@ -91,6 +100,17 @@ const RawFooter: React.FC = function () {
 						</svg>
 					</Tooltip>
 				</Button>
+				<Menu
+					id="support-site-menu"
+					anchorEl={supportMenuAnchor}
+					open={Boolean(supportMenuAnchor)}
+					onClose={closeSupportMenu}
+				>
+					<MenuItem onClick={() => openSupportSite('https://ko-fi.com/kuretoshi')}>Ko-fiで支援する</MenuItem>
+					<MenuItem onClick={() => openSupportSite('https://github.com/sponsors/kuretoshi')}>
+						GitHub Sponsorsで支援する
+					</MenuItem>
+				</Menu>
 				<Button color="grey" aria-label="X" onClick={() => shell.openExternal('https://x.com/tanukibcl?s=11')}>
 					<Tooltip title="Xのページはこちら" arrow>
 						<svg width={36} height={36} viewBox="0 0 1200 1227" role="img" aria-hidden="true">

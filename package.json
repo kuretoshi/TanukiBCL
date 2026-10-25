@@ -9,10 +9,10 @@
 		"type": "git",
 		"url": "https://github.com/kuretoshi/BetterCrewLink.git"
 	},
-	"funding": {
-		"type": "individual",
-		"url": "https://www.paypal.com/donate?hosted_button_id=KS43BDTGN76JQ"
-	},
+	"funding": [
+		"https://ko-fi.com/kuretoshi",
+		"https://github.com/sponsors/kuretoshi"
+	],
 	"author": {
 		"name": "OhMyGuus",
 		"email": "info@guus.ninja",
