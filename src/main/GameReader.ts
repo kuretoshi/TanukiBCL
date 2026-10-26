@@ -545,7 +545,9 @@ export default class GameReader {
 				const roles = this.nosRoles.update(
 					this.pid,
 					`${lobbyCode}:${this.snrRound}`,
-					publishedBody ? undefined : (address, size) => readBuffer(this.amongUs!.handle, address, size)
+					publishedBody ? undefined : (address, size) => readBuffer(this.amongUs!.handle, address, size),
+					gameState,
+					players
 				);
 				this.applyNosRoles(players, roles, publishedBody);
 			} else this.nosRoles.reset();

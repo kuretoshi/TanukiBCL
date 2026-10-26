@@ -125,6 +125,20 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	) {
 		return result;
 	}
+	if (
+		state.gameState === GameState.TASKS &&
+		me.isImpostor &&
+		other.isDead &&
+		((state.mod === 'SUPER_NEW_ROLES' &&
+			activeLobbySettings.snrBuskerReviveHideVoice === true &&
+			other.snrRole?.role.name === 'Busker' &&
+			(other.snrRole.buskerReviveRemaining ?? 0) > 0) ||
+			(state.mod === 'NoS' &&
+				activeLobbySettings.nosBuskerReviveHideVoice === true &&
+				other.nosRole?.roleName === 'busker' &&
+				(other.nosRole.buskerReviveRemaining ?? 0) > 0))
+	)
+		return result;
 
 	let panPos: [number, number] = [other.x - me.x, other.y - me.y];
 	const megaphone = chargingMegaphone(state, other);

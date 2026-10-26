@@ -13,6 +13,17 @@ interface JumboLayout {
 	maxOffset: number;
 }
 
+interface BuskerLayout {
+	abilityType: number;
+	listType: number;
+	itemsType: number;
+	abilitiesOffset: number;
+	itemsOffset: number;
+	countOffset: number;
+	activeOffset: number;
+	timerOffset: number;
+}
+
 interface NumberField {
 	offset: number;
 	size: 1 | 2 | 4;
@@ -29,6 +40,7 @@ export interface SnrLiveLayout {
 	arrayLengthOffset: number;
 	arrayDataOffset: number;
 	jumbo?: JumboLayout | null;
+	busker?: BuskerLayout | null;
 	fields: { playerId: NumberField; role: NumberField; modifier: NumberField | null; ghostRole: NumberField | null };
 }
 
@@ -64,6 +76,12 @@ export function isSnrLiveLayout(value: unknown, pid: number): value is SnrLiveLa
 				['abilitiesOffset', 'itemsOffset', 'countOffset', 'currentOffset', 'dataOffset', 'maxOffset'].every((key) => {
 					const n = v.jumbo![key as keyof JumboLayout];
 					return Number.isInteger(n) && n >= 4 && n <= 4096 && n % 4 === 0;
+				}))) &&
+		(v.busker == null ||
+			(['abilityType', 'listType', 'itemsType'].every((key) => pointer(v.busker![key as keyof BuskerLayout])) &&
+				['abilitiesOffset', 'itemsOffset', 'countOffset', 'activeOffset', 'timerOffset'].every((key) => {
+					const n = v.busker![key as keyof BuskerLayout];
+					return Number.isInteger(n) && n >= 4 && n <= 4096;
 				}))) &&
 		!!v.fields &&
 		field(v.fields.playerId, true) &&
@@ -132,6 +150,44 @@ export function readSnrLiveRoles(
 		}
 		return undefined;
 	};
+	const readBuskerRemaining = (player: number): number | undefined => {
+		const b = layout.busker;
+		if (!b) return undefined;
+		try {
+			const list = pointer(player + b.abilitiesOffset);
+			if (!validPointer(list) || pointer(list) !== b.listType) return undefined;
+			const items = pointer(list + b.itemsOffset);
+			const count = read(list + b.countOffset, 4).readUInt32LE(0);
+			if (
+				!validPointer(items) ||
+				pointer(items) !== b.itemsType ||
+				count > 512 ||
+				count > read(items + layout.arrayLengthOffset, 4).readUInt32LE(0)
+			)
+				return undefined;
+			const entries = read(items + layout.arrayDataOffset, count * layout.pointerSize);
+			for (let i = 0; i < count; i++) {
+				const ability = layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(i * 8)) : entries.readUInt32LE(i * 4);
+				if (!validPointer(ability) || pointer(ability) !== b.abilityType) continue;
+				const active = read(ability + b.activeOffset, 1)[0] === 1;
+				const remaining = read(ability + b.timerOffset, 4).readFloatLE(0);
+				if (
+					pointer(player) !== layout.playerType ||
+					pointer(player + b.abilitiesOffset) !== list ||
+					pointer(list) !== b.listType ||
+					pointer(list + b.itemsOffset) !== items ||
+					read(list + b.countOffset, 4).readUInt32LE(0) !== count ||
+					!read(items + layout.arrayDataOffset, count * layout.pointerSize).equals(entries) ||
+					pointer(ability) !== b.abilityType
+				)
+					return undefined;
+				return active && Number.isFinite(remaining) && remaining > 0 && remaining <= 60 ? remaining : undefined;
+			}
+		} catch {
+			// A moving ability must fail closed.
+		}
+		return undefined;
+	};
 	const snapshot = () => {
 		const array = pointer(layout.arraySlot);
 		if (
@@ -180,6 +236,7 @@ export function readSnrLiveRoles(
 				ghostRole: describe(bytes, layout.fields.ghostRole),
 			};
 			if (hasSnrJumbo(role)) role.jumbo = readJumbo(player);
+			if (role.role.name === 'Busker') role.buskerReviveRemaining = readBuskerRemaining(player);
 			result.set(id, role);
 		}
 		if (

@@ -16,6 +16,7 @@
 			"voice_effect_enabled": "ボイスエフェクトを有効化",
 			"snr_jumbo_voice": "ジャンボ役職の時、大きくなるほど声を太くする",
 			"snr_push_reverb": "突き落とされて落下中の声に残響を付ける",
+			"busker_revive_hide_voice": "復活可能時間中のバスカーの声をインポスターに聞かせない",
 			"jackal_haunting": "第三陣営のキルできる役職が幽霊の声も聞こえる",
 			"jackal_hear_outside_vents": "ジャッカル、波動砲ジャッカルはベント内にいても声が聞こえる",
 			"jackal_talk_in_vents": "ジャッカル、波動砲ジャッカル同士でベント内で会話ができる",

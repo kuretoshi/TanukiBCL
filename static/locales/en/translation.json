@@ -16,6 +16,7 @@
 			"voice_effect_enabled": "Enable Voice Effects",
 			"snr_jumbo_voice": "Deepen Jumbo voices as they grow",
 			"snr_push_reverb": "Add reverb to voices while falling after a push",
+			"busker_revive_hide_voice": "Hide the Busker's voice from impostors during the revive window",
 			"jackal_haunting": "Third-party roles can hear ghosts",
 			"jackal_hear_outside_vents": "Jackal and Wave Cannon Jackal can hear outside voices while venting",
 			"jackal_talk_in_vents": "Jackal and Wave Cannon Jackal can talk to each other inside vents",

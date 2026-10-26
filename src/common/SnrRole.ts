@@ -13,6 +13,7 @@ export interface SnrLiveRole {
 	winnerTeam?: SnrEnumValue | null;
 	teamTag?: SnrEnumValue | null;
 	jumbo?: { currentSize: number; maxSize: number };
+	buskerReviveRemaining?: number;
 	hat2Id?: string;
 	visor2Id?: string;
 }

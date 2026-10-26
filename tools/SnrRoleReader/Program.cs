@@ -96,7 +96,7 @@ static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize,
         arrayType = source.Array.Type!.MethodTable, playerType = source.PlayerType.MethodTable,
         arrayLengthOffset = pointerSize,
         arrayDataOffset = source.Array.Type.GetArrayElementAddress(source.Array.Address, 0) - source.Array.Address,
-        jumbo = BuildJumboLayout(source),
+        jumbo = BuildJumboLayout(source), busker = BuildBuskerLayout(source),
         fields = new { playerId = DescribeField("PlayerId"), role = DescribeField("Role"),
             modifier = DescribeField("ModifierRole"), ghostRole = DescribeField("GhostRole") }
     };
@@ -131,6 +131,34 @@ static object? BuildJumboLayout(SnrPlayerSource source)
         itemsType,
         abilitiesOffset = Offset(abilities), itemsOffset = Offset(items), countOffset = Offset(size),
         currentOffset = Offset(current), dataOffset = Offset(dataField), maxOffset = Offset(max)
+    };
+}
+
+static object? BuildBuskerLayout(SnrPlayerSource source)
+{
+    var ability = source.Module.GetTypeByName("SuperNewRoles.Roles.Ability.BuskerPseudocideAbility");
+    var abilities = source.PlayerType.GetFieldByName("_playerAbilities");
+    var list = abilities?.Type;
+    var items = list?.GetFieldByName("_items");
+    var size = list?.GetFieldByName("_size");
+    var active = ability?.GetFieldByName("<isEffectActive>k__BackingField");
+    var timer = ability?.GetFieldByName("<EffectTimer>k__BackingField");
+    ulong itemsType = 0;
+    var players = source.Array.AsArray();
+    for (int i = 0; i < players.Length && itemsType == 0; i++) {
+        var player = players.GetObjectValue(i);
+        if (player.IsNull) continue;
+        var liveItems = ReadObject(ReadObject(player, "_playerAbilities"), "_items");
+        if (!liveItems.IsNull && liveItems.IsArray) itemsType = liveItems.Type!.MethodTable;
+    }
+    if (ability == null || abilities == null || list == null || items?.Type == null || size == null ||
+        active?.ElementType != ClrElementType.Boolean || timer?.ElementType != ClrElementType.Float ||
+        ability.IsCollectible || itemsType == 0) return null;
+    ulong Offset(ClrInstanceField field) => field.GetAddress(0x1000, false) - 0x1000;
+    return new {
+        abilityType = ability.MethodTable, listType = list.MethodTable, itemsType,
+        abilitiesOffset = Offset(abilities), itemsOffset = Offset(items), countOffset = Offset(size),
+        activeOffset = Offset(active), timerOffset = Offset(timer)
     };
 }
 

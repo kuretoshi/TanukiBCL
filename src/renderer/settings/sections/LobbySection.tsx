@@ -182,6 +182,12 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						checked={values.snrPushReverb !== false}
 						onChange={(checked) => update({ snrPushReverb: checked })}
 					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.busker_revive_hide_voice')}
+						disabled={disabled}
+						checked={values.snrBuskerReviveHideVoice === true}
+						onChange={(checked) => update({ snrBuskerReviveHideVoice: checked })}
+					/>
 					{modToggles.map(({ key, label }) => {
 						const remainsAvailable = key === 'jackalHaunting' || key === 'sidekickHaunting';
 						return (
@@ -243,6 +249,12 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						disabledReason={disabledReason}
 						checked={values.nosNeutralKillerHaunting === true}
 						onChange={(checked) => update({ nosNeutralKillerHaunting: checked })}
+					/>
+					<SwitchRow
+						label={t('settings.lobbysettings.busker_revive_hide_voice')}
+						disabled={disabled}
+						checked={values.nosBuskerReviveHideVoice === true}
+						onChange={(checked) => update({ nosBuskerReviveHideVoice: checked })}
 					/>
 					<SwitchRow
 						label={t('settings.lobbysettings.nos_voice_positions')}

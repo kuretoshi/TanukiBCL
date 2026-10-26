@@ -16,7 +16,7 @@ export class SnrLiveTracker {
 	private attemptedSession = '';
 	private request = 0;
 	private pending = false;
-	private needsJumboLayout = false;
+	private needsAbilityLayout = false;
 	private needsRoleMetadata = false;
 	private roleMetadataRetryAt = 0;
 	private cosmeticRefreshAt = 0;
@@ -38,7 +38,7 @@ export class SnrLiveTracker {
 		this.layout = undefined;
 		this.attemptedSession = '';
 		this.pending = false;
-		this.needsJumboLayout = false;
+		this.needsAbilityLayout = false;
 		this.needsRoleMetadata = false;
 		this.roleMetadataRetryAt = 0;
 		this.cosmeticRefreshAt = 0;
@@ -109,15 +109,15 @@ export class SnrLiveTracker {
 			? `${session}:${
 					this.needsRoleMetadata
 						? 'metadata'
-						: this.needsJumboLayout
-							? 'jumbo'
+						: this.needsAbilityLayout
+							? 'abilities'
 							: `cosmetics-${Math.floor(Date.now() / 5000)}`
 				}`
 			: session;
 		const retryReady =
 			(!this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt) && Date.now() >= this.discoveryRetryAt;
 		if (
-			(!this.layout || this.needsJumboLayout || this.needsRoleMetadata || refreshCosmetics) &&
+			(!this.layout || this.needsAbilityLayout || this.needsRoleMetadata || refreshCosmetics) &&
 			retryReady &&
 			!this.pending &&
 			(this.attemptedSession !== discoverySession || !this.layout)
@@ -181,7 +181,9 @@ export class SnrLiveTracker {
 				([playerId, role]) => !isSnrJackal(role) && !this.roleMetadata.has(playerId)
 			);
 			if (this.needsRoleMetadata) this.roleMetadataRetryAt = Math.max(this.roleMetadataRetryAt, Date.now() + 1000);
-			this.needsJumboLayout = !this.layout.jumbo && [...roles.values()].some(hasSnrJumbo);
+			this.needsAbilityLayout = [...roles.values()].some(
+				(role) => (!this.layout!.jumbo && hasSnrJumbo(role)) || (!this.layout!.busker && role.role.name === 'Busker')
+			);
 			this.message = 'SNR役職を自動更新中';
 			return roles;
 		} catch {
