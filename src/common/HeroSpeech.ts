@@ -36,3 +36,11 @@ export function heardHenshin(text: unknown, final = true): boolean {
 		(final && normalized === '返信')
 	);
 }
+export function heardTransformation(text: unknown, words: readonly string[], final = true): boolean {
+	if (words.length === 0) return heardHenshin(text, final);
+	if (typeof text !== 'string' || text.length > 4096) return false;
+	if (words[0] === '変身' && heardHenshin(text, final)) return true;
+	const normal = normaliseSpeech(text);
+	if (words.some((word) => normaliseSpeech(word).length >= 2 && normal.includes(normaliseSpeech(word)))) return true;
+	return false;
+}
