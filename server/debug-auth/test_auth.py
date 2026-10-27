@@ -31,6 +31,12 @@ class AuthenticationTests(unittest.TestCase):
         set_password(self.db, 'tester', 'tester-password')
         check = '/v1/player-bans/check'
         manage = '/v1/player-bans/manage'
+        preflight = self.client.options(check, headers={'Origin': 'https://example.org',
+            'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type'})
+        self.assertEqual(preflight.status_code, 200)
+        self.assertEqual(preflight.headers['Access-Control-Allow-Origin'], '*')
+        self.assertEqual(preflight.headers['Access-Control-Allow-Headers'], 'Content-Type')
+        self.assertNotIn('Access-Control-Allow-Origin', self.client.options(manage).headers)
         with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
             self.assertEqual(self.client.post(manage, json={'password': 'tester-password', 'action': 'list'}).status_code, 403)
             self.assertEqual(self.client.post(manage, json={'password': 'admin-password', 'action': 'add',
