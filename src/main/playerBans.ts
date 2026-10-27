@@ -2,8 +2,15 @@ const PLAYER_BAN_BASE_URL = 'https://debug-auth.kuretoshi.work/v1/player-bans';
 
 export interface PlayerBanRecord {
 	uid_digest: string;
+	player_uid: string;
 	display_name: string;
 	friend_code: string;
+	reason: string;
+	created_at: number;
+}
+
+export interface PendingPlayerNameBan {
+	player_name: string;
 	reason: string;
 	created_at: number;
 }
@@ -23,11 +30,28 @@ async function postBanRequest(path: 'check' | 'manage', payload: object, request
 
 export async function checkPlayerBan(
 	playerUid: unknown,
+	playerName: unknown,
+	observedPlayers: unknown,
 	request: typeof fetch
 ): Promise<'clear' | 'banned' | 'unavailable'> {
 	if (typeof playerUid !== 'string' || !playerUid.trim() || playerUid.length > 256) return 'unavailable';
+	if (typeof playerName !== 'string' || playerName.length > 80) return 'unavailable';
+	const observed = Array.isArray(observedPlayers)
+		? observedPlayers
+				.slice(0, 14)
+				.filter(
+					(player) =>
+						player &&
+						typeof player.playerUid === 'string' &&
+						player.playerUid.length <= 256 &&
+						typeof player.playerName === 'string' &&
+						player.playerName.length <= 80
+				)
+		: [];
 	try {
-		const result = (await postBanRequest('check', { playerUid }, request)) as { banned?: unknown };
+		const result = (await postBanRequest('check', { playerUid, playerName, observedPlayers: observed }, request)) as {
+			banned?: unknown;
+		};
 		return result.banned === true ? 'banned' : result.banned === false ? 'clear' : 'unavailable';
 	} catch {
 		return 'unavailable';
@@ -37,15 +61,21 @@ export async function checkPlayerBan(
 export async function managePlayerBans(
 	payload: unknown,
 	request: typeof fetch
-): Promise<{ bans: PlayerBanRecord[] } | { error: string }> {
+): Promise<{ bans: PlayerBanRecord[]; pending: PendingPlayerNameBan[] } | { error: string }> {
 	if (!payload || typeof payload !== 'object') return { error: '入力内容を確認してください。' };
 	const data = payload as Record<string, unknown>;
 	if (typeof data.password !== 'string' || !data.password || data.password.length > 1024)
 		return { error: '管理者パスワードを入力してください。' };
-	if (!['list', 'add', 'remove'].includes(String(data.action))) return { error: '操作を確認してください。' };
+	if (!['list', 'add', 'remove', 'add-name', 'remove-name'].includes(String(data.action)))
+		return { error: '操作を確認してください。' };
 	try {
-		const result = (await postBanRequest('manage', data, request)) as { bans?: PlayerBanRecord[] };
-		return Array.isArray(result.bans) ? { bans: result.bans } : { error: 'BAN一覧を取得できませんでした。' };
+		const result = (await postBanRequest('manage', data, request)) as {
+			bans?: PlayerBanRecord[];
+			pending?: PendingPlayerNameBan[];
+		};
+		return Array.isArray(result.bans) && Array.isArray(result.pending)
+			? { bans: result.bans, pending: result.pending }
+			: { error: 'BAN一覧を取得できませんでした。' };
 	} catch (error) {
 		return { error: error instanceof Error ? error.message : 'BANサーバーを確認できません。' };
 	}

@@ -749,10 +749,13 @@ if (!gotTheLock) {
 		}
 	});
 	let nextDebugAttempt = 0;
-	ipcMain.handle('player-bans:check', async (event, playerUid: unknown) => {
-		if (event.sender !== global.mainWindow?.webContents) return 'unavailable';
-		return checkPlayerBan(playerUid, net.fetch);
-	});
+	ipcMain.handle(
+		'player-bans:check',
+		async (event, playerUid: unknown, playerName: unknown, observedPlayers: unknown) => {
+			if (event.sender !== global.mainWindow?.webContents) return 'unavailable';
+			return checkPlayerBan(playerUid, playerName, observedPlayers, net.fetch);
+		}
+	);
 	ipcMain.handle('debug:player-bans', async (event, payload: unknown) => {
 		if (event.sender !== global.debugWindow?.webContents) return { error: 'デバッグ画面から操作してください。' };
 		return managePlayerBans(payload, net.fetch);

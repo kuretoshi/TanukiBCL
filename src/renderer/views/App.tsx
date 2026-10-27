@@ -104,38 +104,49 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 	const [settingsLoaded, setSettingsLoaded] = useState(false);
 
 	const { gameState, gameOpen, playerColors, error } = useSyncExternalStore(gameStore.subscribe, gameStore.getSnapshot);
-	const localPlayerUid = gameOpen
-		? (gameState?.players?.find((player) => player.isLocal)?.playerUid?.trim() ?? '')
-		: '';
+	const localPlayer = gameOpen ? gameState?.players?.find((player) => player.isLocal) : undefined;
+	const localPlayerUid = localPlayer?.playerUid?.trim() ?? '';
+	const localPlayerName = localPlayer?.name?.trim() ?? '';
 	const [banCheck, setBanCheck] = useState<{
 		uid: string;
+		name: string;
 		status: 'checking' | 'clear' | 'banned' | 'unavailable';
-	}>({ uid: '', status: 'checking' });
-	const banStatus = localPlayerUid ? (banCheck.uid === localPlayerUid ? banCheck.status : 'checking') : 'clear';
+	}>({ uid: '', name: '', status: 'checking' });
+	const banStatus = localPlayerUid
+		? banCheck.uid === localPlayerUid && banCheck.name === localPlayerName
+			? banCheck.status
+			: 'checking'
+		: 'clear';
 
 	useEffect(() => {
 		if (!localPlayerUid) return;
 		let active = true;
 		const check = async () => {
 			try {
-				const result = await ipcRenderer.invoke('player-bans:check', localPlayerUid);
+				const observedPlayers = (gameStore.getSnapshot().gameState?.players ?? [])
+					.filter((player) => !player.isLocal && !player.disconnected && !player.isDummy)
+					.map((player) => ({ playerUid: player.playerUid?.trim() ?? '', playerName: player.name?.trim() ?? '' }))
+					.filter((player) => player.playerUid && player.playerName)
+					.slice(0, 14);
+				const result = await ipcRenderer.invoke('player-bans:check', localPlayerUid, localPlayerName, observedPlayers);
 				if (active)
 					setBanCheck({
 						uid: localPlayerUid,
+						name: localPlayerName,
 						status: result === 'banned' || result === 'clear' ? result : 'unavailable',
 					});
 			} catch {
-				if (active) setBanCheck({ uid: localPlayerUid, status: 'unavailable' });
+				if (active) setBanCheck({ uid: localPlayerUid, name: localPlayerName, status: 'unavailable' });
 			}
 		};
-		setBanCheck({ uid: localPlayerUid, status: 'checking' });
+		setBanCheck({ uid: localPlayerUid, name: localPlayerName, status: 'checking' });
 		void check();
 		const timer = setInterval(() => void check(), 15000);
 		return () => {
 			active = false;
 			clearInterval(timer);
 		};
-	}, [localPlayerUid]);
+	}, [localPlayerUid, localPlayerName]);
 
 	useEffect(() => {
 		const onSettingsChanged = (newValue: ISettings) => setSettings(newValue);

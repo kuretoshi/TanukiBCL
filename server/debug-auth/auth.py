@@ -51,6 +51,15 @@ def initialize(path):
                 reason TEXT NOT NULL,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS player_ban_uids (
+                uid_digest TEXT PRIMARY KEY,
+                player_uid TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS pending_player_name_bans (
+                player_name TEXT PRIMARY KEY,
+                reason TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
         """)
     os.chmod(path, 0o600)
     inquiry.initialize(path)
@@ -105,7 +114,38 @@ def uid_digest(uid):
 def list_bans(path):
     with closing(connect(path)) as db:
         return [dict(row) for row in db.execute(
-            'SELECT uid_digest,display_name,friend_code,reason,created_at FROM player_bans ORDER BY created_at DESC')]
+            '''SELECT b.uid_digest,b.display_name,b.friend_code,b.reason,b.created_at,
+                      COALESCE(u.player_uid,'') AS player_uid
+               FROM player_bans b LEFT JOIN player_ban_uids u ON b.uid_digest=u.uid_digest
+               ORDER BY b.created_at DESC''')]
+
+
+def list_pending_name_bans(path):
+    with closing(connect(path)) as db:
+        return [dict(row) for row in db.execute(
+            'SELECT player_name,reason,created_at FROM pending_player_name_bans ORDER BY created_at DESC')]
+
+
+def validate_player_name(name):
+    if not isinstance(name, str) or not name or name != name.strip() or len(name) > 80:
+        raise ValueError('A player name of 1 to 80 characters is required.')
+    return name
+
+
+def add_pending_name_ban(path, name, reason=''):
+    name = validate_player_name(name)
+    if not isinstance(reason, str) or len(reason) > 500:
+        raise ValueError('Ban details are invalid.')
+    with closing(connect(path)) as db, db:
+        db.execute('''INSERT INTO pending_player_name_bans VALUES(?,?,?)
+                      ON CONFLICT(player_name) DO UPDATE SET reason=excluded.reason''',
+                   (name, reason.strip(), int(time.time())))
+
+
+def remove_pending_name_ban(path, name):
+    name = validate_player_name(name)
+    with closing(connect(path)) as db, db:
+        db.execute('DELETE FROM pending_player_name_bans WHERE player_name=?', (name,))
 
 
 def add_ban(path, uid, display_name='', friend_code='', reason=''):
@@ -117,6 +157,8 @@ def add_ban(path, uid, display_name='', friend_code='', reason=''):
         db.execute('INSERT INTO player_bans VALUES(?,?,?,?,?) ON CONFLICT(uid_digest) DO UPDATE SET '
                    'display_name=excluded.display_name,friend_code=excluded.friend_code,reason=excluded.reason',
                    (digest, display_name.strip(), friend_code.strip(), reason.strip(), int(time.time())))
+        db.execute('''INSERT INTO player_ban_uids VALUES(?,?)
+                      ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''', (digest, uid))
     return digest
 
 
@@ -125,6 +167,7 @@ def remove_ban(path, digest):
         raise ValueError('Ban identifier is invalid.')
     with closing(connect(path)) as db, db:
         db.execute('DELETE FROM player_bans WHERE uid_digest=?', (digest,))
+        db.execute('DELETE FROM player_ban_uids WHERE uid_digest=?', (digest,))
 
 
 def issue_invitation(path, name, hours=72):
@@ -231,10 +274,39 @@ def create_app(database=None):
     def check_player_ban():
         data = request.get_json(silent=True)
         try:
-            digest = uid_digest(data.get('playerUid') if isinstance(data, dict) else None)
+            uid = data.get('playerUid') if isinstance(data, dict) else None
+            digest = uid_digest(uid)
+            name = data.get('playerName', '') if isinstance(data, dict) else ''
+            if name:
+                validate_player_name(name)
+            observed = data.get('observedPlayers', []) if isinstance(data, dict) else []
+            if not isinstance(observed, list) or len(observed) > 15:
+                raise ValueError('Invalid player roster.')
         except ValueError:
-            return jsonify(error='Invalid player UID.'), 400
-        with closing(connect(database)) as db:
+            return jsonify(error='Invalid player identity.'), 400
+        with closing(connect(database)) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            for player in [{'playerUid': uid, 'playerName': name}, *observed]:
+                if not isinstance(player, dict):
+                    continue
+                candidate_uid = player.get('playerUid')
+                candidate_name = player.get('playerName')
+                try:
+                    candidate_digest = uid_digest(candidate_uid)
+                    validate_player_name(candidate_name)
+                except ValueError:
+                    continue
+                if db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (candidate_digest,)).fetchone():
+                    continue
+                pending = db.execute('SELECT reason FROM pending_player_name_bans WHERE player_name=?',
+                                     (candidate_name,)).fetchone()
+                if pending:
+                    db.execute('INSERT INTO player_bans VALUES(?,?,?,?,?)',
+                               (candidate_digest, candidate_name, '', pending['reason'], int(time.time())))
+                    db.execute('''INSERT INTO player_ban_uids VALUES(?,?)
+                                  ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''',
+                               (candidate_digest, candidate_uid))
+                    db.execute('DELETE FROM pending_player_name_bans WHERE player_name=?', (candidate_name,))
             banned = db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (digest,)).fetchone() is not None
         return jsonify(banned=banned)
 
@@ -253,11 +325,15 @@ def create_app(database=None):
             if action == 'add':
                 add_ban(database, data.get('playerUid'), data.get('displayName', ''),
                         data.get('friendCode', ''), data.get('reason', ''))
+            elif action == 'add-name':
+                add_pending_name_ban(database, data.get('playerName'), data.get('reason', ''))
             elif action == 'remove':
                 remove_ban(database, data.get('uidDigest'))
+            elif action == 'remove-name':
+                remove_pending_name_ban(database, data.get('playerName'))
             elif action != 'list':
                 return jsonify(error='Invalid action.'), 400
-            return jsonify(bans=list_bans(database))
+            return jsonify(bans=list_bans(database), pending=list_pending_name_bans(database))
         except ValueError as error:
             return jsonify(error=str(error)), 400
 

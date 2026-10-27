@@ -46,7 +46,7 @@ class AuthenticationTests(unittest.TestCase):
                 'reason': 'test'})
             self.assertEqual(added.status_code, 200)
             self.assertEqual(len(added.json['bans']), 1)
-            self.assertNotIn('stable-player-uid', repr(added.json))
+            self.assertEqual(added.json['bans'][0]['player_uid'], 'stable-player-uid')
             self.assertTrue(self.client.post(check, json={'playerUid': 'stable-player-uid'}).json['banned'])
             self.assertFalse(self.client.post(check, json={'playerUid': 'another-uid'}).json['banned'])
             digest = added.json['bans'][0]['uid_digest']
@@ -54,6 +54,50 @@ class AuthenticationTests(unittest.TestCase):
                 'uidDigest': digest})
             self.assertEqual(removed.status_code, 200)
             self.assertFalse(self.client.post(check, json={'playerUid': 'stable-player-uid'}).json['banned'])
+
+    def test_pending_name_ban_binds_first_matching_uid(self):
+        set_password(self.db, 'admin', 'admin-password')
+        manage = '/v1/player-bans/manage'
+        check = '/v1/player-bans/check'
+        with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
+            created = self.client.post(manage, json={'password': 'admin-password', 'action': 'add-name',
+                'playerName': 'Target', 'reason': 'report'})
+            self.assertEqual(created.status_code, 200)
+            self.assertEqual(created.json['pending'][0]['player_name'], 'Target')
+            self.assertFalse(self.client.post(check, json={'playerUid': 'other-uid',
+                'playerName': 'target'}).json['banned'])
+            matched = self.client.post(check, json={'playerUid': 'target-uid', 'playerName': 'Target'})
+            self.assertTrue(matched.json['banned'])
+            self.assertNotIn('target-uid', repr(matched.json))
+            listed = self.client.post(manage, json={'password': 'admin-password', 'action': 'list'}).json
+            self.assertEqual(listed['pending'], [])
+            self.assertEqual(listed['bans'][0]['player_uid'], 'target-uid')
+            self.assertTrue(self.client.post(check, json={'playerUid': 'target-uid',
+                'playerName': 'Renamed'}).json['banned'])
+            self.assertFalse(self.client.post(check, json={'playerUid': 'other-uid',
+                'playerName': 'Target'}).json['banned'])
+            self.client.post(manage, json={'password': 'admin-password', 'action': 'add-name',
+                'playerName': 'Unused'})
+            removed = self.client.post(manage, json={'password': 'admin-password', 'action': 'remove-name',
+                'playerName': 'Unused'})
+            self.assertEqual(removed.json['pending'], [])
+
+    def test_lobby_observation_enrolls_other_player_without_blocking_observer(self):
+        set_password(self.db, 'admin', 'admin-password')
+        with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
+            self.client.post('/v1/player-bans/manage', json={'password': 'admin-password',
+                'action': 'add-name', 'playerName': 'Target'})
+            observed = self.client.post('/v1/player-bans/check', json={'playerUid': 'observer-uid',
+                'playerName': 'Observer', 'observedPlayers': [
+                    {'playerUid': 'target-uid', 'playerName': 'Target'}]})
+            self.assertEqual(observed.status_code, 200)
+            self.assertFalse(observed.json['banned'])
+            listed = self.client.post('/v1/player-bans/manage', json={'password': 'admin-password',
+                'action': 'list'}).json
+            self.assertEqual(listed['pending'], [])
+            self.assertEqual(listed['bans'][0]['player_uid'], 'target-uid')
+            self.assertTrue(self.client.post('/v1/player-bans/check', json={
+                'playerUid': 'target-uid', 'playerName': 'Changed'}).json['banned'])
 
     def test_password_change_disable_and_storage(self):
         set_password(self.db, 'tester', 'original')
