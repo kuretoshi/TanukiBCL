@@ -26,6 +26,29 @@ class AuthenticationTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_player_bans_require_named_admin_and_match_uid(self):
+        set_password(self.db, 'admin', 'admin-password')
+        set_password(self.db, 'tester', 'tester-password')
+        check = '/v1/player-bans/check'
+        manage = '/v1/player-bans/manage'
+        with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
+            self.assertEqual(self.client.post(manage, json={'password': 'tester-password', 'action': 'list'}).status_code, 403)
+            self.assertEqual(self.client.post(manage, json={'password': 'admin-password', 'action': 'add',
+                'playerUid': '', 'displayName': 'bad'}).status_code, 400)
+            added = self.client.post(manage, json={'password': 'admin-password', 'action': 'add',
+                'playerUid': 'stable-player-uid', 'displayName': 'Player', 'friendCode': 'CODE#1234',
+                'reason': 'test'})
+            self.assertEqual(added.status_code, 200)
+            self.assertEqual(len(added.json['bans']), 1)
+            self.assertNotIn('stable-player-uid', repr(added.json))
+            self.assertTrue(self.client.post(check, json={'playerUid': 'stable-player-uid'}).json['banned'])
+            self.assertFalse(self.client.post(check, json={'playerUid': 'another-uid'}).json['banned'])
+            digest = added.json['bans'][0]['uid_digest']
+            removed = self.client.post(manage, json={'password': 'admin-password', 'action': 'remove',
+                'uidDigest': digest})
+            self.assertEqual(removed.status_code, 200)
+            self.assertFalse(self.client.post(check, json={'playerUid': 'stable-player-uid'}).json['banned'])
+
     def test_password_change_disable_and_storage(self):
         set_password(self.db, 'tester', 'original')
         self.assertTrue(verify(self.db, 'original'))

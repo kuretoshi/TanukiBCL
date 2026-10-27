@@ -1,6 +1,7 @@
 import electronUpdater from 'electron-updater';
 import { verifyDebugPassword } from './debugAuth';
 import { verifyRemoteDebugPassword } from './remoteDebugAuth';
+import { checkPlayerBan, managePlayerBans } from './playerBans';
 import { setVoiceDebugEnabled } from './GameReader';
 import { app, BrowserWindow, ipcMain, session, net, protocol, dialog, screen } from 'electron';
 import { copyFile } from 'node:fs/promises';
@@ -748,6 +749,14 @@ if (!gotTheLock) {
 		}
 	});
 	let nextDebugAttempt = 0;
+	ipcMain.handle('player-bans:check', async (event, playerUid: unknown) => {
+		if (event.sender !== global.mainWindow?.webContents) return 'unavailable';
+		return checkPlayerBan(playerUid, net.fetch);
+	});
+	ipcMain.handle('debug:player-bans', async (event, payload: unknown) => {
+		if (event.sender !== global.debugWindow?.webContents) return { error: 'デバッグ画面から操作してください。' };
+		return managePlayerBans(payload, net.fetch);
+	});
 	let debugAttemptPending = false;
 	ipcMain.handle('OPEN_DEBUG', async (event, password: unknown) => {
 		if (event.sender !== global.settingsWindow?.webContents || Date.now() < nextDebugAttempt || debugAttemptPending)

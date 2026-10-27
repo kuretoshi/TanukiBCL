@@ -44,6 +44,13 @@ def initialize(path):
                 expires_at INTEGER NOT NULL,
                 used_at INTEGER
             );
+            CREATE TABLE IF NOT EXISTS player_bans (
+                uid_digest TEXT PRIMARY KEY,
+                display_name TEXT NOT NULL,
+                friend_code TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
         """)
     os.chmod(path, 0o600)
     inquiry.initialize(path)
@@ -78,6 +85,46 @@ def verify(path, password):
     # Evaluate every record rather than exposing the matching record's position.
     results = [hmac.compare_digest(derive(password, row['salt']), row['hash']) for row in records]
     return any(results)
+
+
+def verify_ban_admin(path, password):
+    name = os.environ.get('BAN_ADMIN_NAME', '').strip()
+    if not name or not isinstance(password, str) or not password or len(password) > 1024:
+        return False
+    with closing(connect(path)) as db:
+        row = db.execute('SELECT salt,hash FROM passwords WHERE name=? AND enabled=1', (name,)).fetchone()
+    return bool(row) and hmac.compare_digest(derive(password, row['salt']), row['hash'])
+
+
+def uid_digest(uid):
+    if not isinstance(uid, str) or not 1 <= len(uid) <= 256 or uid != uid.strip():
+        raise ValueError('A valid player UID is required.')
+    return hashlib.sha256(uid.encode('utf-8')).hexdigest()
+
+
+def list_bans(path):
+    with closing(connect(path)) as db:
+        return [dict(row) for row in db.execute(
+            'SELECT uid_digest,display_name,friend_code,reason,created_at FROM player_bans ORDER BY created_at DESC')]
+
+
+def add_ban(path, uid, display_name='', friend_code='', reason=''):
+    digest = uid_digest(uid)
+    for value, limit in ((display_name, 80), (friend_code, 80), (reason, 500)):
+        if not isinstance(value, str) or len(value) > limit:
+            raise ValueError('Ban details are invalid.')
+    with closing(connect(path)) as db, db:
+        db.execute('INSERT INTO player_bans VALUES(?,?,?,?,?) ON CONFLICT(uid_digest) DO UPDATE SET '
+                   'display_name=excluded.display_name,friend_code=excluded.friend_code,reason=excluded.reason',
+                   (digest, display_name.strip(), friend_code.strip(), reason.strip(), int(time.time())))
+    return digest
+
+
+def remove_ban(path, digest):
+    if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+        raise ValueError('Ban identifier is invalid.')
+    with closing(connect(path)) as db, db:
+        db.execute('DELETE FROM player_bans WHERE uid_digest=?', (digest,))
 
 
 def issue_invitation(path, name, hours=72):
@@ -175,6 +222,40 @@ def create_app(database=None):
     @app.get('/health')
     def health():
         return jsonify(status='ok')
+
+    @app.post('/v1/player-bans/check')
+    def check_player_ban():
+        data = request.get_json(silent=True)
+        try:
+            digest = uid_digest(data.get('playerUid') if isinstance(data, dict) else None)
+        except ValueError:
+            return jsonify(error='Invalid player UID.'), 400
+        with closing(connect(database)) as db:
+            banned = db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (digest,)).fetchone() is not None
+        return jsonify(banned=banned)
+
+    @app.post('/v1/player-bans/manage')
+    def manage_player_bans():
+        source = request.remote_addr or 'unknown'
+        if source in ('127.0.0.1', '::1'):
+            source = request.headers.get('X-Real-IP', source)
+        if not allow_attempt(database, source):
+            return jsonify(error='Too many attempts.'), 429
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not verify_ban_admin(database, data.get('password')):
+            return jsonify(error='Not authorized.'), 403
+        try:
+            action = data.get('action')
+            if action == 'add':
+                add_ban(database, data.get('playerUid'), data.get('displayName', ''),
+                        data.get('friendCode', ''), data.get('reason', ''))
+            elif action == 'remove':
+                remove_ban(database, data.get('uidDigest'))
+            elif action != 'list':
+                return jsonify(error='Invalid action.'), 400
+            return jsonify(bans=list_bans(database))
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
 
     @app.post('/v1/inquiries')
     def submit_inquiry():

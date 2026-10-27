@@ -17,6 +17,7 @@ import SnrRolePanel from './SnrRolePanel';
 import NosDebugPanel from './NosDebugPanel';
 import PlayerRolePanel from './PlayerRolePanel';
 import DebugLivePanel from './DebugLivePanel';
+import PlayerBanPanel from './PlayerBanPanel';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const controlStyles = { WebkitAppRegion: 'no-drag', p: 0, borderRadius: 0, width: 34, height: '100%' };
@@ -186,6 +187,7 @@ function DebugWindow(): React.JSX.Element {
 							<DebugSection title="プレイヤーの外見・サイズ・座標など">
 								<DebugLivePanel gameState={gameState} />
 							</DebugSection>
+							<DebugSection title="ユーザーBAN管理">{() => <PlayerBanPanel players={players} />}</DebugSection>
 							<DebugSection title="ゲーム状態（JSON）">
 								{() => (
 									<Box component="pre" sx={jsonStyles}>

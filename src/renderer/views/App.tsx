@@ -99,10 +99,43 @@ const RawTitleBar: React.FC = function () {
 const TitleBar = React.memo(RawTitleBar);
 
 export default function App({ t }: WithTranslation): React.JSX.Element {
+	const classes = useStyles();
 	const [settings, setSettings] = useState<ISettings>({} as ISettings);
 	const [settingsLoaded, setSettingsLoaded] = useState(false);
 
 	const { gameState, gameOpen, playerColors, error } = useSyncExternalStore(gameStore.subscribe, gameStore.getSnapshot);
+	const localPlayerUid = gameOpen
+		? (gameState?.players?.find((player) => player.isLocal)?.playerUid?.trim() ?? '')
+		: '';
+	const [banCheck, setBanCheck] = useState<{
+		uid: string;
+		status: 'checking' | 'clear' | 'banned' | 'unavailable';
+	}>({ uid: '', status: 'checking' });
+	const banStatus = localPlayerUid ? (banCheck.uid === localPlayerUid ? banCheck.status : 'checking') : 'clear';
+
+	useEffect(() => {
+		if (!localPlayerUid) return;
+		let active = true;
+		const check = async () => {
+			try {
+				const result = await ipcRenderer.invoke('player-bans:check', localPlayerUid);
+				if (active)
+					setBanCheck({
+						uid: localPlayerUid,
+						status: result === 'banned' || result === 'clear' ? result : 'unavailable',
+					});
+			} catch {
+				if (active) setBanCheck({ uid: localPlayerUid, status: 'unavailable' });
+			}
+		};
+		setBanCheck({ uid: localPlayerUid, status: 'checking' });
+		void check();
+		const timer = setInterval(() => void check(), 15000);
+		return () => {
+			active = false;
+			clearInterval(timer);
+		};
+	}, [localPlayerUid]);
 
 	useEffect(() => {
 		const onSettingsChanged = (newValue: ISettings) => setSettings(newValue);
@@ -130,8 +163,8 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 
 	useEffect(() => {
 		if (!settingsLoaded) return;
-		ipcRenderer.send('enableOverlay', settings.enableOverlay);
-	}, [settingsLoaded, settings.enableOverlay]);
+		ipcRenderer.send('enableOverlay', settings.enableOverlay && banStatus === 'clear');
+	}, [settingsLoaded, settings.enableOverlay, banStatus]);
 
 	useLanguage(settings.language, true);
 
@@ -143,9 +176,52 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 				<SettingsContext.Provider value={[settings, setSetting]}>
 					<StyledEngineProvider injectFirst>
 						<ThemeProvider theme={theme}>
-							<TitleBar />
-
-							{gameOpen ? <VoiceView t={t} error={error} /> : <Menu t={t} error={error} />}
+							{banStatus === 'clear' ? (
+								<TitleBar />
+							) : (
+								<Box
+									sx={{
+										...classes.root,
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'space-between',
+										pl: 1,
+									}}
+								>
+									<Box sx={{ color: 'primary.main', WebkitAppRegion: 'drag', flex: 1 }}>タヌキのベタクル</Box>
+									<IconButton
+										size="small"
+										aria-label="閉じる"
+										onClick={() => ipcRenderer.send(IpcMessages.QUIT_CREWLINK)}
+									>
+										<CloseIcon htmlColor="#777" />
+									</IconButton>
+								</Box>
+							)}
+							{banStatus === 'clear' ? (
+								gameOpen ? (
+									<VoiceView t={t} error={error} />
+								) : (
+									<Menu t={t} error={error} />
+								)
+							) : (
+								<Box
+									sx={{
+										height: '100vh',
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										p: 3,
+										textAlign: 'center',
+									}}
+								>
+									{banStatus === 'banned'
+										? 'このユーザーはBANされているため、アプリを使用できません。'
+										: banStatus === 'checking'
+											? 'ユーザーの利用状態を確認しています…'
+											: '利用状態を確認できません。ネットワーク接続を確認してください。'}
+								</Box>
+							)}
 						</ThemeProvider>
 					</StyledEngineProvider>
 				</SettingsContext.Provider>

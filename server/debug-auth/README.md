@@ -45,6 +45,12 @@ sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-de
 
 失効は次回のデバッグ画面を開く操作から適用されます。すでに開いている画面を遠隔で閉じる機能はありません。通常の通話機能は認証APIの停止に影響されません。
 
+## プレイヤーBAN管理
+
+デバッグ画面の「ユーザーBAN管理」では、Among Usから取得したプレイヤーUIDを使ってBANを登録・解除します。管理できるのは環境変数 `BAN_ADMIN_NAME` に指定した、登録済みの担当者名のパスワードだけです。管理者パスワードを別の担当者と共有しないでください。Piのサービス環境に `BAN_ADMIN_NAME=担当者名` を追加し、サービスとnginxの設定を更新してから使います。公開するAPIは `/v1/player-bans/check` と `/v1/player-bans/manage` です。
+
+クライアントはゲーム内の自分のUID取得後に照合します。照合中・BAN中・照合サーバーに接続できない間は通話画面を表示しません。ゲームを起動していない間はUIDを取得できません。旧バージョンや改変クライアント、クライアントが別のUIDを送る場合まで強制的に停止する仕組みではありません。
+
 ## お問い合わせのDiscord送信先
 
 デバッグパスワードとは別のSQLiteテーブル `inquiry_webhooks` に、本家用 `tanuki` と.NET用 `net` のWebhookを1件ずつ保存します。アプリにはWebhook URLを含めず、両アプリは `https://debug-auth.kuretoshi.work/v1/inquiries` に報告を送ります。製品識別子は送信先の選択用であり、認証情報ではありません。公開APIは1送信元あたり毎時10件・全体で毎時120件に制限します。
