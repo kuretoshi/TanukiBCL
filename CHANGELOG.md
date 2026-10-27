@@ -2,6 +2,10 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.50
+
+- 動作調整。
+
 ## v3.2.48
 
 - フッターの支援ボタンからKo-fiまたはGitHub Sponsorsを選べるようにしました。
