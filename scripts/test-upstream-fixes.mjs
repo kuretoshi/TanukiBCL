@@ -45,6 +45,26 @@ const { AudioController } = await bundle('src/renderer/voice/AudioController.ts'
 const { pushToTalkOptions } = await bundle('src/common/pushToTalkOptions.ts');
 const { GameState } = await bundle('src/common/AmongUsState.ts');
 const { normalizeMeetingState } = await bundle('src/common/meetingState.ts');
+const { sortMeetingPlayers, reconcileMeetingPlayers } = await bundle('src/common/meetingOrder.ts');
+const meetingPlayers = [
+	{ id: 3, clientId: 33, isDead: false, disconnected: false },
+	{ id: 1, clientId: 11, isDead: false, disconnected: false },
+	{ id: 2, clientId: 22, isDead: false, disconnected: false },
+];
+const meetingSnapshot = sortMeetingPlayers(meetingPlayers);
+const lateDeathOrder = reconcileMeetingPlayers(meetingSnapshot, [
+	{ ...meetingPlayers[0] },
+	{ ...meetingPlayers[1] },
+	{ ...meetingPlayers[2], isDead: true, clientId: 999 },
+]);
+assert.deepEqual(
+	lateDeathOrder.map((player) => player.id),
+	[1, 3, 2]
+);
+assert.equal(lateDeathOrder[2], meetingPlayers[2]);
+assert.equal(lateDeathOrder[2].clientId, 22);
+assert.deepEqual(reconcileMeetingPlayers(meetingSnapshot, meetingPlayers.slice(0, 2)), meetingSnapshot);
+console.log('ok late meeting death reorders voice frames without changing participant identities');
 const { MapType, CameraLocation } = await bundle('src/common/AmongusMap.ts');
 const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.ts');
 const lobby = { ...defaultLobbySettings };

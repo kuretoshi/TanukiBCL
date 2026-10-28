@@ -10,6 +10,7 @@ import { ISettings } from '../../common/ISettings';
 import { DEFAULT_PLAYERCOLORS } from '../../common/playerColors';
 import { nosColorHex } from '../../common/NosSnapshot';
 import { modList } from '../../common/Mods';
+import { reconcileMeetingPlayers, sortMeetingPlayers } from '../../common/meetingOrder';
 
 interface UseStylesProps {
 	height: number;
@@ -358,22 +359,17 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 		height: height,
 		oldHud: gameState.oldMeetingHud,
 	});
-	const players = useMemo(() => {
-		if (!gameState.players) return null;
-		return gameState.players.slice().sort((a, b) => {
-			if ((a.disconnected || a.isDead) && (b.disconnected || b.isDead)) {
-				return a.id - b.id;
-			} else if (a.disconnected || a.isDead) {
-				return 1000;
-			} else if (b.disconnected || b.isDead) {
-				return -1000;
-			}
-			return a.id - b.id;
+	const [players, setPlayers] = useState(() => sortMeetingPlayers(gameState.players ?? []));
+	const [meetingStartedAt] = useState(Date.now);
+	useEffect(() => {
+		// Ability kills can become final only after the HUD enters discussion. NoS also
+		// rearranges its vote areas two seconds after opening the meeting.
+		if (Date.now() - meetingStartedAt > 4000 || !gameState.players) return;
+		setPlayers((snapshot) => {
+			const next = reconcileMeetingPlayers(snapshot, gameState.players);
+			return next.every((player, index) => player.id === snapshot[index]?.id) ? snapshot : next;
 		});
-		// Frozen for the duration of the meeting: re-sorting on player updates would make the
-		// tablet boxes jump as players are voted out. Live values come from voiceState instead.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [gameState.gameState]);
+	}, [gameState.players, meetingStartedAt]);
 	if (!players || gameState.gameState !== GameState.DISCUSSION) return null;
 
 	const overlays = players.map((player) => {
