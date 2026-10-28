@@ -60,6 +60,15 @@ def initialize(path):
                 reason TEXT NOT NULL,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS player_history (
+                uid_digest TEXT PRIMARY KEY,
+                player_uid TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                friend_code TEXT NOT NULL,
+                first_seen_at INTEGER NOT NULL,
+                last_seen_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS player_history_last_seen ON player_history(last_seen_at DESC);
         """)
     os.chmod(path, 0o600)
     inquiry.initialize(path)
@@ -111,6 +120,12 @@ def uid_digest(uid):
     return hashlib.sha256(uid.encode('utf-8')).hexdigest()
 
 
+def validate_uid_digest(digest):
+    if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+        raise ValueError('Ban identifier is invalid.')
+    return digest
+
+
 def list_bans(path):
     with closing(connect(path)) as db:
         return [dict(row) for row in db.execute(
@@ -126,10 +141,58 @@ def list_pending_name_bans(path):
             'SELECT player_name,reason,created_at FROM pending_player_name_bans ORDER BY created_at DESC')]
 
 
+def list_player_history(path, name='', from_seen=None, to_seen=None, offset=0, limit=50):
+    validate_history_search(name, from_seen, to_seen, offset)
+    with closing(connect(path)) as db:
+        conditions = []
+        params = []
+        if name:
+            conditions.append('instr(lower(h.display_name), lower(?)) > 0')
+            params.append(name)
+        if from_seen is not None:
+            conditions.append('h.last_seen_at >= ?')
+            params.append(from_seen)
+        if to_seen is not None:
+            conditions.append('h.last_seen_at < ?')
+            params.append(to_seen)
+        where = 'WHERE ' + ' AND '.join(conditions) if conditions else ''
+        total = db.execute('SELECT COUNT(*) FROM player_history h ' + where, params).fetchone()[0]
+        rows = db.execute('''SELECT h.uid_digest,h.display_name,h.friend_code,h.first_seen_at,h.last_seen_at,
+                                    CASE WHEN b.uid_digest IS NULL THEN 0 ELSE 1 END AS is_banned
+                             FROM player_history h LEFT JOIN player_bans b ON h.uid_digest=b.uid_digest
+                             ''' + where + ''' ORDER BY h.last_seen_at DESC,h.uid_digest
+                             LIMIT ? OFFSET ?''', (*params, limit, offset)).fetchall()
+        return [dict(row) for row in rows], total
+
+
+def validate_history_search(name, from_seen, to_seen, offset):
+    valid_timestamp = lambda value: value is None or (type(value) is int and 0 <= value <= 4102444800)
+    if (not isinstance(name, str) or len(name) > 80 or type(offset) is not int or
+            offset < 0 or offset > 100000 or not valid_timestamp(from_seen) or
+            not valid_timestamp(to_seen) or
+            (from_seen is not None and to_seen is not None and from_seen >= to_seen)):
+        raise ValueError('History search is invalid.')
+
+
 def validate_player_name(name):
     if not isinstance(name, str) or not name or name != name.strip() or len(name) > 80:
         raise ValueError('A player name of 1 to 80 characters is required.')
     return name
+
+
+def record_player_history(db, uid, name, friend_code, now):
+    digest = uid_digest(uid)
+    name = validate_player_name(name)
+    if not isinstance(friend_code, str) or len(friend_code) > 80:
+        raise ValueError('Friend code is invalid.')
+    db.execute('''INSERT INTO player_history VALUES(?,?,?,?,?,?)
+                  ON CONFLICT(uid_digest) DO UPDATE SET
+                  display_name=excluded.display_name,
+                  friend_code=CASE WHEN excluded.friend_code<>'' THEN excluded.friend_code
+                                   ELSE player_history.friend_code END,
+                  last_seen_at=MAX(player_history.last_seen_at,excluded.last_seen_at)''',
+               (digest, uid, name, friend_code.strip(), now, now))
+    return digest
 
 
 def add_pending_name_ban(path, name, reason=''):
@@ -162,9 +225,27 @@ def add_ban(path, uid, display_name='', friend_code='', reason=''):
     return digest
 
 
+def add_ban_from_history(path, digest, reason=''):
+    digest = validate_uid_digest(digest)
+    if not isinstance(reason, str) or len(reason) > 500:
+        raise ValueError('Ban details are invalid.')
+    with closing(connect(path)) as db, db:
+        record = db.execute('''SELECT player_uid,display_name,friend_code FROM player_history
+                               WHERE uid_digest=?''', (digest,)).fetchone()
+        if not record:
+            raise ValueError('Player history was not found.')
+        db.execute('''INSERT INTO player_bans VALUES(?,?,?,?,?)
+                      ON CONFLICT(uid_digest) DO UPDATE SET
+                      display_name=excluded.display_name,friend_code=excluded.friend_code,
+                      reason=excluded.reason''',
+                   (digest, record['display_name'], record['friend_code'], reason.strip(), int(time.time())))
+        db.execute('''INSERT INTO player_ban_uids VALUES(?,?)
+                      ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''',
+                   (digest, record['player_uid']))
+
+
 def remove_ban(path, digest):
-    if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
-        raise ValueError('Ban identifier is invalid.')
+    digest = validate_uid_digest(digest)
     with closing(connect(path)) as db, db:
         db.execute('DELETE FROM player_bans WHERE uid_digest=?', (digest,))
         db.execute('DELETE FROM player_ban_uids WHERE uid_digest=?', (digest,))
@@ -280,20 +361,21 @@ def create_app(database=None):
             if name:
                 validate_player_name(name)
             observed = data.get('observedPlayers', []) if isinstance(data, dict) else []
-            if not isinstance(observed, list) or len(observed) > 15:
+            if not isinstance(observed, list) or len(observed) > 29:
                 raise ValueError('Invalid player roster.')
         except ValueError:
             return jsonify(error='Invalid player identity.'), 400
         with closing(connect(database)) as db, db:
             db.execute('BEGIN IMMEDIATE')
+            now = int(time.time())
             for player in [{'playerUid': uid, 'playerName': name}, *observed]:
                 if not isinstance(player, dict):
                     continue
                 candidate_uid = player.get('playerUid')
                 candidate_name = player.get('playerName')
                 try:
-                    candidate_digest = uid_digest(candidate_uid)
-                    validate_player_name(candidate_name)
+                    candidate_digest = record_player_history(
+                        db, candidate_uid, candidate_name, player.get('friendCode', ''), now)
                 except ValueError:
                     continue
                 if db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (candidate_digest,)).fetchone():
@@ -302,7 +384,7 @@ def create_app(database=None):
                                      (candidate_name,)).fetchone()
                 if pending:
                     db.execute('INSERT INTO player_bans VALUES(?,?,?,?,?)',
-                               (candidate_digest, candidate_name, '', pending['reason'], int(time.time())))
+                               (candidate_digest, candidate_name, '', pending['reason'], now))
                     db.execute('''INSERT INTO player_ban_uids VALUES(?,?)
                                   ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''',
                                (candidate_digest, candidate_uid))
@@ -322,18 +404,27 @@ def create_app(database=None):
             return jsonify(error='Not authorized.'), 403
         try:
             action = data.get('action')
+            history_name = data.get('historyName', '')
+            history_from = data.get('historyFrom')
+            history_to = data.get('historyTo')
+            history_offset = data.get('historyOffset', 0)
+            validate_history_search(history_name, history_from, history_to, history_offset)
             if action == 'add':
                 add_ban(database, data.get('playerUid'), data.get('displayName', ''),
                         data.get('friendCode', ''), data.get('reason', ''))
             elif action == 'add-name':
                 add_pending_name_ban(database, data.get('playerName'), data.get('reason', ''))
+            elif action == 'add-history':
+                add_ban_from_history(database, data.get('uidDigest'), data.get('reason', ''))
             elif action == 'remove':
                 remove_ban(database, data.get('uidDigest'))
             elif action == 'remove-name':
                 remove_pending_name_ban(database, data.get('playerName'))
             elif action != 'list':
                 return jsonify(error='Invalid action.'), 400
-            return jsonify(bans=list_bans(database), pending=list_pending_name_bans(database))
+            history, history_total = list_player_history(database, history_name, history_from, history_to, history_offset)
+            return jsonify(bans=list_bans(database), pending=list_pending_name_bans(database),
+                           history=history, historyTotal=history_total)
         except ValueError as error:
             return jsonify(error=str(error)), 400
 

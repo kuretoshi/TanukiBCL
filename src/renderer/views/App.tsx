@@ -107,6 +107,7 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 	const localPlayer = gameOpen ? gameState?.players?.find((player) => player.isLocal) : undefined;
 	const localPlayerUid = localPlayer?.playerUid?.trim() ?? '';
 	const localPlayerName = localPlayer?.name?.trim() ?? '';
+	const localFriendCode = localPlayer?.friendCode?.trim() ?? '';
 	const [banCheck, setBanCheck] = useState<{
 		uid: string;
 		name: string;
@@ -125,10 +126,20 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 			try {
 				const observedPlayers = (gameStore.getSnapshot().gameState?.players ?? [])
 					.filter((player) => !player.isLocal && !player.disconnected && !player.isDummy)
-					.map((player) => ({ playerUid: player.playerUid?.trim() ?? '', playerName: player.name?.trim() ?? '' }))
+					.map((player) => ({
+						playerUid: player.playerUid?.trim() ?? '',
+						playerName: player.name?.trim() ?? '',
+						friendCode: player.friendCode?.trim() ?? '',
+					}))
 					.filter((player) => player.playerUid && player.playerName)
-					.slice(0, 14);
-				const result = await ipcRenderer.invoke('player-bans:check', localPlayerUid, localPlayerName, observedPlayers);
+					.slice(0, 29);
+				const result = await ipcRenderer.invoke(
+					'player-bans:check',
+					localPlayerUid,
+					localPlayerName,
+					localFriendCode,
+					observedPlayers
+				);
 				if (active)
 					setBanCheck({
 						uid: localPlayerUid,
@@ -146,7 +157,7 @@ export default function App({ t }: WithTranslation): React.JSX.Element {
 			active = false;
 			clearInterval(timer);
 		};
-	}, [localPlayerUid, localPlayerName]);
+	}, [localPlayerUid, localPlayerName, localFriendCode]);
 
 	useEffect(() => {
 		const onSettingsChanged = (newValue: ISettings) => setSettings(newValue);

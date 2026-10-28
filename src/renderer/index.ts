@@ -21,6 +21,9 @@ if (typeof window !== 'undefined' && window.location) {
 		case 'debug':
 			void import('./views/DebugWindow');
 			break;
+		case 'player-history':
+			void import('./views/PlayerHistoryWindow');
+			break;
 		case 'settings':
 			void import('./views/SettingsWindow');
 			break;

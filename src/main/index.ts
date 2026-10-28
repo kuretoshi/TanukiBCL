@@ -86,6 +86,7 @@ declare global {
 	var lobbyBrowser: BrowserWindow | null;
 	var settingsWindow: BrowserWindow | null;
 	var debugWindow: BrowserWindow | null;
+	var playerHistoryWindow: BrowserWindow | null;
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -114,6 +115,7 @@ global.overlay = null;
 global.settingsWindow = null;
 global.lobbyBrowser = null;
 global.debugWindow = null;
+global.playerHistoryWindow = null;
 const store = new Store<ISettings>({ name: getVariantStoreName() });
 let isQuitting = false;
 app.commandLine.appendSwitch('disable-pinch');
@@ -135,7 +137,15 @@ function closeAppWindows() {
 		/* empty */
 	}
 
-	const windows = [global.debugWindow, global.settingsWindow, global.lobbyBrowser, global.overlay, global.mainWindow];
+	const windows = [
+		global.playerHistoryWindow,
+		global.debugWindow,
+		global.settingsWindow,
+		global.lobbyBrowser,
+		global.overlay,
+		global.mainWindow,
+	];
+	global.playerHistoryWindow = null;
 	global.debugWindow = null;
 	global.settingsWindow = null;
 	global.lobbyBrowser = null;
@@ -434,6 +444,32 @@ function createDebugWindow() {
 	});
 
 	loadView(window, 'debug');
+	return window;
+}
+
+function createPlayerHistoryWindow(): BrowserWindow {
+	const window = new BrowserWindow({
+		title: 'プレイヤー履歴・BAN管理',
+		width: 900,
+		height: 700,
+		minWidth: 640,
+		minHeight: 440,
+		parent: global.debugWindow ?? undefined,
+		backgroundColor: '#25232a',
+		show: false,
+		webPreferences: {
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false,
+			preload: preload(),
+		},
+	});
+	registerWindowLogging(window, 'player-history');
+	window.once('ready-to-show', () => window.show());
+	window.on('closed', () => {
+		global.playerHistoryWindow = null;
+	});
+	loadView(window, 'player-history');
 	return window;
 }
 
@@ -751,14 +787,24 @@ if (!gotTheLock) {
 	let nextDebugAttempt = 0;
 	ipcMain.handle(
 		'player-bans:check',
-		async (event, playerUid: unknown, playerName: unknown, observedPlayers: unknown) => {
+		async (event, playerUid: unknown, playerName: unknown, friendCode: unknown, observedPlayers: unknown) => {
 			if (event.sender !== global.mainWindow?.webContents) return 'unavailable';
-			return checkPlayerBan(playerUid, playerName, observedPlayers, net.fetch);
+			return checkPlayerBan(playerUid, playerName, friendCode, observedPlayers, net.fetch);
 		}
 	);
 	ipcMain.handle('debug:player-bans', async (event, payload: unknown) => {
-		if (event.sender !== global.debugWindow?.webContents) return { error: 'デバッグ画面から操作してください。' };
+		if (event.sender !== global.debugWindow?.webContents && event.sender !== global.playerHistoryWindow?.webContents)
+			return { error: 'デバッグ画面から操作してください。' };
 		return managePlayerBans(payload, net.fetch);
+	});
+	ipcMain.handle('OPEN_PLAYER_HISTORY', (event) => {
+		if (event.sender !== global.debugWindow?.webContents) return;
+		if (!global.playerHistoryWindow) global.playerHistoryWindow = createPlayerHistoryWindow();
+		else {
+			if (global.playerHistoryWindow.isMinimized()) global.playerHistoryWindow.restore();
+			global.playerHistoryWindow.show();
+			global.playerHistoryWindow.focus();
+		}
 	});
 	let debugAttemptPending = false;
 	ipcMain.handle('OPEN_DEBUG', async (event, password: unknown) => {

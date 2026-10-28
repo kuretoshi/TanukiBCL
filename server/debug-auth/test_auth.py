@@ -99,6 +99,61 @@ class AuthenticationTests(unittest.TestCase):
             self.assertTrue(self.client.post('/v1/player-bans/check', json={
                 'playerUid': 'target-uid', 'playerName': 'Changed'}).json['banned'])
 
+    def test_player_history_deduplicates_and_supports_later_ban(self):
+        set_password(self.db, 'admin', 'admin-password')
+        check = '/v1/player-bans/check'
+        manage = '/v1/player-bans/manage'
+        with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
+            first = self.client.post(check, json={
+                'playerUid': 'observer-uid', 'playerName': 'Observer',
+                'observedPlayers': [{'playerUid': 'target-uid', 'playerName': 'Target',
+                                     'friendCode': 'FRIEND#1234'}]})
+            self.assertEqual(first.status_code, 200)
+            with closing(sqlite3.connect(self.db)) as db, db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM player_history').fetchone()[0], 2)
+                db.execute('UPDATE player_history SET first_seen_at=100,last_seen_at=100 '
+                           'WHERE player_uid=?', ('target-uid',))
+
+            repeated = self.client.post(check, json={
+                'playerUid': 'observer-uid', 'playerName': 'Observer',
+                'observedPlayers': [{'playerUid': 'target-uid', 'playerName': 'Renamed'}]})
+            self.assertEqual(repeated.status_code, 200)
+            self.assertFalse(repeated.json['banned'])
+            listed = self.client.post(manage, json={'password': 'admin-password', 'action': 'list',
+                'historyName': 'Renamed', 'historyOffset': 0})
+            self.assertEqual(listed.status_code, 200)
+            self.assertEqual(listed.json['historyTotal'], 1)
+            entry = listed.json['history'][0]
+            self.assertEqual(self.client.post(manage, json={'password': 'admin-password',
+                'action': 'list', 'historyName': 'renamed'}).json['historyTotal'], 1)
+            self.assertEqual(entry['display_name'], 'Renamed')
+            self.assertEqual(entry['friend_code'], 'FRIEND#1234')
+            self.assertEqual(entry['first_seen_at'], 100)
+            self.assertGreater(entry['last_seen_at'], 100)
+            self.assertEqual(entry['is_banned'], 0)
+            in_range = self.client.post(manage, json={'password': 'admin-password', 'action': 'list',
+                'historyName': 'Renamed', 'historyFrom': entry['last_seen_at'],
+                'historyTo': entry['last_seen_at'] + 1})
+            self.assertEqual(in_range.json['historyTotal'], 1)
+            out_of_range = self.client.post(manage, json={'password': 'admin-password', 'action': 'list',
+                'historyName': 'Renamed', 'historyTo': entry['last_seen_at']})
+            self.assertEqual(out_of_range.json['historyTotal'], 0)
+            invalid_range = self.client.post(manage, json={'password': 'admin-password', 'action': 'list',
+                'historyFrom': 200, 'historyTo': 100})
+            self.assertEqual(invalid_range.status_code, 400)
+            with closing(sqlite3.connect(self.db)) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM player_history').fetchone()[0], 2)
+            self.assertEqual(self.client.post(manage, json={'password': 'wrong', 'action': 'list'}).status_code, 403)
+            self.assertEqual(self.client.post(manage, json={'password': 'admin-password',
+                'action': 'add-history', 'uidDigest': '0' * 64}).status_code, 400)
+            added = self.client.post(manage, json={'password': 'admin-password',
+                'action': 'add-history', 'uidDigest': entry['uid_digest'], 'reason': 'reviewed'})
+            self.assertEqual(added.status_code, 200)
+            self.assertEqual(added.json['history'][0]['is_banned'], 1)
+            self.assertEqual(added.json['bans'][0]['player_uid'], 'target-uid')
+            self.assertTrue(self.client.post(check, json={'playerUid': 'target-uid',
+                'playerName': 'Renamed'}).json['banned'])
+
     def test_password_change_disable_and_storage(self):
         set_password(self.db, 'tester', 'original')
         self.assertTrue(verify(self.db, 'original'))

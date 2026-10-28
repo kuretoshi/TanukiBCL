@@ -32,7 +32,10 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 		if (busy) return;
 		setBusy(true);
 		try {
-			const result = (await ipcRenderer.invoke('debug:player-bans', { password, ...payload })) as {
+			const result = (await ipcRenderer.invoke('debug:player-bans', {
+				password,
+				...payload,
+			})) as {
 				bans?: BanRecord[];
 				pending?: PendingNameBan[];
 				error?: string;
@@ -107,6 +110,7 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 			<Typography role="status" variant="caption">
 				{message}
 			</Typography>
+			<Typography variant="subtitle2">現在のロビー</Typography>
 			{players
 				.filter((player) => player.playerUid)
 				.map((player) => (
@@ -141,6 +145,9 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 			{players.every((player) => !player.playerUid) && (
 				<Typography variant="body2">ユーザー識別子の取得を待っています。</Typography>
 			)}
+			<Button variant="outlined" onClick={() => void ipcRenderer.invoke('OPEN_PLAYER_HISTORY')}>
+				プレイヤー履歴を別ウィンドウで開く
+			</Button>
 			<Typography variant="subtitle2">UID待ち</Typography>
 			{pending.map((item) => (
 				<Box key={item.player_name} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

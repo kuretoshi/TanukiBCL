@@ -4,11 +4,16 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import { Menu, MenuItem, Tooltip } from '@mui/material';
 
-const useStyles = () => ({
+interface FooterProps {
+	inFlow?: boolean;
+}
+
+const useStyles = (inFlow: boolean) => ({
 	footer: {
-		position: 'fixed',
-		bottom: 0,
-		left: 0,
+		position: inFlow ? 'relative' : 'fixed',
+		bottom: inFlow ? undefined : 0,
+		left: inFlow ? undefined : 0,
+		flexShrink: 0,
 		zIndex: 3,
 		backgroundColor: '#25232a',
 		width: '100%',
@@ -29,8 +34,8 @@ const useStyles = () => ({
 	},
 });
 
-const RawFooter: React.FC = function () {
-	const classes = useStyles();
+const RawFooter: React.FC<FooterProps> = function ({ inFlow = false }) {
+	const classes = useStyles(inFlow);
 	const [supportMenuAnchor, setSupportMenuAnchor] = React.useState<HTMLElement | null>(null);
 	const closeSupportMenu = () => setSupportMenuAnchor(null);
 	const openSupportSite = (url: string) => {
