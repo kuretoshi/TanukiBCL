@@ -28,6 +28,7 @@ export default defineConfig({
 				external: ['electron-devtools-installer'],
 				input: {
 					index: resolve(__dirname, 'src/main/index.ts'),
+					snrCosmeticsWorker: resolve(__dirname, 'src/main/snrCosmeticsWorker.ts'),
 				},
 			},
 		},

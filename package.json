@@ -77,9 +77,13 @@
 		"memoryjs": "file:vendor/memoryjs-0.0.10-tanuki.1.tgz",
 		"minimist": "1.2.8",
 		"node-keyboard-watcher": "file:vendor/node-keyboard-watcher-1.0.6-tanuki.1.tgz",
+		"pngjs": "7.0.0",
 		"process": "0.11.10",
 		"registry-js": "1.16.1",
 		"structron": "0.2.6",
+		"unity-asset-reader": "1.1.0",
+		"unity-asset-reader-node": "1.1.0",
+		"unity-asset-reader-texture": "1.1.0",
 		"vdf-parser": "1.2.1"
 	},
 	"devDependencies": {

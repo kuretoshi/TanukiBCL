@@ -25,6 +25,7 @@ import { registerNosVoiceRoleBridge } from './nosVoiceRoleBridge';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
 import { findSnrCosmeticFile, SnrCosmeticPart } from './snrCosmetics';
+import { findSnrBundledCosmeticFile } from './snrBundleCosmeticsClient';
 import {
 	initializeDebugLogging,
 	registerWindowLogging,
@@ -662,12 +663,20 @@ if (!gotTheLock) {
 				: new Response(null, { status: 404 });
 		});
 		protocol.handle('snr-cosmetic', async (request) => {
-			if (isLiteApp) return new Response(null, { status: 404 });
+			if (isLiteApp || gameReader.loadedMod.id !== 'SUPER_NEW_ROLES') return new Response(null, { status: 404 });
 			const url = new URL(request.url);
 			const part = url.host as SnrCosmeticPart;
 			if (!['hat-front', 'hat-back', 'visor', 'skin'].includes(part)) return new Response(null, { status: 404 });
 			const productId = decodeURIComponent(url.pathname.slice(1));
-			const filePath = findSnrCosmeticFile(gameReader.gamePath, productId, part);
+			let filePath = findSnrCosmeticFile(gameReader.gamePath, productId, part);
+			if (!filePath) {
+				filePath = await findSnrBundledCosmeticFile(
+					gameReader.gamePath,
+					productId,
+					part,
+					joinPath(app.getPath('userData'), 'snr-cosmetics-cache')
+				);
+			}
 			if (!filePath) return new Response(null, { status: 404 });
 			if (url.searchParams.get('adaptive') === '1') {
 				const generatedPath = await GenerateHat(
