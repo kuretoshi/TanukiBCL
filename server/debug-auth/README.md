@@ -53,6 +53,14 @@ BAN照合時にアプリから報告されたロビーのプレイヤーを `pla
 
 クライアントはゲーム内の自分のUID取得後に照合します。照合中・BAN中・照合サーバーに接続できない間は通話画面を表示しません。ゲームを起動していない間はUIDを取得できません。旧バージョンや改変クライアント、クライアントが別のUIDを送る場合まで強制的に停止する仕組みではありません。
 
+## HeidiSQLでプレイヤー情報を閲覧する
+
+運用DBは引き続きSQLiteです。`heidisql_mirror.py` は `player_history`、`player_bans`、`player_ban_uids`、`pending_player_name_bans` だけをMariaDBの `tanuki_player_view` にコピーします。パスワードハッシュ、問い合わせ本文、添付ファイルはコピーしません。`mirror_status` の `refreshed_at_utc` と件数で更新状態を確認できます。MariaDBには閲覧専用ユーザーだけを作り、127.0.0.1で待ち受けさせ、HeidiSQLからはSSHトンネル経由で接続します。
+
+PiにはMariaDBと `python3-pymysql` が必要です。スクリプトを `/opt/tanuki-debug-auth/` に、serviceとtimerを `/etc/systemd/system/` に配置し、`systemctl daemon-reload`、`systemctl start tanuki-heidisql-mirror.service`、`systemctl enable --now tanuki-heidisql-mirror.timer` を実行します。timerは5分ごとにSQLiteの一貫したスナップショットを取得し、MariaDBの4テーブルを同一トランザクションで更新します。アプリが読み書きするSQLiteには変更を加えません。
+
+HeidiSQLでは接続方式を「MariaDB/MySQL (SSH tunnel)」、ホストを `127.0.0.1`、ポートを `3306`、ユーザーを `tanuki_viewer`、データベースを `tanuki_player_view` にします。SSHホストはPiのIPアドレス、SSHユーザーはPiのログインユーザー、認証にはそのSSH秘密鍵を設定します。DBユーザーのパスワードは別途安全に管理します。閲覧専用ユーザーに書き込み権限は付与しません。
+
 ## お問い合わせのDiscord送信先
 
 デバッグパスワードとは別のSQLiteテーブル `inquiry_webhooks` に、本家用 `tanuki` と.NET用 `net` のWebhookを1件ずつ保存します。アプリにはWebhook URLを含めず、両アプリは `https://debug-auth.kuretoshi.work/v1/inquiries` に報告を送ります。製品識別子は送信先の選択用であり、認証情報ではありません。公開APIは1送信元あたり毎時10件・全体で毎時120件に制限します。

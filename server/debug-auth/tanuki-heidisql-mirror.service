@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh read-only HeidiSQL player mirror
+Requires=mariadb.service
+After=mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/tanuki-debug-auth/heidisql_mirror.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
