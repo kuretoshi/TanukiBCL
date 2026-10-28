@@ -81,6 +81,25 @@ function loadedBundle(file: string): BundleIndex {
 	return cachedBundle;
 }
 
+async function extractImage(
+	bundle: BundleIndex,
+	id: string,
+	part: SnrCosmeticPart,
+	output: string,
+	cacheRoot: string
+): Promise<string | undefined> {
+	for (const path of bundle.images.get(`${part}:${id}`) ?? []) {
+		const asset = bundle.environment.get(path);
+		if (!asset || !isImage(asset)) continue;
+		const { rgba, width, height } = await decodeImage(asset);
+		if (width <= 0 || height <= 0 || width > 4096 || height > 4096) continue;
+		await mkdir(cacheRoot, { recursive: true });
+		await writeFile(output, PNG.sync.write({ data: Buffer.from(rgba), width, height }));
+		return output;
+	}
+	return undefined;
+}
+
 /** Extract only the requested sprite from SNR's locally installed Unity bundle. */
 export async function findSnrBundledCosmeticFile(
 	gameExecutable: string,
@@ -99,15 +118,8 @@ export async function findSnrBundledCosmeticFile(
 			);
 			if (existsSync(output)) return output;
 			const bundle = loadedBundle(file);
-			for (const path of bundle.images.get(`${part}:${id}`) ?? []) {
-				const asset = bundle.environment.get(path);
-				if (!asset || !isImage(asset)) continue;
-				const { rgba, width, height } = await decodeImage(asset);
-				if (width <= 0 || height <= 0 || width > 4096 || height > 4096) continue;
-				await mkdir(cacheRoot, { recursive: true });
-				await writeFile(output, PNG.sync.write({ data: Buffer.from(rgba), width, height }));
-				return output;
-			}
+			const extracted = await extractImage(bundle, id, part, output, cacheRoot);
+			if (extracted) return extracted;
 		} catch (error) {
 			console.warn('[SNR cosmetics] Could not read bundle:', file, error);
 		}

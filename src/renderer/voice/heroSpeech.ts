@@ -239,7 +239,8 @@ export class HeroSpeech {
 	}
 	private acceptJob(capture: Capture, job: HeroSpeechPlayer, text: unknown, final: boolean): void {
 		if (job.expires <= Date.now() || this.handled.has(this.jobKey(job))) return;
-		const matched = job.kind === 'ng' ? heardForbiddenWord(text, job.words, final) : heardTransformation(text, job.words, final);
+		const matched =
+			job.kind === 'ng' ? heardForbiddenWord(text, job.words, final) : heardTransformation(text, job.words, final);
 		if (!matched) {
 			if (job.kind === 'hero') capture.partialAt = 0;
 			return;
