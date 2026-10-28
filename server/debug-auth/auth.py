@@ -14,6 +14,7 @@ import inquiry
 import issue_bridge
 
 MAX_PASSWORDS = 16
+PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS = 30 * 60
 
 
 def connect(path):
@@ -193,8 +194,13 @@ def record_player_history(db, uid, name, friend_code, now):
                   display_name=excluded.display_name,
                   friend_code=CASE WHEN excluded.friend_code<>'' THEN excluded.friend_code
                                    ELSE player_history.friend_code END,
-                  last_seen_at=MAX(player_history.last_seen_at,excluded.last_seen_at)''',
-               (digest, uid, name, friend_code.strip(), now, now))
+                  last_seen_at=CASE WHEN excluded.last_seen_at >= player_history.last_seen_at + ?
+                                    THEN excluded.last_seen_at ELSE player_history.last_seen_at END
+                  WHERE excluded.last_seen_at >= player_history.last_seen_at + ?
+                     OR player_history.display_name <> excluded.display_name
+                     OR (excluded.friend_code <> '' AND player_history.friend_code <> excluded.friend_code)''',
+               (digest, uid, name, friend_code.strip(), now, now,
+                PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS, PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS))
     return digest
 
 

@@ -154,6 +154,22 @@ class AuthenticationTests(unittest.TestCase):
             self.assertTrue(self.client.post(check, json={'playerUid': 'target-uid',
                 'playerName': 'Renamed'}).json['banned'])
 
+    def test_player_history_updates_last_seen_every_thirty_minutes(self):
+        with closing(sqlite3.connect(self.db)) as db, db:
+            record_player_history(db, 'player-uid', 'Original', '', 1000)
+            changes = db.total_changes
+            record_player_history(db, 'player-uid', 'Original', '', 2799)
+            self.assertEqual(db.total_changes, changes)
+            self.assertEqual(db.execute('SELECT last_seen_at FROM player_history').fetchone()[0], 1000)
+
+            record_player_history(db, 'player-uid', 'Original', '', 2800)
+            self.assertEqual(db.execute('SELECT last_seen_at FROM player_history').fetchone()[0], 2800)
+
+            record_player_history(db, 'player-uid', 'Renamed', 'FRIEND#1234', 2801)
+            self.assertEqual(db.execute('SELECT display_name,friend_code,last_seen_at '
+                                        'FROM player_history').fetchone(),
+                             ('Renamed', 'FRIEND#1234', 2800))
+
     def test_admin_can_request_every_history_record(self):
         set_password(self.db, 'admin', 'admin-password')
         with closing(sqlite3.connect(self.db)) as db, db:
