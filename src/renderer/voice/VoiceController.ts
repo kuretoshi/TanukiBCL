@@ -183,6 +183,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	private readonly heldNosRadio = new HeldNosRadio();
 	private activeNosRadioKind?: number;
 	private nosRadioKinds: Record<number, number | undefined> = {};
+	private nosPseudocideReports: Record<number, { clientId: number; active: boolean; receivedAt: number }> = {};
+	private nosPseudocideSession = '';
+	private nosPseudocideSent?: boolean;
+	private nosPseudocideSentAt = 0;
 	private radioStatusVersion = 0;
 	private radioStatusVersions: Record<number, number> = {};
 	private lastRadioStatusSentAt = 0;
@@ -204,6 +208,21 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 	/** The same host-derived MOD/role state is used by audio, settings and diagnostics. */
 	getEffectiveGameState(state: AmongUsState): AmongUsState {
+		if (state.mod === 'NoS') {
+			const now = Date.now();
+			return {
+				...state,
+				players: state.players?.map((player) => {
+					const report = this.nosPseudocideReports[player.id];
+					const active = player.isLocal
+						? state.nosLocalIsPseudocide
+						: report?.clientId === player.clientId && now - report.receivedAt < 10000
+							? report.active
+							: undefined;
+					return { ...player, nosIsPseudocide: active };
+				}),
+			};
+		}
 		if (!this.snapshot.toh4eLobby && state.mod !== 'TOH4E') return state;
 		return {
 			...state,
@@ -591,6 +610,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				const nosRadiosByPlayer = { ...this.snapshot.nosRadiosByPlayer };
 				const clientId = this.connection.getClient(peerId)?.clientId;
 				if (clientId !== undefined)
+					for (const [playerId, report] of Object.entries(this.nosPseudocideReports))
+						if (report.clientId === clientId) delete this.nosPseudocideReports[Number(playerId)];
+				if (clientId !== undefined)
 					for (const [playerId, report] of Object.entries(nosRadiosByPlayer))
 						if (report.clientId === clientId) delete nosRadiosByPlayer[Number(playerId)];
 				this.patch({ audioConnected, connectionQuality, nosRadiosByPlayer });
@@ -614,6 +636,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.prev.nosRadioSession = '';
 				this.prev.nosRadioSentSignature = '';
 				this.prev.nosRadioSentAt = 0;
+				this.nosPseudocideReports = {};
+				this.nosPseudocideSession = '';
+				this.nosPseudocideSent = undefined;
+				this.nosPseudocideSentAt = 0;
 				this.radioStatusVersions = {};
 			})
 		);
@@ -702,6 +728,23 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					[sender.id]: { clientId: sender.clientId, radios: data.radios, receivedAt: Date.now() },
 				},
 			});
+			return;
+		}
+		if (data.type === 'nos-pseudocide') {
+			const sender = state.players?.find((player) => player.clientId === senderClientId);
+			if (
+				state.mod !== 'NoS' ||
+				(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION) ||
+				data.lobbyCode !== state.lobbyCode ||
+				!sender || sender.isLocal || sender.disconnected ||
+				data.playerId !== sender.id || typeof data.active !== 'boolean'
+			)
+				return;
+			this.nosPseudocideReports[sender.id] = {
+				clientId: sender.clientId,
+				active: data.active,
+				receivedAt: Date.now(),
+			};
 			return;
 		}
 		const fromHost = senderClientId !== undefined && senderClientId === this.host.parsedHostId;
@@ -972,6 +1015,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.publishToh4eRole(state);
 		this.handlePlayerIdentity(state, myPlayer);
 		this.syncNosRadioReports(state, myPlayer);
+		this.syncNosPseudocide(state, myPlayer);
 		this.handlePublicLobby(state, myPlayer);
 		this.cleanupImpostorRadio(state, myPlayer);
 		this.updatePeerAudio(state, myPlayer);
@@ -1025,6 +1069,34 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		);
 		this.prev.nosRadioSentSignature = signature;
 		this.prev.nosRadioSentAt = now;
+	}
+
+	private syncNosPseudocide(state: AmongUsState, myPlayer: Player | undefined): void {
+		const active = state.mod === 'NoS' &&
+			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) && !!myPlayer;
+		const session = active ? `${state.lobbyCode}|${state.clientId}` : '';
+		if (session !== this.nosPseudocideSession) {
+			this.nosPseudocideSession = session;
+			this.nosPseudocideReports = {};
+			this.nosPseudocideSent = undefined;
+			this.nosPseudocideSentAt = 0;
+		}
+		if (!active || !myPlayer || state.nosLocalIsPseudocide === undefined) return;
+		const now = Date.now();
+		if (this.nosPseudocideSent === state.nosLocalIsPseudocide && now - this.nosPseudocideSentAt < 3000)
+			return;
+		const peers = state.players
+			.filter((player) => !player.isLocal && !player.disconnected)
+			.map((player) => this.connection.playerSocketIds[player.clientId])
+			.filter(Boolean);
+		this.connection.sendControlToPeers(peers, JSON.stringify({
+			type: 'nos-pseudocide',
+			lobbyCode: state.lobbyCode,
+			playerId: myPlayer.id,
+			active: state.nosLocalIsPseudocide,
+		}));
+		this.nosPseudocideSent = state.nosLocalIsPseudocide;
+		this.nosPseudocideSentAt = now;
 	}
 
 	private publishToh4eRoster(state: AmongUsState, force = false): void {
@@ -1581,7 +1653,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		const otherTalking = { ...this.snapshot.otherTalking };
 		let talkingChanged = false;
 
-		for (const player of state.players) {
+		for (const player of audioState.players) {
 			if (player.isLocal || player.clientId === myPlayer.clientId) continue;
 			const peerId = playerSocketIds[player.clientId];
 			if (!peerId || !this.audio.hasPeer(peerId)) continue;

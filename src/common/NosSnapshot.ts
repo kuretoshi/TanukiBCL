@@ -59,6 +59,8 @@ export function isNosRadioData(value: unknown): value is NosRadioData {
 
 export interface NosSnapshot {
 	localMicPosition: { x: number; y: number };
+	/** NoS publishes this only for the local player's Busker fake death. */
+	localIsPseudocide?: boolean;
 	players: NosPlayerData[];
 	radios: NosRadioData[];
 }

@@ -204,7 +204,8 @@ internal static class Program
             PlayersLength = RequiredField(snapshot, "PlayersLength").Offset,
             Players = RequiredField(snapshot, "Players").Offset,
             RadiosLength = radiosLength?.Offset,
-            Radios = radios?.Offset
+            Radios = radios?.Offset,
+            LocalIsPseudocide = snapshot.GetFieldByName("LocalIsPseudocide")?.Offset
         };
 
         var playerLayout = new PlayerDataLayout
@@ -463,10 +464,11 @@ internal static class Program
             throw new InvalidOperationException("The Among Us process has restarted. Run resolve again.");
         if (metadata.PointerSize is not (4 or 8))
             throw new InvalidOperationException("Invalid pointer size in metadata");
-        if (metadata.SchemaVersion != ExpectedSchemaVersion && metadata.SchemaVersion != 20260928 && metadata.SchemaVersion != CostumeSchemaVersion && metadata.SchemaVersion != BodySchemaVersion)
+        if (metadata.SchemaVersion != ExpectedSchemaVersion && metadata.SchemaVersion != 20260928 && metadata.SchemaVersion != CostumeSchemaVersion &&
+            (metadata.SchemaVersion < BodySchemaVersion || metadata.SchemaVersion > 20991231))
             throw new InvalidOperationException($"Unsupported TBCL schema version {metadata.SchemaVersion}");
 
-        if (metadata.SchemaVersion == BodySchemaVersion && (metadata.PlayerData.BodyType is null || metadata.PlayerData.NeckLength is null))
+        if (metadata.SchemaVersion >= BodySchemaVersion && (metadata.PlayerData.BodyType is null || metadata.PlayerData.NeckLength is null))
             throw new InvalidOperationException("Missing NoS body state fields");
         ValidateLayout(metadata.Snapshot, metadata.PlayerData, metadata.RadioData, metadata.PointerSize);
     }
@@ -482,6 +484,8 @@ internal static class Program
         ];
         if (snapshotOffsets.Any(x => x < 0))
             throw new InvalidOperationException("Invalid Snapshot layout metadata");
+        if (snapshot.LocalIsPseudocide is int pseudocideOffset && (pseudocideOffset < 0 || pseudocideOffset >= 256))
+            throw new InvalidOperationException("Invalid LocalIsPseudocide layout metadata");
 
         var costumes = new[] { player.Skin, player.Hat, player.Visor };
         if (costumes.Any(c => c is not null) && costumes.Any(c => c is null)) throw new InvalidOperationException("Incomplete costume layout");
@@ -611,6 +615,7 @@ internal static class Program
         public int Players { get; set; }
 		public int? RadiosLength { get; set; }
 		public int? Radios { get; set; }
+		public int? LocalIsPseudocide { get; set; }
     }
 
     sealed class PlayerDataLayout

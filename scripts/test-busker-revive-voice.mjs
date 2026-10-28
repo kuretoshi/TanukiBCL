@@ -15,16 +15,18 @@ const run = (changes = {}) => calculateVoiceAudio({ state, me, other: busker, se
 
 for (const mod of ['SUPER_NEW_ROLES', 'NoS']) {
 	const role = mod === 'NoS'
-		? { nosRole: { roleName: 'busker', buskerReviveRemaining: 5 } }
-		: { snrRole: { role: { name: 'Busker', value: 1 }, buskerReviveRemaining: 5 } };
+		? { nosRole: { roleName: 'busker' }, nosIsPseudocide: true }
+		: { snrRole: { role: { name: 'Busker', value: 1 }, buskerPseudocideActive: true } };
 	const field = mod === 'NoS' ? 'nosBuskerReviveHideVoice' : 'snrBuskerReviveHideVoice';
 	const scenario = { state: { ...state, mod }, other: { ...busker, ...role } };
 	assert.equal(run(scenario), 0, `${mod}: active Busker is hidden from a living impostor`);
 	assert.ok(run({ ...scenario, activeLobbySettings: { ...lobby, [field]: false } }) > 0,
 		`${mod}: disabled setting preserves ghost hearing`);
-	assert.ok(run({ ...scenario, other: { ...scenario.other, [mod === 'NoS' ? 'nosRole' : 'snrRole']:
-		{ ...role[mod === 'NoS' ? 'nosRole' : 'snrRole'], buskerReviveRemaining: 0 } } }) > 0,
-		`${mod}: timer expiry restores ordinary ghost hearing`);
+	const ended = mod === 'NoS'
+		? { ...scenario.other, nosIsPseudocide: false }
+		: { ...scenario.other, snrRole: { ...role.snrRole, buskerPseudocideActive: false } };
+	assert.ok(run({ ...scenario, other: ended }) > 0,
+		`${mod}: ending fake death restores ordinary ghost hearing`);
 	assert.equal(run({ ...scenario, me: { ...me, isDead: true } }), 0,
 		`${mod}: dead impostors are also unable to hear`);
 	assert.ok(run({ ...scenario, me: { ...me, isDead: true, isImpostor: false } }) > 0,
@@ -32,4 +34,23 @@ for (const mod of ['SUPER_NEW_ROLES', 'NoS']) {
 	assert.equal(run({ ...scenario, state: { ...state, mod, gameState: 2 } }), 0,
 		`${mod}: meetings follow existing living versus ghost rules`);
 }
+const nos = { state: { ...state, mod: 'NoS' }, other: { ...busker,
+	nosRole: { roleName: 'busker' } } };
+const snr = { other: { ...busker,
+	snrRole: { role: { name: 'Busker', value: 1 } } } };
+assert.ok(run({ ...snr, other: { ...snr.other,
+	snrRole: { ...snr.other.snrRole, buskerPseudocideActive: false } } }) > 0,
+	'SNR: inactive ability leaves ordinary ghost hearing active');
+assert.ok(run({ ...snr }) > 0,
+	'SNR: missing ability state does not hide the voice');
+assert.equal(run({ ...snr, other: { ...snr.other, isDead: false,
+	snrRole: { ...snr.other.snrRole, buskerPseudocideActive: true } } }), 0,
+	'SNR: active ability hides fake death independent of the death flag');
+assert.ok(run({ ...nos, other: { ...nos.other, nosIsPseudocide: false } }) > 0,
+	'NoS: published false leaves ordinary ghost hearing active');
+assert.ok(run({ ...nos }) > 0,
+	'NoS: missing fake-death state does not hide the voice');
+assert.equal(run({ ...nos, other: { ...nos.other, isDead: false, nosIsPseudocide: true,
+	nosRole: { roleName: 'busker' } } }), 0,
+	'NoS: published true hides fake death independent of the death flag');
 console.log('PASS Busker revive voice restriction for SNR and NoS');

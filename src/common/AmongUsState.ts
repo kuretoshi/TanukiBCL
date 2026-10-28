@@ -36,6 +36,7 @@ export interface AmongUsState {
 	nosReadStatus?: { failed: boolean; message: string; schemaVersion?: number };
 	nosLoadedContents?: { path: string; status: string; data?: unknown };
 	nosLocalMicPosition?: { x: number; y: number };
+	nosLocalIsPseudocide?: boolean;
 	nosRadios?: NosRadioData[];
 	nosMegaphones?: MegaphoneState[];
 	nosPortableMegaphones?: { playerId: number; extraRange: number }[];
@@ -103,6 +104,8 @@ export interface Player {
 	snrVisor2Id?: string;
 	nosPlayer?: NosPlayerData;
 	nosRole?: NosRole;
+	/** A fresh report from this player's own NoS snapshot; undefined until known. */
+	nosIsPseudocide?: boolean;
 	nosCosmetics?: Partial<Record<'skin' | 'hat' | 'hatBack' | 'visor' | 'bodyMask', string>>;
 	tohRole?: TohRole;
 	vanillaIsImpostor?: boolean;

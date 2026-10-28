@@ -14,6 +14,7 @@ public static unsafe class TBCLFields
         public PlayerData* Players;
         public int RadiosLength;
         public RadioData* Radios;
+        public bool LocalIsPseudocide;
     }
     public struct CostumeData {
         public byte NameLength;
@@ -52,7 +53,8 @@ public static unsafe class TBCLFields
         *radio = new RadioData { Kind = RadioKind.Jackal, HearableMask = 0xB, NameLength = 6 };
         var radioName = "Jackal"; for (int i = 0; i < radioName.Length; i++) radio->Name[i] = radioName[i];
         *snapshot = new Snapshot { LocalMicPositionX = 1f, LocalMicPositionY = -1f,
-            PlayersLength = empty ? 0 : 1, Players = player, RadiosLength = 1, Radios = radio };
+            PlayersLength = empty ? 0 : 1, Players = player, RadiosLength = 1, Radios = radio,
+            LocalIsPseudocide = neutral };
         Latest = snapshot;
         nextIndex++;
     }

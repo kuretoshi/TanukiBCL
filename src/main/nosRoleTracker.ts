@@ -1,5 +1,4 @@
 import { isNosPlayerRoles, type NosRole } from '../common/NosRole';
-import { GameState, type Player } from '../common/AmongUsState';
 import { isNosBodyLayout, readNosBodyType, type NosBodyLayout } from './nosBodyMemory';
 
 /** Managed role snapshots plus live native state; no reuse across rounds or processes. */
@@ -11,7 +10,6 @@ export class NosRoleTracker {
 	private receivedAt = 0;
 	private roles = new Map<number, NosRole>();
 	private bodies = new Map<number, NosBodyLayout>();
-	private cancelledBuskers = new Set<number>();
 	message = 'NoS役職未取得';
 
 	constructor(private read: (pid: number) => Promise<unknown>) {}
@@ -23,16 +21,13 @@ export class NosRoleTracker {
 		this.receivedAt = 0;
 		this.roles.clear();
 		this.bodies.clear();
-		this.cancelledBuskers.clear();
 		this.message = 'NoS役職未取得';
 	}
 
 	update(
 		pid: number,
 		round: string,
-		readBody?: (address: number, size: number) => Buffer,
-		gameState: GameState = GameState.UNKNOWN,
-		players: readonly Player[] = []
+		readBody?: (address: number, size: number) => Buffer
 	): ReadonlyMap<number, NosRole> {
 		const session = `${pid}:${round}`;
 		if (session !== this.session) {
@@ -73,10 +68,6 @@ export class NosRoleTracker {
 		}
 		const result = new Map<number, NosRole>();
 		for (const [id, role] of this.roles) {
-			const player = players.find((candidate) => candidate.id === id);
-			if (player && !player.isDead) this.cancelledBuskers.delete(id);
-			if (gameState === GameState.DISCUSSION && role.roleName === 'busker' && (role.buskerReviveRemaining ?? 0) > 0)
-				this.cancelledBuskers.add(id);
 			let bodyType: number | undefined;
 			try {
 				const body = this.bodies.get(id);
@@ -86,12 +77,6 @@ export class NosRoleTracker {
 			}
 			result.set(id, {
 				...role,
-				buskerReviveRemaining:
-					!this.cancelledBuskers.has(id) &&
-					role.buskerReviveRemaining != null &&
-					role.buskerReviveRemaining - (Date.now() - this.receivedAt) / 1000 > 0
-						? role.buskerReviveRemaining - (Date.now() - this.receivedAt) / 1000
-						: undefined,
 				bodyType,
 				isBerserking: role.roleName === 'berserker' && bodyType !== undefined ? bodyType === 2 : undefined,
 			});

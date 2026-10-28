@@ -115,6 +115,15 @@ x64Memory.writeFloatLE(7.2, 0x1500 + 8);
 assert.ok(isSnrLiveLayout(x64, 123));
 assert.equal(readSnrLiveRoles(x64, x64Read).get(3).jumbo.currentSize.toFixed(1), '2.4');
 assert.equal(readSnrLiveRoles(x64, x64Read).get(3).jumbo.maxSize.toFixed(1), '7.2');
+const buskerLayout = { ...x64, fields: { ...x64.fields, role: field(144, { 1: 'Busker' }) },
+  busker: { abilityType: x64.jumbo.abilityType, listType: x64.jumbo.listType,
+    itemsType: x64.jumbo.itemsType, abilitiesOffset: 72, itemsOffset: 8,
+    countOffset: 16, activeOffset: 48 } };
+assert.ok(isSnrLiveLayout(buskerLayout, 123));
+x64Memory[0x1400 + 48] = 1;
+assert.equal(readSnrLiveRoles(buskerLayout, x64Read).get(3).buskerPseudocideActive, true);
+x64Memory[0x1400 + 48] = 0;
+assert.equal(readSnrLiveRoles(buskerLayout, x64Read).get(3).buskerPseudocideActive, false);
 console.log('PASS x64 live roles: jumbo current/max size, pointer stride, separate list count/version');
 const eligibilityTracker = new SnrLiveTracker(async () => { throw new Error('Unexpected discovery'); });
 eligibilityTracker.accept(123, { status: 'ok', pid: 123, liveLayout: layout, players: [{ playerId: 3, role: { value: 137 }, isNeutral: false, canKill: false }] });

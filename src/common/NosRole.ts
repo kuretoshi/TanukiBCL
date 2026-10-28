@@ -6,7 +6,6 @@ export interface NosRole {
 	bodyType?: number;
 	isBerserking?: boolean;
 	isRainbowStar?: boolean | null;
-	buskerReviveRemaining?: number | null;
 }
 
 export interface NosPlayerRole {
@@ -30,12 +29,7 @@ export function isNosPlayerRoles(value: unknown): value is NosPlayerRole[] {
 			typeof role.runtimeClass === 'string' &&
 			role.runtimeClass.length > 0 &&
 			role.runtimeClass.length <= 1024 &&
-			(role.isRainbowStar == null || typeof role.isRainbowStar === 'boolean') &&
-			(role.buskerReviveRemaining == null ||
-				(typeof role.buskerReviveRemaining === 'number' &&
-					Number.isFinite(role.buskerReviveRemaining) &&
-					role.buskerReviveRemaining > 0 &&
-					role.buskerReviveRemaining <= 60))
+			(role.isRainbowStar == null || typeof role.isRainbowStar === 'boolean')
 		);
 	});
 }

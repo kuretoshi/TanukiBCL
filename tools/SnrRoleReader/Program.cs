@@ -142,7 +142,6 @@ static object? BuildBuskerLayout(SnrPlayerSource source)
     var items = list?.GetFieldByName("_items");
     var size = list?.GetFieldByName("_size");
     var active = ability?.GetFieldByName("<isEffectActive>k__BackingField");
-    var timer = ability?.GetFieldByName("<EffectTimer>k__BackingField");
     ulong itemsType = 0;
     var players = source.Array.AsArray();
     for (int i = 0; i < players.Length && itemsType == 0; i++) {
@@ -152,13 +151,13 @@ static object? BuildBuskerLayout(SnrPlayerSource source)
         if (!liveItems.IsNull && liveItems.IsArray) itemsType = liveItems.Type!.MethodTable;
     }
     if (ability == null || abilities == null || list == null || items?.Type == null || size == null ||
-        active?.ElementType != ClrElementType.Boolean || timer?.ElementType != ClrElementType.Float ||
+        active?.ElementType != ClrElementType.Boolean ||
         ability.IsCollectible || itemsType == 0) return null;
     ulong Offset(ClrInstanceField field) => field.GetAddress(0x1000, false) - 0x1000;
     return new {
         abilityType = ability.MethodTable, listType = list.MethodTable, itemsType,
         abilitiesOffset = Offset(abilities), itemsOffset = Offset(items), countOffset = Offset(size),
-        activeOffset = Offset(active), timerOffset = Offset(timer)
+        activeOffset = Offset(active)
     };
 }
 

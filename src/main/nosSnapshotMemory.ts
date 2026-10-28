@@ -20,6 +20,7 @@ export interface NosLayout {
 		players: number;
 		radiosLength?: number | null;
 		radios?: number | null;
+		localIsPseudocide?: number | null;
 	};
 	playerData: Record<PlayerField | 'size', number> & {
 		skin?: NosCostumeLayout | null;
@@ -37,7 +38,8 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	if (
 		v.pid !== pid ||
 		(v.pointerSize !== 4 && v.pointerSize !== 8) ||
-		![20260918, 20260928, 20261005, 20261009].includes(v.schemaVersion) ||
+		(![20260918, 20260928, 20261005].includes(v.schemaVersion) &&
+			(!Number.isInteger(v.schemaVersion) || v.schemaVersion < 20261009 || v.schemaVersion > 20991231)) ||
 		!Number.isInteger(v.latestSlotAddress) ||
 		v.latestSlotAddress < 0x10000 ||
 		v.latestSlotAddress > Number.MAX_SAFE_INTEGER ||
@@ -72,7 +74,7 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	const hasBodyRate = bodyRateFieldCount === 2;
 	const bodyStateCount = [p.bodyType, p.neckLength].filter((value) => value != null).length;
 	if (bodyStateCount !== 0 && bodyStateCount !== 2) return false;
-	if (v.schemaVersion === 20261009 && (bodyStateCount !== 2 || !hasBodyRate)) return false;
+	if (v.schemaVersion >= 20261009 && (bodyStateCount !== 2 || !hasBodyRate)) return false;
 	if (bodyStateCount === 2 && (!validOffset(p.bodyType, 4, p.size) || !validOffset(p.neckLength, 4, p.size)))
 		return false;
 	if (p.isJammed != null && !Number.isInteger(p.isJammed)) return false;
@@ -87,6 +89,7 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 		['localMicPositionX', 'localMicPositionY', 'playersLength', 'players'].every((key) =>
 			validOffset(v.snapshot[key as keyof NosLayout['snapshot']], 4, 256)
 		) &&
+		(v.snapshot.localIsPseudocide == null || validOffset(v.snapshot.localIsPseudocide, 1, 256)) &&
 		['playerId', 'isKiller', 'isImpostor', 'isCrewmate', 'isNeutral', 'isImpostorlike', 'nameLength'].every((key) =>
 			validOffset(p[key as PlayerField], 1, p.size)
 		) &&
@@ -131,6 +134,9 @@ export function readNosSnapshot(
 		(s.radios ?? 0) + layout.pointerSize
 	);
 	const header = read(snapshot, headerSize);
+	const localIsPseudocide =
+		s.localIsPseudocide == null ? undefined : header[s.localIsPseudocide];
+	if (localIsPseudocide !== undefined && localIsPseudocide > 1) throw new Error('Invalid NoS flag');
 	const headerPointer = (offset: number) =>
 		layout.pointerSize === 4 ? header.readUInt32LE(offset) : Number(header.readBigUInt64LE(offset));
 	const count = header.readInt32LE(s.playersLength);
@@ -224,6 +230,7 @@ export function readNosSnapshot(
 			x: finite(header.readFloatLE(s.localMicPositionX)),
 			y: finite(header.readFloatLE(s.localMicPositionY)),
 		},
+		...(localIsPseudocide !== undefined ? { localIsPseudocide: localIsPseudocide === 1 } : {}),
 		players,
 		radios,
 	};

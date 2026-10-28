@@ -96,6 +96,7 @@ try {
 	await published;
 	const layout = response.metadata;
 	assert.ok(isNosLayout(layout, child.pid), JSON.stringify(response));
+	assert.ok(Number.isInteger(layout.snapshot.localIsPseudocide));
 	assert.equal(layout.schemaVersion, 20261009);
 	assert.equal(layout.playerData.skin.capacity, 128);
 	assert.equal(layout.playerData.size, 888);
@@ -108,8 +109,11 @@ try {
 		bodyType: undefined,
 		neckLength: undefined,
 	};
-	const legacy = { ...layout, schemaVersion: 20260928, playerData: legacyPlayer };
+	const legacySnapshot = { ...layout.snapshot };
+	delete legacySnapshot.localIsPseudocide;
+	const legacy = { ...layout, schemaVersion: 20260928, snapshot: legacySnapshot, playerData: legacyPlayer };
 	assert.ok(isNosLayout(legacy, child.pid));
+	assert.equal(readNosSnapshot(legacy, read).localIsPseudocide, undefined);
 	assert.equal(readNosSnapshot(legacy, read).players[0].name, 'テスト');
 	assert.equal(readNosSnapshot(legacy, read).players[0].skin, undefined);
 	assert.equal(readNosSnapshot(layout, read).players[0].skin.name, 'Test');
@@ -124,9 +128,17 @@ try {
 	assert.equal(isNosLayout({ ...layout, pid: child.pid + 1 }, child.pid), false);
 	assert.equal(isNosLayout({ ...layout, playerData: { ...layout.playerData, name: 10000 } }, child.pid), false);
 	assert.equal(isNosLayout({ ...layout, schemaVersion: 0 }, child.pid), false);
+	assert.ok(isNosLayout({ ...layout, schemaVersion: 20261030 }, child.pid));
+	assert.equal(isNosLayout({ ...layout, snapshot: { ...layout.snapshot, localIsPseudocide: 256 } }, child.pid), false);
 	const live = () => readNosSnapshot(layout, read);
 	const first = live();
 	assert.deepEqual(first.localMicPosition, { x: 1, y: -1 });
+	assert.equal(first.localIsPseudocide, true);
+	assert.throws(() => readNosSnapshot(layout, (address, size) => {
+		const bytes = Buffer.from(read(address, size));
+		if (address === first.publication) bytes[layout.snapshot.localIsPseudocide] = 2;
+		return bytes;
+	}), /Invalid NoS flag/);
 	assert.equal(first.players[0].name, 'テスト');
 	assert.equal(first.players[0].isNeutral, true);
 	assert.equal(first.players[0].colorB, 0.75);
@@ -208,6 +220,7 @@ try {
 	assert.equal(readNosPalette(palette, read)[3], '#ff4000', 'Follow the static slot after a managed GC');
 	await command('team');
 	assert.equal(live().players[0].isNeutral, false);
+	assert.equal(live().localIsPseudocide, false);
 	assert.equal(live().players[0].isImpostor, true);
 	assert.equal(live().players[0].isJammed, false);
 	let finish,

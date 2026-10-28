@@ -65,25 +65,3 @@ try {
 	tracker.reset();
 }
 console.log('PASS NoS roles: validation, polling, process/round changes, late responses, expiry and failures');
-
-// Reporting a Busker body removes the ability to revive even if the role timer has time left.
-const buskerRows = [{ playerId: 0, role: { roleId: 72, roleName: 'busker', displayName: 'バスカー',
-	runtimeClass: 'Nebula.Roles.Crewmate.Busker+Ability', buskerReviveRemaining: 20 } }];
-const buskerTracker = new NosRoleTracker(() => Promise.resolve(buskerRows));
-now = 20000;
-Date.now = () => now;
-try {
-	buskerTracker.update(1, 'busker', undefined, 1, [{ id: 0, isDead: true }]);
-	await settle();
-	assert.ok(buskerTracker.update(1, 'busker', undefined, 1, [{ id: 0, isDead: true }])
-		.get(0).buskerReviveRemaining > 0);
-	assert.equal(buskerTracker.update(1, 'busker', undefined, 2, [{ id: 0, isDead: true }])
-		.get(0).buskerReviveRemaining, undefined);
-	assert.equal(buskerTracker.update(1, 'busker', undefined, 1, [{ id: 0, isDead: true }])
-		.get(0).buskerReviveRemaining, undefined);
-	assert.ok(buskerTracker.update(1, 'busker', undefined, 1, [{ id: 0, isDead: false }])
-		.get(0).buskerReviveRemaining > 0);
-} finally {
-	Date.now = originalNow;
-	buskerTracker.reset();
-}

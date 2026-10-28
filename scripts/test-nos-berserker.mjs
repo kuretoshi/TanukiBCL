@@ -24,7 +24,7 @@ const me = { id: 1, clientId: 101, isDead: false, name: 'listener' };
 const other = { id: 0, clientId: 100, name: 'speaker', nosRole: { ...role, bodyType: 2, isBerserking: true } };
 const select = (speaker = other, game = state, lobby = defaultLobbySettings, listener = me) =>
 	selectVoiceEffect(game, { voiceEffectStrength: 0 }, lobby, listener, speaker, -1);
-const expected = { strength: 0, berserker: true };
+const expected = { strength: 100, berserker: true };
 assert.equal(
 	select({ ...other, nosRole: { ...other.nosRole, bodyType: 0 } }),
 	null,

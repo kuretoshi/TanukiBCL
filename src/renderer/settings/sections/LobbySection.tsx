@@ -251,7 +251,7 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						onChange={(checked) => update({ nosNeutralKillerHaunting: checked })}
 					/>
 					<SwitchRow
-						label={t('settings.lobbysettings.busker_revive_hide_voice')}
+						label={t('settings.lobbysettings.nos_busker_pseudocide_hide_voice')}
 						disabled={disabled}
 						checked={values.nosBuskerReviveHideVoice === true}
 						onChange={(checked) => update({ nosBuskerReviveHideVoice: checked })}

@@ -4,7 +4,7 @@ using System.Diagnostics;
 internal static class NosRoles
 {
     internal record Role(int? RoleId, string? RoleName, string? DisplayName, string RuntimeClass,
-        bool? IsRainbowStar = null, float? BuskerReviveRemaining = null);
+        bool? IsRainbowStar = null);
     internal record PlayerRole(byte PlayerId, Role Role, NosBody.Layout? BodyLayout);
 
     // Read managed fields from a process snapshot; never invoke MOD getters or methods.
@@ -46,43 +46,13 @@ internal static class NosRoles
                 string? name = definition.IsNull ? null : definition.ReadStringField("<LocalizedName>k__BackingField", 256);
                 int? roleId = definition.IsNull ? null : definition.ReadField<int>("<Virial.Assignable.IRoleID.Id>k__BackingField");
                 translations.TryGetValue($"role.{name}.name", out var label);
-                result.Add(new PlayerRole(id, new Role(roleId, name, label, role.Type!.Name!, ReadRainbowStar(runtime, player),
-                    name == "busker" ? ReadBuskerReviveRemaining(module, manager, player) : null),
+                result.Add(new PlayerRole(id, new Role(roleId, name, label, role.Type!.Name!, ReadRainbowStar(runtime, player)),
                     name == "berserker" ? NosBody.Resolve(target, player, id) : null));
             }
         }
         using var current = Process.GetProcessById(pid);
         if (current.StartTime.ToUniversalTime().Ticks != started) throw new InvalidOperationException("NoS process changed");
         return result.ToArray();
-    }
-
-    private static float? ReadBuskerReviveRemaining(ClrModule module, ClrObject manager, ClrObject player)
-    {
-        // Pseudocide remains the death state after the revive timer expires. Compare the
-        // MOD's game clock and death timestamp against its synced role option instead.
-        try
-        {
-            var state = player.ReadObjectField("MyState");
-            var stateType = module.GetTypeByName("Nebula.Player.PlayerState");
-            var pseudocide = stateType?.GetStaticFieldByName("Pseudocide")?.ReadObject(module.AppDomain) ?? default;
-            if (state.IsNull || pseudocide.IsNull || state.Address != pseudocide.Address) return null;
-            var deathField = player.Type?.GetFieldByName("DeathTimeStamp");
-            if (deathField == null) return null;
-            var death = player.ReadValueTypeField("DeathTimeStamp");
-            if (!death.ReadField<bool>("hasValue")) return null;
-            var moment = death.ReadValueTypeField("value");
-            float deathTime = moment.ReadField<float>("time");
-            float gameTime = manager.ReadField<float>("<CurrentTime>k__BackingField");
-            var busker = module.GetTypeByName("Nebula.Roles.Crewmate.Busker");
-            var option = busker?.GetStaticFieldByName("PseudocideDurationOption")?.ReadObject(module.AppDomain) ?? default;
-            var value = option.IsNull ? default : option.ReadObjectField("val");
-            if (value.IsNull) return null;
-            float duration = value.ReadField<float>("currentValue");
-            float remaining = deathTime + duration - gameTime;
-            return float.IsFinite(remaining) && duration is >= 5f and <= 60f && remaining > 0f && remaining <= duration
-                ? remaining : null;
-        }
-        catch { return null; }
     }
 
     private static bool? ReadRainbowStar(ClrRuntime runtime, ClrObject player)

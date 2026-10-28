@@ -541,13 +541,11 @@ export default class GameReader {
 				}
 			}
 			if (this.loadedMod.id === 'NoS' && !this.is_linux && snrActive) {
-				const publishedBody = this.nosSnapshot.schemaVersion === 20261009;
+				const publishedBody = (this.nosSnapshot.schemaVersion ?? 0) >= 20261009;
 				const roles = this.nosRoles.update(
 					this.pid,
 					`${lobbyCode}:${this.snrRound}`,
-					publishedBody ? undefined : (address, size) => readBuffer(this.amongUs!.handle, address, size),
-					gameState,
-					players
+					publishedBody ? undefined : (address, size) => readBuffer(this.amongUs!.handle, address, size)
 				);
 				this.applyNosRoles(players, roles, publishedBody);
 			} else this.nosRoles.reset();
@@ -571,6 +569,7 @@ export default class GameReader {
 						? this.nosContents.update(path.dirname(this.gamePath))
 						: undefined,
 				nosLocalMicPosition: nos?.localMicPosition,
+				nosLocalIsPseudocide: nos?.localIsPseudocide,
 				nosRadios: nos?.radios,
 				nosBibiriEchoes:
 					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)

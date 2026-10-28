@@ -21,7 +21,6 @@ interface BuskerLayout {
 	itemsOffset: number;
 	countOffset: number;
 	activeOffset: number;
-	timerOffset: number;
 }
 
 interface NumberField {
@@ -79,7 +78,7 @@ export function isSnrLiveLayout(value: unknown, pid: number): value is SnrLiveLa
 				}))) &&
 		(v.busker == null ||
 			(['abilityType', 'listType', 'itemsType'].every((key) => pointer(v.busker![key as keyof BuskerLayout])) &&
-				['abilitiesOffset', 'itemsOffset', 'countOffset', 'activeOffset', 'timerOffset'].every((key) => {
+				['abilitiesOffset', 'itemsOffset', 'countOffset', 'activeOffset'].every((key) => {
 					const n = v.busker![key as keyof BuskerLayout];
 					return Number.isInteger(n) && n >= 4 && n <= 4096;
 				}))) &&
@@ -150,7 +149,7 @@ export function readSnrLiveRoles(
 		}
 		return undefined;
 	};
-	const readBuskerRemaining = (player: number): number | undefined => {
+	const readBuskerState = (player: number): boolean | undefined => {
 		const b = layout.busker;
 		if (!b) return undefined;
 		try {
@@ -169,8 +168,8 @@ export function readSnrLiveRoles(
 			for (let i = 0; i < count; i++) {
 				const ability = layout.pointerSize === 8 ? Number(entries.readBigUInt64LE(i * 8)) : entries.readUInt32LE(i * 4);
 				if (!validPointer(ability) || pointer(ability) !== b.abilityType) continue;
-				const active = read(ability + b.activeOffset, 1)[0] === 1;
-				const remaining = read(ability + b.timerOffset, 4).readFloatLE(0);
+				const activeByte = read(ability + b.activeOffset, 1)[0];
+				if (activeByte > 1) return undefined;
 				if (
 					pointer(player) !== layout.playerType ||
 					pointer(player + b.abilitiesOffset) !== list ||
@@ -178,10 +177,11 @@ export function readSnrLiveRoles(
 					pointer(list + b.itemsOffset) !== items ||
 					read(list + b.countOffset, 4).readUInt32LE(0) !== count ||
 					!read(items + layout.arrayDataOffset, count * layout.pointerSize).equals(entries) ||
-					pointer(ability) !== b.abilityType
+					pointer(ability) !== b.abilityType ||
+					read(ability + b.activeOffset, 1)[0] !== activeByte
 				)
 					return undefined;
-				return active && Number.isFinite(remaining) && remaining > 0 && remaining <= 60 ? remaining : undefined;
+				return activeByte === 1;
 			}
 		} catch {
 			// A moving ability must fail closed.
@@ -236,7 +236,9 @@ export function readSnrLiveRoles(
 				ghostRole: describe(bytes, layout.fields.ghostRole),
 			};
 			if (hasSnrJumbo(role)) role.jumbo = readJumbo(player);
-			if (role.role.name === 'Busker') role.buskerReviveRemaining = readBuskerRemaining(player);
+			if (role.role.name === 'Busker') {
+				role.buskerPseudocideActive = readBuskerState(player);
+			}
 			result.set(id, role);
 		}
 		if (
