@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from auth import allow_attempt, create_app, initialize, set_password, verify, issue_invitation, redeem_invitation
+from auth import allow_attempt, create_app, initialize, record_player_history, set_password, verify, issue_invitation, redeem_invitation
 import inquiry
 import issue_bridge
 import discord_bridge
@@ -153,6 +153,25 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(added.json['bans'][0]['player_uid'], 'target-uid')
             self.assertTrue(self.client.post(check, json={'playerUid': 'target-uid',
                 'playerName': 'Renamed'}).json['banned'])
+
+    def test_admin_can_request_every_history_record(self):
+        set_password(self.db, 'admin', 'admin-password')
+        with closing(sqlite3.connect(self.db)) as db, db:
+            for index in range(55):
+                record_player_history(db, f'uid-{index}', f'Player {index}', '', index + 1)
+        with mock.patch.dict('os.environ', {'BAN_ADMIN_NAME': 'admin'}):
+            manage = '/v1/player-bans/manage'
+            ordinary = self.client.post(manage, json={'password': 'admin-password', 'action': 'list'})
+            self.assertEqual(ordinary.status_code, 200)
+            self.assertEqual(ordinary.json['historyTotal'], 55)
+            self.assertEqual(len(ordinary.json['history']), 50)
+            complete = self.client.post(manage, json={'password': 'admin-password',
+                'action': 'list', 'historyAll': True})
+            self.assertEqual(complete.status_code, 200)
+            self.assertEqual(complete.json['historyTotal'], 55)
+            self.assertEqual(len(complete.json['history']), 55)
+            self.assertEqual(self.client.post(manage, json={'password': 'admin-password',
+                'action': 'list', 'historyAll': 'yes'}).status_code, 400)
 
     def test_password_change_disable_and_storage(self):
         set_password(self.db, 'tester', 'original')

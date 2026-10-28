@@ -17,12 +17,45 @@ interface PendingNameBan {
 	reason: string;
 }
 
+interface PlayerHistoryRecord {
+	uid_digest: string;
+	display_name: string;
+	friend_code: string;
+	first_seen_at: number;
+	last_seen_at: number;
+	is_banned: number;
+}
+
+const formatSeenAt = (seconds: number) => new Date(seconds * 1000).toLocaleString('ja-JP');
+
+const HistoryRecords = React.memo(function HistoryRecords({ records }: { records: PlayerHistoryRecord[] }) {
+	return (
+		<Box sx={{ maxHeight: 360, overflowY: 'auto', border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
+			{records.map((item) => (
+				<Box key={item.uid_digest} sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
+					<Typography variant="body2">
+						{item.display_name} ／ ID: …{item.uid_digest.slice(-8)}
+						{item.friend_code ? ` ／ ${item.friend_code}` : ''} ／ {item.is_banned ? 'BAN済み' : '未BAN'}
+					</Typography>
+					<Typography variant="caption">
+						初回: {formatSeenAt(item.first_seen_at)} ／ 最終: {formatSeenAt(item.last_seen_at)}
+					</Typography>
+				</Box>
+			))}
+		</Box>
+	);
+});
+
 export default function PlayerBanPanel({ players }: { players: Player[] }): React.JSX.Element {
 	const [password, setPassword] = useState('');
 	const [reason, setReason] = useState('');
 	const [playerName, setPlayerName] = useState('');
 	const [bans, setBans] = useState<BanRecord[]>([]);
 	const [pending, setPending] = useState<PendingNameBan[]>([]);
+	const [history, setHistory] = useState<PlayerHistoryRecord[]>([]);
+	const [historyTotal, setHistoryTotal] = useState(0);
+	const [historyLoaded, setHistoryLoaded] = useState(false);
+	const [historyAvailable, setHistoryAvailable] = useState(true);
 	const [message, setMessage] = useState('管理者パスワードを入力して一覧を読み込んでください。');
 	const [busy, setBusy] = useState(false);
 	const [confirmUid, setConfirmUid] = useState('');
@@ -35,15 +68,23 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 			const result = (await ipcRenderer.invoke('debug:player-bans', {
 				password,
 				...payload,
+				historyAll: true,
 			})) as {
 				bans?: BanRecord[];
 				pending?: PendingNameBan[];
+				history?: PlayerHistoryRecord[];
+				historyTotal?: number;
+				historyAvailable?: boolean;
 				error?: string;
 			};
 			if (result.error) setMessage(result.error);
 			else if (result.bans) {
 				setBans(result.bans);
 				setPending(result.pending ?? []);
+				setHistory(result.history ?? []);
+				setHistoryTotal(result.historyTotal ?? 0);
+				setHistoryAvailable(result.historyAvailable !== false);
+				setHistoryLoaded(true);
 				setMessage('BAN一覧を更新しました。');
 				setConfirmUid('');
 				setConfirmName('');
@@ -148,6 +189,17 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 			<Button variant="outlined" onClick={() => void ipcRenderer.invoke('OPEN_PLAYER_HISTORY')}>
 				プレイヤー履歴を別ウィンドウで開く
 			</Button>
+			<Typography variant="subtitle2">
+				DB登録済みプレイヤー（{historyLoaded ? `${historyTotal}人` : '未読み込み'}）
+			</Typography>
+			{historyLoaded && !historyAvailable && <Typography variant="body2">履歴機能はサーバーに未反映です。</Typography>}
+			{historyLoaded && historyAvailable && history.length === 0 && (
+				<Typography variant="body2">記録されたプレイヤーはまだいません。</Typography>
+			)}
+			{historyLoaded && historyAvailable && history.length < historyTotal && (
+				<Typography variant="body2">一部のみ取得できました。サーバーの更新を確認してください。</Typography>
+			)}
+			{history.length > 0 && <HistoryRecords records={history} />}
 			<Typography variant="subtitle2">UID待ち</Typography>
 			{pending.map((item) => (
 				<Box key={item.player_name} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

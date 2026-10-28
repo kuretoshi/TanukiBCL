@@ -157,11 +157,14 @@ def list_player_history(path, name='', from_seen=None, to_seen=None, offset=0, l
             params.append(to_seen)
         where = 'WHERE ' + ' AND '.join(conditions) if conditions else ''
         total = db.execute('SELECT COUNT(*) FROM player_history h ' + where, params).fetchone()[0]
-        rows = db.execute('''SELECT h.uid_digest,h.display_name,h.friend_code,h.first_seen_at,h.last_seen_at,
+        sql = '''SELECT h.uid_digest,h.display_name,h.friend_code,h.first_seen_at,h.last_seen_at,
                                     CASE WHEN b.uid_digest IS NULL THEN 0 ELSE 1 END AS is_banned
                              FROM player_history h LEFT JOIN player_bans b ON h.uid_digest=b.uid_digest
-                             ''' + where + ''' ORDER BY h.last_seen_at DESC,h.uid_digest
-                             LIMIT ? OFFSET ?''', (*params, limit, offset)).fetchall()
+                             ''' + where + ''' ORDER BY h.last_seen_at DESC,h.uid_digest'''
+        if limit is None:
+            rows = db.execute(sql, params).fetchall()
+        else:
+            rows = db.execute(sql + ' LIMIT ? OFFSET ?', (*params, limit, offset)).fetchall()
         return [dict(row) for row in rows], total
 
 
@@ -408,7 +411,10 @@ def create_app(database=None):
             history_from = data.get('historyFrom')
             history_to = data.get('historyTo')
             history_offset = data.get('historyOffset', 0)
+            history_all = data.get('historyAll', False)
             validate_history_search(history_name, history_from, history_to, history_offset)
+            if type(history_all) is not bool:
+                raise ValueError('History search is invalid.')
             if action == 'add':
                 add_ban(database, data.get('playerUid'), data.get('displayName', ''),
                         data.get('friendCode', ''), data.get('reason', ''))
@@ -422,7 +428,9 @@ def create_app(database=None):
                 remove_pending_name_ban(database, data.get('playerName'))
             elif action != 'list':
                 return jsonify(error='Invalid action.'), 400
-            history, history_total = list_player_history(database, history_name, history_from, history_to, history_offset)
+            history, history_total = list_player_history(database, history_name, history_from,
+                                                         history_to, history_offset,
+                                                         limit=None if history_all else 50)
             return jsonify(bans=list_bans(database), pending=list_pending_name_bans(database),
                            history=history, historyTotal=history_total)
         except ValueError as error:
