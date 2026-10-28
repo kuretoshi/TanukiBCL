@@ -126,7 +126,7 @@
 		},
 		"overlay": {
 			"title": "オーバーレイ",
-			"always_on_top": "最前面に表示",
+			"always_on_top": "ベタクル本体を最前面に表示",
 			"enabled": "オーバーレイを有効化",
 			"compact": "コンパクトなオーバーレイ",
 			"meeting": "議論のオーバーレイ表示",

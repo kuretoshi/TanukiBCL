@@ -24,11 +24,6 @@ const OverlaySection: React.FC<OverlaySectionProps> = function ({ t, settings, s
 	return (
 		<SettingsSection title={t('settings.overlay.title')}>
 			<SwitchRow
-				label={t('settings.overlay.always_on_top')}
-				checked={settings.alwaysOnTop}
-				onChange={(checked) => setSettings('alwaysOnTop', checked)}
-			/>
-			<SwitchRow
 				label={t('settings.overlay.enabled')}
 				checked={settings.enableOverlay}
 				onChange={(checked) => setSettings('enableOverlay', checked)}

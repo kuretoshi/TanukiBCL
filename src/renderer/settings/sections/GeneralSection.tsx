@@ -3,7 +3,7 @@ import { TFunction } from 'i18next';
 import Button from '@mui/material/Button';
 import { ISettings } from '../../../common/ISettings';
 import languages from '../../language/languages';
-import { ConfirmApi, SelectRow, SettingRow, SettingsSection } from '../SettingsControls';
+import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SwitchRow } from '../SettingsControls';
 
 export interface GeneralSectionProps {
 	t: TFunction;
@@ -30,6 +30,11 @@ const GeneralSection: React.FC<GeneralSectionProps> = function ({
 					value={settings.language}
 					options={Object.entries(languages).map(([key, value]) => ({ value: key, label: value.name }))}
 					onChange={(value) => setSettings('language', value)}
+				/>
+				<SwitchRow
+					label={t('settings.overlay.always_on_top')}
+					checked={settings.alwaysOnTop}
+					onChange={(checked) => setSettings('alwaysOnTop', checked)}
 				/>
 			</SettingsSection>
 

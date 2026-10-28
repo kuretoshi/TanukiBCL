@@ -126,7 +126,7 @@
 		},
 		"overlay": {
 			"title": "Overlay",
-			"always_on_top": "BetterCrewLinkKai on Top",
+			"always_on_top": "Keep the main window on top",
 			"enabled": "Enable Overlay",
 			"compact": "Compact Overlay",
 			"meeting": "Meeting Overlay",
