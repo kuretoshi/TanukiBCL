@@ -965,6 +965,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.updateVersionWarning();
 		this.handleHostChange(state);
 		this.handleGameStateTransition(state, myPlayer);
+		this.refreshMeetingDeathDisplay(state);
 		this.handleLobbyConnection(state, myPlayer);
 		this.publishToh4eLobby(state);
 		this.publishToh4eRoster(state);
@@ -1210,6 +1211,19 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			}
 			this.patch({ otherDead });
 		}
+	}
+
+	private refreshMeetingDeathDisplay(state: AmongUsState): void {
+		if (state.gameState !== GameState.DISCUSSION || !state.players) return;
+		const otherDead = { ...this.snapshot.otherDead };
+		let changed = false;
+		for (const player of state.players) {
+			const dead = player.isDead || player.disconnected;
+			if (otherDead[player.clientId] === dead) continue;
+			otherDead[player.clientId] = dead;
+			changed = true;
+		}
+		if (changed) this.patch({ otherDead });
 	}
 
 	private handleGameStateTransition(state: AmongUsState, myPlayer: Player | undefined): void {
