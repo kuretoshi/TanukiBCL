@@ -134,8 +134,7 @@ export function readNosSnapshot(
 		(s.radios ?? 0) + layout.pointerSize
 	);
 	const header = read(snapshot, headerSize);
-	const localIsPseudocide =
-		s.localIsPseudocide == null ? undefined : header[s.localIsPseudocide];
+	const localIsPseudocide = s.localIsPseudocide == null ? undefined : header[s.localIsPseudocide];
 	if (localIsPseudocide !== undefined && localIsPseudocide > 1) throw new Error('Invalid NoS flag');
 	const headerPointer = (offset: number) =>
 		layout.pointerSize === 4 ? header.readUInt32LE(offset) : Number(header.readBigUInt64LE(offset));

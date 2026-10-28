@@ -736,8 +736,11 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				state.mod !== 'NoS' ||
 				(state.gameState !== GameState.TASKS && state.gameState !== GameState.DISCUSSION) ||
 				data.lobbyCode !== state.lobbyCode ||
-				!sender || sender.isLocal || sender.disconnected ||
-				data.playerId !== sender.id || typeof data.active !== 'boolean'
+				!sender ||
+				sender.isLocal ||
+				sender.disconnected ||
+				data.playerId !== sender.id ||
+				typeof data.active !== 'boolean'
 			)
 				return;
 			this.nosPseudocideReports[sender.id] = {
@@ -1072,8 +1075,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private syncNosPseudocide(state: AmongUsState, myPlayer: Player | undefined): void {
-		const active = state.mod === 'NoS' &&
-			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) && !!myPlayer;
+		const active =
+			state.mod === 'NoS' &&
+			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+			!!myPlayer;
 		const session = active ? `${state.lobbyCode}|${state.clientId}` : '';
 		if (session !== this.nosPseudocideSession) {
 			this.nosPseudocideSession = session;
@@ -1083,18 +1088,20 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		}
 		if (!active || !myPlayer || state.nosLocalIsPseudocide === undefined) return;
 		const now = Date.now();
-		if (this.nosPseudocideSent === state.nosLocalIsPseudocide && now - this.nosPseudocideSentAt < 3000)
-			return;
+		if (this.nosPseudocideSent === state.nosLocalIsPseudocide && now - this.nosPseudocideSentAt < 3000) return;
 		const peers = state.players
 			.filter((player) => !player.isLocal && !player.disconnected)
 			.map((player) => this.connection.playerSocketIds[player.clientId])
 			.filter(Boolean);
-		this.connection.sendControlToPeers(peers, JSON.stringify({
-			type: 'nos-pseudocide',
-			lobbyCode: state.lobbyCode,
-			playerId: myPlayer.id,
-			active: state.nosLocalIsPseudocide,
-		}));
+		this.connection.sendControlToPeers(
+			peers,
+			JSON.stringify({
+				type: 'nos-pseudocide',
+				lobbyCode: state.lobbyCode,
+				playerId: myPlayer.id,
+				active: state.nosLocalIsPseudocide,
+			})
+		);
 		this.nosPseudocideSent = state.nosLocalIsPseudocide;
 		this.nosPseudocideSentAt = now;
 	}
