@@ -156,6 +156,11 @@ export const settingsStore = new Store<ISettings>({
 			type: 'boolean',
 			default: false,
 		},
+		appPlayerLayout: {
+			type: 'string',
+			enum: ['standard', 'aliveAboveGhosts'],
+			default: 'standard',
+		},
 		compactOverlay: {
 			type: 'boolean',
 			default: false,

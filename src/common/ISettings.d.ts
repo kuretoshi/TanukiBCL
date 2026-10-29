@@ -1,5 +1,7 @@
 import { GamePlatform } from './GamePlatform';
 
+export type AppPlayerLayout = 'standard' | 'aliveAboveGhosts';
+
 export interface ISettings {
 	alwaysOnTop: boolean;
 	language: string;
@@ -14,6 +16,7 @@ export interface ISettings {
 	impostorRadioShortcut: string;
 	jackalRadioShortcut?: string;
 	hideCode: boolean;
+	appPlayerLayout: AppPlayerLayout;
 	natFix: boolean;
 	compactOverlay: boolean;
 	overlayPosition: string;

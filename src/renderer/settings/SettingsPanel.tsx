@@ -6,6 +6,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import TuneIcon from '@mui/icons-material/Tune';
+import GridViewIcon from '@mui/icons-material/GridView';
 import GroupsIcon from '@mui/icons-material/Groups';
 import PersonIcon from '@mui/icons-material/Person';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
@@ -26,6 +27,7 @@ import { ipcRenderer } from '../lib/electron-bridge';
 import SettingsStore from './SettingsStore';
 import { useConfirmDialog } from './SettingsControls';
 import GeneralSection from './sections/GeneralSection';
+import AppLayoutSection from './sections/AppLayoutSection';
 import LobbySection from './sections/LobbySection';
 import PlayersSection from './sections/PlayersSection';
 import AudioSection, { MediaDevice } from './sections/AudioSection';
@@ -37,6 +39,7 @@ import StreamingSection from './sections/StreamingSection';
 
 type CategoryId =
 	| 'general'
+	| 'appLayout'
 	| 'lobby'
 	| 'players'
 	| 'audio'
@@ -202,6 +205,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 		() =>
 			[
 				{ id: 'general', label: t('settings.general'), icon: <TuneIcon fontSize="small" /> },
+				{ id: 'appLayout', label: t('settings.app_layout.title'), icon: <GridViewIcon fontSize="small" /> },
 				{ id: 'lobby', label: t('settings.lobbysettings.title'), icon: <GroupsIcon fontSize="small" /> },
 				{ id: 'players', label: t('settings.players.title'), icon: <PersonIcon fontSize="small" /> },
 				{ id: 'audio', label: t('settings.audio.title'), icon: <VolumeUpIcon fontSize="small" /> },
@@ -267,6 +271,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 							confirm={confirm}
 						/>
 					)}
+					{category === 'appLayout' && <AppLayoutSection t={t} settings={settings} setSettings={setSettings} />}
 					{category === 'lobby' && (
 						<LobbySection
 							t={t}

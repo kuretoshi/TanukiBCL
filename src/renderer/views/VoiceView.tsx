@@ -22,7 +22,7 @@ import { modList } from '../../common/Mods';
 import { IpcHandlerMessages } from '../../common/ipc-messages';
 import { ipcRenderer } from '../lib/electron-bridge';
 import { useVoiceEngine } from '../voice/useVoiceController';
-import { getPlayerGridLayout, playerAvatarChrome, playerGridGap } from './playerGridLayout';
+import { getPlayerGridLayout, playerAvatarChrome, playerGridGap, playerGroupHeaderHeight } from './playerGridLayout';
 
 export interface VoiceProps {
 	t: (key: string) => string;
@@ -133,12 +133,27 @@ const OtherPlayersGrid = styled(Box)({
 	gap: playerGridGap,
 	flex: '1 1 0',
 	minHeight: 0,
-	width: 'calc(100% - 48px)',
+	width: 'calc(100% - 24px)',
 	margin: '4px auto',
 	justifyContent: 'center',
 	alignContent: 'start',
 	overflow: 'hidden',
 });
+
+const PlayerGroupHeader: React.FC<{ label: string; row: number; color: string }> = function ({ label, row, color }) {
+	return (
+		<Box sx={{ gridColumn: '1 / -1', gridRow: row, display: 'flex', alignItems: 'center', gap: 1 }}>
+			<Typography
+				component="span"
+				variant="caption"
+				sx={{ color, fontWeight: 700, letterSpacing: 0.5, whiteSpace: 'nowrap' }}
+			>
+				{label}
+			</Typography>
+			<Box sx={{ height: '1px', flex: 1, backgroundColor: 'rgba(255,255,255,0.32)' }} />
+		</Box>
+	);
+};
 
 const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: VoiceProps) {
 	const classes = useStyles();
@@ -157,6 +172,11 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 		if (!gameState?.players || !myPlayer) return [];
 		return gameState.players.filter((player) => !player.isLocal);
 	}, [gameState?.players, myPlayer]);
+	const groupPlayersByLife = settings.appPlayerLayout === 'aliveAboveGhosts';
+	const alivePlayers = groupPlayersByLife ? otherPlayers.filter((player) => !voice.otherDead[player.clientId]) : [];
+	const displayedPlayers = groupPlayersByLife
+		? [...alivePlayers, ...otherPlayers.filter((player) => !!voice.otherDead[player.clientId])]
+		: otherPlayers;
 
 	const playerConfigs = settings.playerConfigMap;
 
@@ -187,8 +207,23 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 	const { columns: otherPlayersPerRow, avatarSize: otherPlayerAvatarSize } = getPlayerGridLayout(
 		gridSize.width,
 		gridSize.height,
-		otherPlayers.length
+		displayedPlayers.length,
+		groupPlayersByLife ? alivePlayers.length : undefined
 	);
+	const aliveRows = Math.ceil(alivePlayers.length / otherPlayersPerRow);
+	const ghostCount = groupPlayersByLife ? displayedPlayers.length - alivePlayers.length : 0;
+	const ghostRows = Math.ceil(ghostCount / otherPlayersPerRow);
+	const ghostHeaderRow = alivePlayers.length > 0 ? aliveRows + 2 : 1;
+	const groupedRows = [
+		aliveRows > 0
+			? `${playerGroupHeaderHeight}px repeat(${aliveRows}, ${otherPlayerAvatarSize + playerAvatarChrome}px)`
+			: '',
+		ghostRows > 0
+			? `${playerGroupHeaderHeight}px repeat(${ghostRows}, ${otherPlayerAvatarSize + playerAvatarChrome}px)`
+			: '',
+	]
+		.filter(Boolean)
+		.join(' ');
 	const detectedMod =
 		gameState.mod === 'NONE' ? undefined : (modList.find(({ id }) => id === gameState.mod)?.label ?? gameState.mod);
 
@@ -301,19 +336,40 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 							<OtherPlayersGrid
 								ref={gridRef}
 								sx={{
+									...(groupPlayersByLife && {
+										width: 'calc(100% - 32px)',
+										justifyContent: displayedPlayers.length >= 8 ? 'space-between' : 'center',
+									}),
 									gridTemplateColumns: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize + playerAvatarChrome}px)`,
+									...(groupPlayersByLife && { gridTemplateRows: groupedRows }),
 									gridAutoRows: `${otherPlayerAvatarSize + playerAvatarChrome}px`,
 								}}
 							>
-								{otherPlayers.map((player) => {
+								{groupPlayersByLife && alivePlayers.length > 0 && (
+									<PlayerGroupHeader label={t('settings.app_layout.survivors')} row={1} color="#91d6a9" />
+								)}
+								{groupPlayersByLife && ghostCount > 0 && (
+									<PlayerGroupHeader label={t('settings.app_layout.afterlife')} row={ghostHeaderRow} color="#c8b1df" />
+								)}
+								{displayedPlayers.map((player, index) => {
 									const peer = voice.playerSocketIds[player.clientId];
 									const connected = voice.socketClients[peer]?.clientId === player.clientId || false;
 									const playerConfig =
 										playerConfigs?.[player.playerConfigId] ?? playerConfigs?.[player.nameHash] ?? DEFAULT_PLAYER_CONFIG;
 									const theirVadHidden = player.shiftedColor !== -1 && gameState?.gameState !== GameState.DISCUSSION;
+									const ghostGroup = groupPlayersByLife && index >= alivePlayers.length;
+									const groupIndex = ghostGroup ? index - alivePlayers.length : index;
+									const playerBoxSx = {
+										width: otherPlayerAvatarSize,
+										position: 'relative' as const,
+										...(groupPlayersByLife && {
+											gridColumn: (groupIndex % otherPlayersPerRow) + 1,
+											gridRow: Math.floor(groupIndex / otherPlayersPerRow) + (ghostGroup ? ghostHeaderRow + 1 : 2),
+										}),
+									};
 
 									return (
-										<Box key={player.id} sx={{ width: otherPlayerAvatarSize, position: 'relative' }}>
+										<Box key={player.id} sx={playerBoxSx}>
 											<Avatar
 												hideWhenAppearanceChanged={gameState.gameState === GameState.TASKS}
 												connectionState={

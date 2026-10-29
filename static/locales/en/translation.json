@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"app_layout": { "title": "App Screen Layout", "player_order": "Player order", "standard": "Default", "alive_above_ghosts": "Living players above ghosts", "survivors": "Survivors", "afterlife": "Ghosts" },
 		"voice_effects": { "title": "Voice Effects", "preview_title": "Effect Test", "preview_target": "Effect to test", "disguise_strength": "Disguise and mushroom effect strength", "snr_jumbo_strength": "Jumbo strength", "snr_push_reverb_strength": "Push Reverb Strength", "nos_size_strength": "Size change strength", "nos_rokurokubi_strength": "Rokurokubi strength", "nos_berserker_strength": "Berserker strength", "nos_citrus_strength": "Citrus voice changer strength", "nos_rainbow_star_strength": "Rainbow Star echo strength" },
 		"title": "Settings",
 		"language": "Language",

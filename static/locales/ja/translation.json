@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"app_layout": { "title": "画面レイアウト", "player_order": "プレイヤーの表示順", "standard": "デフォルト", "alive_above_ghosts": "生存者を上段、幽霊を下段", "survivors": "生存者", "afterlife": "霊界" },
 		"voice_effects": { "title": "ボイスエフェクト", "preview_title": "エフェクトテスト", "preview_target": "テストするエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ", "snr_jumbo_strength": "ジャンボの強さ", "snr_push_reverb_strength": "突き落とし時の残響の強さ", "nos_size_strength": "サイズ変化の強さ", "nos_rokurokubi_strength": "ろくろ首の強さ", "nos_berserker_strength": "バーサーカーの強さ", "nos_citrus_strength": "シトラス感染時の強さ", "nos_rainbow_star_strength": "虹色スターのエコーの強さ" },
 		"title": "設定",
 		"language": "言語",
