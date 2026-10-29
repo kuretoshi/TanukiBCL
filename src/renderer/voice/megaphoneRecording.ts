@@ -1,4 +1,5 @@
 import type { MegaphoneState } from '../../common/MegaphoneState';
+import { createRecordingCapture } from './recordingCapture';
 
 // Each listener buffers the incoming WebRTC audio before proximity attenuation.
 // Nothing is written to disk or sent to a new service.
@@ -8,12 +9,6 @@ export function createMegaphoneRecording(
 	destination: AudioNode,
 	canRecord = () => true
 ) {
-	const processor = context.createScriptProcessor(2048, 1, 1);
-	const silent = context.createGain();
-	silent.gain.value = 0;
-	source.connect(processor);
-	processor.connect(silent);
-	silent.connect(destination);
 	const output = context.createGain();
 	output.connect(destination);
 	let recording = false;
@@ -25,14 +20,15 @@ export function createMegaphoneRecording(
 	let graph: AudioNode[] = [];
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const maxSamples = context.sampleRate * 10;
-	processor.onaudioprocess = (event) => {
+	const capture = createRecordingCapture(context, source, destination, (event) => {
 		if (!recording || samples >= maxSamples) return;
 		const input = event.inputBuffer.getChannelData(0);
 		const chunk = new Float32Array(Math.min(input.length, maxSamples - samples));
 		if (canRecord()) chunk.set(input.subarray(0, chunk.length));
 		chunks.push(chunk);
 		samples += chunk.length;
-	};
+		if (samples >= maxSamples) capture.setActive(false);
+	});
 	function stopPlayback() {
 		if (timer) clearTimeout(timer);
 		timer = undefined;
@@ -48,6 +44,7 @@ export function createMegaphoneRecording(
 	}
 	function cancel() {
 		recording = false;
+		capture.setActive(false);
 		chunks = [];
 		samples = 0;
 		stopPlayback();
@@ -60,6 +57,7 @@ export function createMegaphoneRecording(
 		}
 		if (!entry?.phase || !entry.shotId) {
 			recording = false;
+			capture.setActive(false);
 			chunks = [];
 			samples = 0;
 			return; // A completed shot can finish playing after the beam disappears.
@@ -70,11 +68,13 @@ export function createMegaphoneRecording(
 		}
 		if (entry.phase === 'charging') {
 			recording = fired !== shot;
+			capture.setActive(recording && samples < maxSamples);
 			return;
 		}
 		if (fired === shot) return;
 		fired = shot;
 		recording = false;
+		capture.setActive(false);
 		if (!samples) return; // Joining after firing must not replay an old charge.
 		const buffer = context.createBuffer(1, samples, context.sampleRate);
 		const data = buffer.getChannelData(0);
@@ -124,14 +124,7 @@ export function createMegaphoneRecording(
 		},
 		disconnect() {
 			cancel();
-			processor.onaudioprocess = null;
-			try {
-				source.disconnect(processor);
-			} catch {
-				/* source already disconnected */
-			}
-			processor.disconnect();
-			silent.disconnect();
+			capture.disconnect();
 			output.disconnect();
 		},
 	};

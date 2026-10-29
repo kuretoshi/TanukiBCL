@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.55",
+	"version": "3.2.56",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -24,6 +24,9 @@
 		"test:snr-push-reverb": "node scripts/test-snr-push-reverb.mjs",
 		"test:voice-jamminger": "node scripts/test-voice-jamminger.mjs",
 		"test:interviewer": "node scripts/test-interviewer.mjs",
+		"test:idle-recordings": "node scripts/test-idle-recordings.mjs",
+		"test:nos-image-performance": "node scripts/test-nos-image-performance.mjs",
+		"test:tanuki-addon-loading": "node scripts/test-tanuki-addon-loading.mjs",
 		"test:game-reader-map": "node scripts/test-game-reader-map.mjs",
 		"check:nesting": "node scripts/check-nesting.mjs",
 		"test:nos-radio-mask": "node scripts/test-nos-radio-mask.mjs",

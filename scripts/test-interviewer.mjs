@@ -18,8 +18,12 @@ function context() {
 	function node() {
 		const n = {
 			gain: { value: 0 },
-			connect() {},
-			disconnect() {
+			connections: [],
+			connect(target) {
+				this.connections.push(target);
+			},
+			disconnect(target) {
+				this.connections = target ? this.connections.filter((node) => node !== target) : [];
 				this.disconnected = true;
 			},
 			start(when, offset) {
@@ -75,14 +79,19 @@ try {
 		audio = createInterviewerRecording(ctx, ctx.createGain());
 	let ownAllowed = true;
 	function input(key, id, allowed) {
-		audio.setInput(key, ctx.createGain(), id, allowed);
-		return ctx.nodes.findLast((n) => n.onaudioprocess);
+		const source = ctx.createGain();
+		audio.setInput(key, source, id, allowed);
+		return {
+			get onaudioprocess() {
+				return source.connections.find((node) => node.onaudioprocess)?.onaudioprocess ?? null;
+			},
+		};
 	}
 	const own = input('own', 1, () => ownAllowed),
 		peer = input('peer', 2, () => true),
 		hidden = input('hidden', 3, () => true);
 	function feed(processor, value) {
-		processor.onaudioprocess({
+		processor.onaudioprocess?.({
 			inputBuffer: { getChannelData: () => Float32Array.from([value, value, value, value]) },
 		});
 	}
@@ -155,9 +164,18 @@ try {
 			a = createInterviewerRecording(c, c.createGain());
 		const source = c.createGain();
 		a.setInput('local', source, localId, () => true);
-		const localProcessor = c.nodes.find((n) => n.onaudioprocess);
-		a.setInput('remote', c.createGain(), localId === 1 ? 2 : 1, () => true);
-		const remoteProcessor = c.nodes.findLast((n) => n.onaudioprocess);
+		const localProcessor = {
+			get onaudioprocess() {
+				return source.connections.find((node) => node.onaudioprocess)?.onaudioprocess ?? null;
+			},
+		};
+		const remoteSource = c.createGain();
+		a.setInput('remote', remoteSource, localId === 1 ? 2 : 1, () => true);
+		const remoteProcessor = {
+			get onaudioprocess() {
+				return remoteSource.connections.find((node) => node.onaudioprocess)?.onaudioprocess ?? null;
+			},
+		};
 		a.update([entry], true, false, 1, 10000);
 		c.currentTime = 0.5;
 		feed(localProcessor, 0.25);

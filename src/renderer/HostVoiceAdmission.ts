@@ -1,4 +1,5 @@
 import type { AmongUsState, Client } from '../common/AmongUsState';
+import { hasTanukiAddon } from '../common/tanukiAddon';
 
 /** Admission uses the signaling server's sender identity, never only packet-supplied player IDs. */
 export class HostVoiceAdmission {
@@ -13,7 +14,7 @@ export class HostVoiceAdmission {
 	): boolean {
 		if (
 			!state?.isHost ||
-			state.mod !== 'NoS' ||
+			!hasTanukiAddon(state) ||
 			!client ||
 			data.lobbyCode !== state.lobbyCode ||
 			data.playerId !== client.playerId ||

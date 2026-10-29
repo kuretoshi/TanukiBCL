@@ -1,6 +1,7 @@
 import { connectReverbMix, createReverbMix, reverbLevels } from './reverbMix';
 import { applyVoiceJamming } from '../../common/VoiceJammingState';
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
+import { hasTanukiAddon } from '../../common/tanukiAddon';
 import { MapType } from '../../common/AmongusMap';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import { IpcRendererMessages } from '../../common/ipc-messages';
@@ -54,6 +55,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private inputToken = 0;
 	private interviewer?: ReturnType<typeof createInterviewerRecording>;
 	private heroSpeech?: HeroSpeech;
+	private speechPlatforms = new Map<string, unknown>();
+	private tanukiAddonActive = false;
 	private interviewMic?: { stream: MediaStream; source: MediaStreamAudioSourceNode };
 	private interviewMuted = new Set<string>();
 	private inputStream?: MediaStream;
@@ -204,47 +207,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		const source = context.createMediaStreamSource(inputStream);
 		this.inputSource = source;
-		if (this.masterGain)
-			this.localMegaphoneRecording = createMegaphoneRecording(
-				context,
-				source,
-				this.masterGain,
-				() =>
-					!!this.inputStream?.getAudioTracks()[0]?.enabled &&
-					!this.mutedState &&
-					!this.remoteVoiceInput &&
-					!this.deafenedState &&
-					!this.jammedState
-			);
-		const voiceRoleAnalyser = context.createAnalyser();
-		voiceRoleAnalyser.fftSize = 2048;
-		voiceRoleAnalyser.smoothingTimeConstant = 0;
-		source.connect(voiceRoleAnalyser);
-		this.voiceRoleAnalyser = voiceRoleAnalyser;
-		const voiceRoleSamples = new Float32Array(voiceRoleAnalyser.fftSize);
-		this.voiceRoleTimer = setInterval(() => {
-			if (
-				this.lastGameState?.mod !== 'NoS' ||
-				(this.lastGameState.gameState !== GameState.TASKS &&
-					this.lastGameState.gameState !== GameState.DISCUSSION &&
-					this.lastGameState.gameState !== GameState.LOBBY)
-			)
-				return;
-			voiceRoleAnalyser.getFloatTimeDomainData(voiceRoleSamples);
-			let sum = 0;
-			for (const sample of voiceRoleSamples) sum += sample * sample;
-			const track = this.inputStream?.getAudioTracks()[0];
-			const active =
-				!!track &&
-				track.enabled &&
-				track.readyState === 'live' &&
-				!track.muted &&
-				!this.mutedState &&
-				!this.remoteVoiceInput &&
-				!this.deafenedState &&
-				!this.jammedState;
-			this.emit('voiceRoleSample', Math.min(1, Math.sqrt(sum / voiceRoleSamples.length)), active);
-		}, 50);
+		this.syncTanukiAddon(this.lastGameState);
 
 		if ((settings.microphoneGainEnabled || settings.micSensitivityEnabled) && !settings.autoGainControl) {
 			const microphoneGain = context.createGain();
@@ -286,14 +249,72 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 	}
 
-	private teardownInputChain(): void {
+	private startTanukiInput(): void {
+		const context = this.context;
+		const source = this.inputSource;
+		if (!context || !source || !this.masterGain) return;
+		this.localMegaphoneRecording ??= createMegaphoneRecording(
+			context,
+			source,
+			this.masterGain,
+			() =>
+				!!this.inputStream?.getAudioTracks()[0]?.enabled &&
+				!this.mutedState &&
+				!this.remoteVoiceInput &&
+				!this.deafenedState &&
+				!this.jammedState
+		);
+		if (this.voiceRoleAnalyser) return;
+		const analyser = context.createAnalyser();
+		analyser.fftSize = 2048;
+		analyser.smoothingTimeConstant = 0;
+		source.connect(analyser);
+		this.voiceRoleAnalyser = analyser;
+		const samples = new Float32Array(analyser.fftSize);
+		this.voiceRoleTimer = setInterval(() => {
+			if (
+				this.voiceRoleAnalyser !== analyser ||
+				!hasTanukiAddon(this.lastGameState) ||
+				![GameState.TASKS, GameState.DISCUSSION, GameState.LOBBY].includes(this.lastGameState.gameState)
+			)
+				return;
+			analyser.getFloatTimeDomainData(samples);
+			let sum = 0;
+			for (const sample of samples) sum += sample * sample;
+			const track = this.inputStream?.getAudioTracks()[0];
+			const active =
+				!!track &&
+				track.enabled &&
+				track.readyState === 'live' &&
+				!track.muted &&
+				!this.mutedState &&
+				!this.remoteVoiceInput &&
+				!this.deafenedState &&
+				!this.jammedState;
+			this.emit('voiceRoleSample', Math.min(1, Math.sqrt(sum / samples.length)), active);
+		}, 50);
+	}
+
+	private stopTanukiInput(): void {
 		this.localMegaphoneRecording?.disconnect();
 		this.localMegaphoneRecording = undefined;
-		if (this.voiceRoleTimer) clearInterval(this.voiceRoleTimer);
+		const wasSampling = this.voiceRoleTimer !== undefined;
+		if (wasSampling) clearInterval(this.voiceRoleTimer);
 		this.voiceRoleTimer = undefined;
+		if (this.voiceRoleAnalyser) {
+			try {
+				this.inputSource?.disconnect(this.voiceRoleAnalyser);
+			} catch {
+				/* The input may already have been disconnected. */
+			}
+		}
 		this.voiceRoleAnalyser?.disconnect();
 		this.voiceRoleAnalyser = undefined;
-		this.emit('voiceRoleSample', 0, false);
+		if (wasSampling) this.emit('voiceRoleSample', 0, false);
+	}
+
+	private teardownInputChain(): void {
+		this.stopTanukiInput();
 		this.audioListener?.destroy();
 		this.audioListener = undefined;
 
@@ -349,8 +370,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const masterGain = context.createGain();
 		masterGain.gain.value = 1;
 		this.masterGain = masterGain;
-		this.interviewer = createInterviewerRecording(context, masterGain);
-		this.heroSpeech = new HeroSpeech(context);
+		this.syncTanukiAddon(this.lastGameState);
 
 		this.useContextSink = 'setSinkId' in AudioContext.prototype;
 		if (this.useContextSink) {
@@ -370,10 +390,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private teardownGraph(): void {
-		this.heroSpeech?.dispose();
-		this.heroSpeech = undefined;
-		this.interviewer?.disconnect();
-		this.interviewer = undefined;
+		this.teardownTanukiAddon();
+		this.speechPlatforms.clear();
 		this.masterGain?.disconnect();
 		this.masterGain = undefined;
 		this.masterDestination?.disconnect();
@@ -577,10 +595,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		pan.connect(gain);
 		gain.connect(masterGain);
 
-		this.peers.set(peerId, {
-			dyingVoiceRecording: createDyingVoiceRecording(context, source, masterGain),
-			megaphoneRecording: createMegaphoneRecording(context, source, masterGain),
-			bibiriEcho: createBibiriEcho(context, gain, masterGain),
+		const peer: PeerAudioNodes = {
 			voiceEffectConnected: false,
 			stream,
 			dummyAudioElement,
@@ -593,20 +608,22 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			reverbConnected: false,
 			radioEchoConnected: false,
 			source,
-		});
+		};
+		this.peers.set(peerId, peer);
+		if (hasTanukiAddon(this.lastGameState)) this.createTanukiPeer(peer);
 
 		this.emit('peerAudioReady', peerId);
 	}
 
 	removePeer(peerId: string): void {
+		this.speechPlatforms.delete(peerId);
 		this.interviewer?.removeInput(peerId);
 		this.heroSpeech?.removeInput(peerId);
 		this.interviewMuted.delete(peerId);
 		const peer = this.peers.get(peerId);
 		if (!peer) return;
 		this.peers.delete(peerId);
-		peer.megaphoneRecording?.disconnect();
-		peer.dyingVoiceRecording?.disconnect();
+		this.destroyTanukiPeer(peer);
 		if (peer.voiceEffect) disconnectProcessingEffect(peer.voiceEffect);
 
 		this.teardownAudioElement(peer.dummyAudioElement);
@@ -618,7 +635,57 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		peer.muffle?.disconnect();
 		disconnectRadioEcho(peer.radioEcho);
 		if (peer.starEcho) disconnectRadioEcho(peer.starEcho);
-		if (peer.bibiriEcho) disconnectBibiriEcho(peer.bibiriEcho);
+	}
+
+	private createTanukiPeer(peer: PeerAudioNodes): void {
+		if (!this.context || !this.masterGain) return;
+		peer.dyingVoiceRecording ??= createDyingVoiceRecording(this.context, peer.source, this.masterGain);
+		peer.megaphoneRecording ??= createMegaphoneRecording(this.context, peer.source, this.masterGain);
+		peer.bibiriEcho ??= createBibiriEcho(this.context, peer.gain, this.masterGain);
+	}
+
+	private destroyTanukiPeer(peer: PeerAudioNodes): void {
+		peer.megaphoneRecording?.disconnect();
+		peer.megaphoneRecording = undefined;
+		peer.dyingVoiceRecording?.disconnect();
+		peer.dyingVoiceRecording = undefined;
+		if (!peer.bibiriEcho) return;
+		try {
+			peer.gain.disconnect(peer.bibiriEcho.input);
+		} catch {
+			/* The normal voice graph may already have been removed. */
+		}
+		disconnectBibiriEcho(peer.bibiriEcho);
+		peer.bibiriEcho = undefined;
+	}
+
+	private syncTanukiAddon(state: AmongUsState | undefined): void {
+		if (!hasTanukiAddon(state)) {
+			if (this.tanukiAddonActive) this.teardownTanukiAddon();
+			return;
+		}
+		if (!this.context || !this.masterGain) return;
+		this.tanukiAddonActive = true;
+		this.interviewer ??= createInterviewerRecording(this.context, this.masterGain);
+		if (!this.heroSpeech) {
+			this.heroSpeech = new HeroSpeech(this.context);
+			this.heroSpeech.setContext(state);
+			for (const [id, platform] of this.speechPlatforms) this.heroSpeech.setPeerPlatform(id, platform);
+		}
+		this.startTanukiInput();
+		for (const peer of this.peers.values()) this.createTanukiPeer(peer);
+	}
+
+	private teardownTanukiAddon(): void {
+		this.tanukiAddonActive = false;
+		this.stopTanukiInput();
+		this.heroSpeech?.dispose();
+		this.heroSpeech = undefined;
+		this.interviewer?.disconnect();
+		this.interviewer = undefined;
+		this.interviewMic?.source.disconnect();
+		this.interviewMic = undefined;
+		for (const peer of this.peers.values()) this.destroyTanukiPeer(peer);
 	}
 
 	private teardownAudioElement(element: HTMLAudioElement): void {
@@ -698,7 +765,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		);
 	}
 
-	updateGameState(state: AmongUsState): void {
+	private updateTanukiState(state: AmongUsState): void {
 		this.heroSpeech?.setContext(state);
 		const heroLocal = state.players.find((player) => player.isLocal);
 		if (heroLocal && this.inputSource)
@@ -732,6 +799,11 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			for (const peer of this.peers.values())
 				if (peer.bibiriEcho) updateBibiriEcho(peer.bibiriEcho, false, false, undefined);
 		}
+	}
+
+	updateGameState(state: AmongUsState): void {
+		this.syncTanukiAddon(state);
+		if (hasTanukiAddon(state)) this.updateTanukiState(state);
 		if (this.lastGameState !== state) {
 			const previousState = this.lastGameState;
 			this.lastGameState = state;
@@ -745,6 +817,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	setSpeechPlatform(peerId: string, platform: unknown): void {
+		this.speechPlatforms.set(peerId, platform);
 		this.heroSpeech?.setPeerPlatform(peerId, platform);
 	}
 	setPeerGain(peerId: string, gain: number): void {
@@ -776,41 +849,42 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
-		this.heroSpeech?.setInput(peerId, peer.source, other.id, () => !other.disconnected && !other.isDead);
-		this.interviewer?.setInput(
-			peerId,
-			peer.source,
-			other.id,
-			() => !this.deafenedState && !other.disconnected && !this.interviewMuted.has(peerId)
-		);
-		const message = state.nosDyingVoices?.find((entry) => entry.playerId === other.id);
-		const nearMessage = inDyingVoiceRange(message, me, state.gameState === GameState.TASKS);
-		peer.dyingVoiceRecording?.update(
-			message,
-			state.mod === 'NoS' &&
-				(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
-				other.isDead &&
-				!other.disconnected,
-			nearMessage && !this.deafenedState
-		);
-		peer.megaphoneRecording?.update(
-			state.nosMegaphones?.find((entry) => entry.playerId === other.id),
-			state.mod === 'NoS' && state.gameState === GameState.TASKS && !other.disconnected && !this.deafenedState,
-			settings.masterVolume / 100
-		);
-		if (peer.bibiriEcho)
-			updateBibiriEcho(
-				peer.bibiriEcho,
-				state.mod === 'NoS' &&
-					(settings.nosBibiriEchoStrength ?? 100) > 0 &&
-					!other.disconnected &&
-					(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
-				other.isDead,
-				state.nosBibiriEchoes?.find((e) => e.playerId === other.id)?.unixMs,
-				Date.now(),
-				settings.nosBibiriEchoStrength ?? 100
+		if (hasTanukiAddon(state)) {
+			this.heroSpeech?.setInput(peerId, peer.source, other.id, () => !other.disconnected && !other.isDead);
+			this.interviewer?.setInput(
+				peerId,
+				peer.source,
+				other.id,
+				() => !this.deafenedState && !other.disconnected && !this.interviewMuted.has(peerId)
 			);
-
+			const message = state.nosDyingVoices?.find((entry) => entry.playerId === other.id);
+			const nearMessage = inDyingVoiceRange(message, me, state.gameState === GameState.TASKS);
+			peer.dyingVoiceRecording?.update(
+				message,
+				state.mod === 'NoS' &&
+					(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+					other.isDead &&
+					!other.disconnected,
+				nearMessage && !this.deafenedState
+			);
+			peer.megaphoneRecording?.update(
+				state.nosMegaphones?.find((entry) => entry.playerId === other.id),
+				state.mod === 'NoS' && state.gameState === GameState.TASKS && !other.disconnected && !this.deafenedState,
+				settings.masterVolume / 100
+			);
+			if (peer.bibiriEcho)
+				updateBibiriEcho(
+					peer.bibiriEcho,
+					state.mod === 'NoS' &&
+						(settings.nosBibiriEchoStrength ?? 100) > 0 &&
+						!other.disconnected &&
+						(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
+					other.isDead,
+					state.nosBibiriEchoes?.find((e) => e.playerId === other.id)?.unixMs,
+					Date.now(),
+					settings.nosBibiriEchoStrength ?? 100
+				);
+		}
 		const { pan, muffle } = peer;
 		const result = calculateVoiceAudio({
 			airshipSpawnFallback:

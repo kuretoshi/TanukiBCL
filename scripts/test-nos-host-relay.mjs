@@ -21,7 +21,7 @@ try {
  await writeFile(join(dir,'TanukiBCL','NoS','host-voice-123.json'),JSON.stringify({protocol:1,pid:123,port:socket.address().port,token:'a'.repeat(32)}));
  const packets=[];socket.on('message',bytes=>packets.push(bytes.toString().split('|')));
  const player={id:7,clientId:42,disconnected:false,isDead:false};
- const state={mod:'NoS',gameState:1,isHost:true,lobbyCode:'ABCDEF',players:[player]};
+ const state={mod:'NoS',nosAddonIds:['tanuki.bcl.roles'],gameState:1,isHost:true,lobbyCode:'ABCDEF',players:[player]};
  const client={playerId:7,clientId:42}; const admission=new HostVoiceAdmission();let last;
  const mobile=new HostVoiceClient(data=>{last=data;assert(admission.accept('mobile',client,data,state));assert(sendHostVoice(data.playerId,data.rms,data.active,123,state));},()=>{});
  mobile.sample(.5,true,state,player,true,10000,10000);

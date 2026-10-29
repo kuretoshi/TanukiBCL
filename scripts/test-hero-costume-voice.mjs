@@ -21,7 +21,7 @@ try {
 	const { readHeroTransformState } = await load('src/main/heroTransformState.ts', 'reader');
 	const me = { id: 1, name: 'listener' };
 	const speaker = { id: 2, name: 'original', appearanceName: 'transformed' };
-	const state = { mod: 'NoS', gameState: GameState.TASKS, players: [me, speaker] };
+	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: GameState.TASKS, players: [me, speaker] };
 	const select = (game = state, other = speaker) => selectVoiceEffect(game,
 		{ voiceEffectStrength: 100 }, { voiceEffectEnabled: true }, me, other, -1);
 	assert.equal(select().strength, 100, 'ordinary disguise retains its effect');

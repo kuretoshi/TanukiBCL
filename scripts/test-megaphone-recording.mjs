@@ -27,8 +27,8 @@ try {
   const ctx = context(); const source = ctx.createGain(); const destination = ctx.createGain();
   let enabled = true;
   const recording = createMegaphoneRecording(ctx, source, destination, () => enabled);
-  const processor = ctx.nodes.find(n => n.onaudioprocess);
-  const feed = data => processor.onaudioprocess({ inputBuffer: { getChannelData: () => Float32Array.from(data) } });
+
+  const feed = data => ctx.nodes.findLast(n => n.onaudioprocess)?.onaudioprocess({ inputBuffer: { getChannelData: () => Float32Array.from(data) } });
   const charge = { playerId: 1, shotId: 1, phase: 'charging', voiceEffect: true };
   try {
    feed([9]); // audio before the charge is excluded

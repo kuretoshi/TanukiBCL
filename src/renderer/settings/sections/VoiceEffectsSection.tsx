@@ -3,6 +3,7 @@ import { TFunction } from 'i18next';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import { AmongUsState } from '../../../common/AmongUsState';
+import { hasTanukiAddon } from '../../../common/tanukiAddon';
 import { ISettings } from '../../../common/ISettings';
 import TestVoiceEffectButton, { VoiceEffectPreviewKind } from '../TestVoiceEffectButton';
 import { SettingsSection, SliderRow } from '../SettingsControls';
@@ -22,7 +23,7 @@ const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameSt
 	const showSnr = gameState?.mod === 'SUPER_NEW_ROLES';
 	const showNos = gameState?.mod === 'NoS';
 	const uchuAddonDetected = showNos && gameState.nosAddonIds?.includes('UchuAddon') === true;
-	const tanukiAddonDetected = showNos && gameState.nosAddonIds?.includes('tanuki.bcl.roles') === true;
+	const tanukiAddonDetected = hasTanukiAddon(gameState);
 	const common: EffectRow[] = [{ key: 'voiceEffectStrength', label: t('settings.voice_effects.disguise_strength') }];
 	const snr: EffectRow[] = showSnr
 		? [

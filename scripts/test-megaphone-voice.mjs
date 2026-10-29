@@ -48,7 +48,7 @@ try {
 	assert.deepEqual(readMegaphoneState(123, now, file), []);
 	const speaker = { id: 2, x: 8, y: 0 };
 	const me = { id: 1, x: 0, y: 0 };
-	const state = { mod: 'NoS', gameState: GameState.TASKS, nosMegaphones: snapshot.players };
+	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: GameState.TASKS, nosMegaphones: snapshot.players };
 	const input = {
 		state,
 		settings: {},

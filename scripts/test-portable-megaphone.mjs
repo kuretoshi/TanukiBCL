@@ -35,7 +35,7 @@ try {
 	assert.deepEqual(readPortableMegaphoneState(123, now, file), []);
 	const other = { id: 2, x: 8, y: 0 };
 	const me = { id: 1, x: 0, y: 0 };
-	const state = { mod: 'NoS', gameState: GameState.TASKS, nosPortableMegaphones: snapshot.players };
+	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: GameState.TASKS, nosPortableMegaphones: snapshot.players };
 	const input = { state, settings: { enableSpatialAudio: true }, activeLobbySettings: {}, me, other,
 		maxDistance: defaultLobbySettings.maxDistance, impostorRadioClientId: -1 };
 	const result = calculateVoiceAudio(input);

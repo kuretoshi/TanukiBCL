@@ -1,4 +1,5 @@
 import type { DyingVoiceState } from '../../common/DyingVoiceState';
+import { createRecordingCapture } from './recordingCapture';
 
 export function inDyingVoiceRange(
 	entry: DyingVoiceState | undefined,
@@ -17,12 +18,6 @@ export function inDyingVoiceRange(
 // Buffer the source before proximity attenuation. Playback alone bypasses the
 // normal ghost/living attenuation, and only for the authenticated role state.
 export function createDyingVoiceRecording(context: AudioContext, source: AudioNode, destination: AudioNode) {
-	const processor = context.createScriptProcessor(2048, 1, 1);
-	const silent = context.createGain();
-	silent.gain.value = 0;
-	source.connect(processor);
-	processor.connect(silent);
-	silent.connect(destination);
 	const output = context.createGain();
 	output.gain.value = 0;
 	output.connect(destination);
@@ -55,19 +50,24 @@ export function createDyingVoiceRecording(context: AudioContext, source: AudioNo
 		recording = false;
 		inside = false;
 		complete = false;
+		capture.setActive(false);
 	}
-	processor.onaudioprocess = (event) => {
+	const capture = createRecordingCapture(context, source, destination, (event) => {
 		if (!recording || !entry) return;
 		const remaining = Math.min(
 			Math.floor(context.sampleRate * entry.seconds) - samples,
 			Math.max(0, Math.floor((recordUntil - context.currentTime) * context.sampleRate))
 		);
-		if (remaining <= 0) return;
+		if (remaining <= 0) {
+			capture.setActive(false);
+			return;
+		}
 		const input = event.inputBuffer.getChannelData(0);
 		const chunk = new Float32Array(input.subarray(0, remaining));
 		chunks.push(chunk);
 		samples += chunk.length;
-	};
+		if (samples >= Math.floor(context.sampleRate * entry.seconds)) capture.setActive(false);
+	});
 	function play() {
 		if (!samples || playback) return;
 		const buffer = context.createBuffer(1, samples, context.sampleRate);
@@ -116,6 +116,7 @@ export function createDyingVoiceRecording(context: AudioContext, source: AudioNo
 				recording = false;
 				complete = true;
 			}
+			capture.setActive(recording && samples < Math.floor(context.sampleRate * next.seconds));
 			if (!near) {
 				inside = false;
 				stop();
@@ -133,14 +134,7 @@ export function createDyingVoiceRecording(context: AudioContext, source: AudioNo
 		cancel,
 		disconnect() {
 			cancel();
-			processor.onaudioprocess = null;
-			try {
-				source.disconnect(processor);
-			} catch {
-				/* already disconnected */
-			}
-			processor.disconnect();
-			silent.disconnect();
+			capture.disconnect();
 			output.disconnect();
 		},
 	};

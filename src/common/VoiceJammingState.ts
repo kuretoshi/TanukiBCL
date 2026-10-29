@@ -1,4 +1,5 @@
 import { GameState, type AmongUsState } from './AmongUsState';
+import { hasTanukiAddon } from './tanukiAddon';
 
 export interface VoiceJammingState {
 	playerId: number;
@@ -22,7 +23,7 @@ export function validVoiceJamming(value: VoiceJammingState): boolean {
 }
 
 export function voiceJammingFor(state: AmongUsState, id: number): VoiceJammingState | undefined {
-	if (state.mod !== 'NoS' || state.gameState !== GameState.DISCUSSION) return undefined;
+	if (!hasTanukiAddon(state) || state.gameState !== GameState.DISCUSSION) return undefined;
 	return Array.isArray(state.nosVoiceJamming)
 		? state.nosVoiceJamming.find((entry) => validVoiceJamming(entry) && entry.playerId === id)
 		: undefined;

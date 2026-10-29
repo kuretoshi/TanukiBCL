@@ -20,7 +20,7 @@ const { autoUpdater } = electronUpdater;
 import Store from 'electron-store';
 import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
-import { gameReader } from './hook';
+import { gameReader, onGameStateChanged } from './hook';
 import { registerNosVoiceRoleBridge } from './nosVoiceRoleBridge';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
@@ -716,8 +716,9 @@ if (!gotTheLock) {
 		initializeIpcHandlers();
 		const nosVoiceRoleSender = registerNosVoiceRoleBridge(
 			ipcMain,
-			() => ({ pid: gameReader.pid, state: gameReader.lastState }),
-			(senderId) => global.mainWindow?.webContents.id === senderId
+			() => ({ pid: gameReader?.pid ?? 0, state: gameReader?.amongUs ? gameReader.lastState : undefined }),
+			(senderId) => global.mainWindow?.webContents.id === senderId,
+			onGameStateChanged
 		);
 		app.once('will-quit', () => nosVoiceRoleSender?.close());
 		initSettingsIpc();

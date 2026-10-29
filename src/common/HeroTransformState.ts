@@ -1,4 +1,5 @@
 import { GameState, type AmongUsState } from './AmongUsState';
+import { hasTanukiAddon } from './tanukiAddon';
 
 export interface HeroTransformState {
 	playerId: number;
@@ -18,7 +19,7 @@ export function validHeroTransform(value: unknown): value is HeroTransformState 
 
 export function isHeroTransformed(state: AmongUsState, playerId: number): boolean {
 	return (
-		state.mod === 'NoS' &&
+		hasTanukiAddon(state) &&
 		state.gameState === GameState.TASKS &&
 		Array.isArray(state.nosHeroTransforms) &&
 		state.nosHeroTransforms.some((entry) => validHeroTransform(entry) && entry.playerId === playerId)

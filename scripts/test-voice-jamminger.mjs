@@ -19,7 +19,7 @@ try {
 	const { selectVoiceEffect } = await load(rules, 'effects');
 	const { readVoiceJammingState } = await load('src/main/voiceJammingState.ts', 'reader');
 	const entry = { playerId: 2, muted: true, lowpass: false, pitch: 1.5 };
-	const state = { mod: 'NoS', gameState: 3, nosVoiceJamming: [entry] }; // DISCUSSION
+	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: 3, nosVoiceJamming: [entry] }; // DISCUSSION
 	const { GameState } = await load('src/common/AmongUsState.ts', 'states');
 	state.gameState = GameState.DISCUSSION;
 	assert(validVoiceJamming(entry));

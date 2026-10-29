@@ -134,11 +134,15 @@ try {
 	const first = live();
 	assert.deepEqual(first.localMicPosition, { x: 1, y: -1 });
 	assert.equal(first.localIsPseudocide, true);
-	assert.throws(() => readNosSnapshot(layout, (address, size) => {
-		const bytes = Buffer.from(read(address, size));
-		if (address === first.publication) bytes[layout.snapshot.localIsPseudocide] = 2;
-		return bytes;
-	}), /Invalid NoS flag/);
+	assert.throws(
+		() =>
+			readNosSnapshot(layout, (address, size) => {
+				const bytes = Buffer.from(read(address, size));
+				if (address === first.publication) bytes[layout.snapshot.localIsPseudocide] = 2;
+				return bytes;
+			}),
+		/Invalid NoS flag/
+	);
 	assert.equal(first.players[0].name, 'テスト');
 	assert.equal(first.players[0].isNeutral, true);
 	assert.equal(first.players[0].colorB, 0.75);
@@ -197,12 +201,30 @@ try {
 		child.stdin.write(value + '\n');
 		await reply;
 	};
-	const readStar = () => JSON.parse(execFileSync(
-		resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['roles', String(child.pid)],
-		{ windowsHide: true, timeout: 45000, encoding: 'utf8' }
-	)).metadata[0].role.isRainbowStar;
+	const readStar = () =>
+		JSON.parse(
+			execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['roles', String(child.pid)], {
+				windowsHide: true,
+				timeout: 45000,
+				encoding: 'utf8',
+			})
+		).metadata[0].role.isRainbowStar;
+	if (process.env.NOS_ROLE_BENCHMARK === '1') {
+		const samples = [];
+		for (let i = 0; i < 8; i++) {
+			const started = performance.now();
+			assert.equal(readStar(), false);
+			samples.push(performance.now() - started);
+		}
+		console.log(`NoS ${architecture} role reader milliseconds: ${JSON.stringify(samples)}`);
+	}
 	assert.equal(readStar(), false, 'No Star modifier means no echo');
-	for (const [value, expected] of [['star-on', true], ['star-yellow', false], ['star-unknown', null], ['star-clear', false]]) {
+	for (const [value, expected] of [
+		['star-on', true],
+		['star-yellow', false],
+		['star-unknown', null],
+		['star-clear', false],
+	]) {
 		await command(value);
 		assert.equal(readStar(), expected, `Managed Star state: ${value}`);
 	}

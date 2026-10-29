@@ -30,7 +30,7 @@ const descriptor = {
 	port: socket.address().port,
 	token: 'a'.repeat(32),
 };
-const state = { mod: 'NoS', gameState: 1, players: [{ id: 7, isLocal: true, isDead: false, disconnected: false }] };
+const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: 1, players: [{ id: 7, isLocal: true, isDead: false, disconnected: false }] };
 const sender = new NosVoiceRoleSender(descriptorPath);
 try {
 	assert.doesNotThrow(() => sender.send(0.5, true, 123, { mod: 'NoS', gameState: 1 }),

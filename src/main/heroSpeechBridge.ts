@@ -1,9 +1,10 @@
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSocket } from 'node:dgram';
+import { createSocket, type Socket } from 'node:dgram';
 import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import type { HeroSpeechPlayer } from '../common/HeroSpeech';
+import { hasTanukiAddon } from '../common/tanukiAddon';
 
 interface Descriptor {
 	protocol: 2;
@@ -60,19 +61,32 @@ export function registerHeroSpeechBridge(
 	ipc: IpcMain,
 	getContext: () => { pid: number; state?: AmongUsState },
 	isMainRenderer: (id: number) => boolean
-): void {
-	const udp = createSocket('udp4');
-	udp.on('error', () => {});
-	udp.unref();
+): () => void {
+	let udp: Socket | undefined;
+	function close(): void {
+		const current = udp;
+		udp = undefined;
+		current?.close();
+	}
+	function send(payload: string, port: number): void {
+		if (!udp) {
+			udp = createSocket('udp4');
+			udp.on('error', () => {});
+			udp.unref();
+		}
+		udp.send(payload, port, '127.0.0.1');
+	}
 	function descriptor(): Descriptor | undefined {
 		const { pid, state } = getContext();
 		if (
-			state?.mod !== 'NoS' ||
+			!hasTanukiAddon(state) ||
 			![GameState.TASKS, GameState.DISCUSSION].includes(state.gameState) ||
 			!pid ||
 			!process.env.LOCALAPPDATA
-		)
+		) {
+			close();
 			return;
+		}
 		try {
 			const path = join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS', `hero-speech-${pid}.json`);
 			if (statSync(path).size > 32768) return;
@@ -93,7 +107,7 @@ export function registerHeroSpeechBridge(
 		if (!d || session !== d.token) return;
 		for (const id of ready) {
 			if (!d.players.some((p) => p.playerId === id) || !permitted(id)) continue;
-			udp.send(`TBCLHS2|${d.token}|ready|${Date.now()}|${id}|1`, d.port, '127.0.0.1');
+			send(`TBCLHS2|${d.token}|ready|${Date.now()}|${id}|1`, d.port);
 		}
 	});
 	function permitted(id: unknown): boolean {
@@ -107,10 +121,10 @@ export function registerHeroSpeechBridge(
 			(p) => p.playerId === player && p.request === request && p.kind === kind && p.request > 0
 		);
 		if (!d || session !== d.token || !armed || armed.expires <= Date.now() || !permitted(player)) return;
-		udp.send(
+		send(
 			`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${kind === 'ng' ? 'ng' : 'henshin'}`,
-			d.port,
-			'127.0.0.1'
+			d.port
 		);
 	});
+	return close;
 }

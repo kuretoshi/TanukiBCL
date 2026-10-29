@@ -6,8 +6,9 @@ import { randomBytes } from 'node:crypto';
 import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { IpcMessages } from '../common/ipc-messages';
-import { sendHostVoice } from './nosHostVoiceRelay';
+import { closeHostVoice, sendHostVoice } from './nosHostVoiceRelay';
 import { registerHeroSpeechBridge } from './heroSpeechBridge';
+import { hasTanukiAddon } from '../common/tanukiAddon';
 
 export interface NosVoiceRoleDescriptor {
 	protocol: 1;
@@ -61,6 +62,10 @@ export class NosVoiceRoleSender {
 	) {}
 
 	send(rms: unknown, active: unknown, pid: number, state?: AmongUsState): void {
+		if (!hasTanukiAddon(state)) {
+			this.close();
+			return;
+		}
 		if (typeof rms !== 'number' || !Number.isFinite(rms) || rms < 0 || rms > 1 || typeof active !== 'boolean') return;
 		const player = state?.players?.find((p) => p.isLocal);
 		if (
@@ -150,7 +155,12 @@ export class NosVoiceRoleSender {
 	}
 
 	close(): void {
+		this.descriptor = undefined;
 		this.discovered = undefined;
+		this.lastRead = -Infinity;
+		this.lastDiscovery = -Infinity;
+		this.currentPid = 0;
+		this.currentPlayer = -1;
 		this.discoveryNonce = randomBytes(16).toString('hex');
 		const socket = this.socket;
 		this.socket = undefined;
@@ -165,20 +175,38 @@ export class NosVoiceRoleSender {
 export function registerNosVoiceRoleBridge(
 	ipcMain: IpcMain,
 	getContext: () => { pid: number; state?: AmongUsState },
-	isMainRenderer: (senderId: number) => boolean
-): NosVoiceRoleSender | undefined {
+	isMainRenderer: (senderId: number) => boolean,
+	onStateChanged?: (listener: (state: AmongUsState | undefined) => void) => () => void
+): { close(): void } | undefined {
 	if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) return;
-	registerHeroSpeechBridge(ipcMain, getContext, isMainRenderer);
-	const sender = new NosVoiceRoleSender(join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS', 'voice-role.json'));
+	const closeSpeech = registerHeroSpeechBridge(ipcMain, getContext, isMainRenderer);
+	let sender: NosVoiceRoleSender | undefined;
+	function reset(): void {
+		sender?.close();
+		sender = undefined;
+		closeHostVoice();
+		closeSpeech();
+	}
+	const unsubscribe = onStateChanged?.((state) => {
+		if (!hasTanukiAddon(state)) reset();
+	});
 	ipcMain.on('NOS_HOST_VOICE_SAMPLE', (event, player: unknown, rms: unknown, active: unknown) => {
 		if (!isMainRenderer(event.sender.id)) return;
 		const context = getContext();
+		if (!hasTanukiAddon(context.state)) return reset();
 		sendHostVoice(player, rms, active, context.pid, context.state);
 	});
 	ipcMain.on(IpcMessages.NOS_VOICE_ROLE_SAMPLE, (event, rms: unknown, active: unknown) => {
 		if (!isMainRenderer(event.sender.id)) return;
 		const context = getContext();
+		if (!hasTanukiAddon(context.state)) return reset();
+		sender ??= new NosVoiceRoleSender(join(process.env.LOCALAPPDATA!, 'TanukiBCL', 'NoS', 'voice-role.json'));
 		sender.send(rms, active, context.pid, context.state);
 	});
-	return sender;
+	return {
+		close() {
+			unsubscribe?.();
+			reset();
+		},
+	};
 }

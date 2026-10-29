@@ -44,8 +44,8 @@ try {
  assert.equal(inDyingVoiceRange(entry, { ...listener, disconnected: true }, true), false);
  assert.equal(inDyingVoiceRange(entry, { ...listener, x: 10 }, true), false, 'out of range cannot trigger playback');
  const ctx = context(); const audio = createDyingVoiceRecording(ctx, ctx.createGain(), ctx.createGain());
- const processor = ctx.nodes.find(n => n.onaudioprocess);
- const feed = values => processor.onaudioprocess({ inputBuffer: { getChannelData: () => Float32Array.from(values) } });
+
+ const feed = values => ctx.nodes.findLast(n => n.onaudioprocess)?.onaudioprocess({ inputBuffer: { getChannelData: () => Float32Array.from(values) } });
  try {
   feed([9]); audio.setVolume(1);
   audio.update(entry, true, false, 10000); feed([.25, .5]);

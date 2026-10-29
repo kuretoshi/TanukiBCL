@@ -43,7 +43,7 @@ export class NosContentsTracker {
 	private costumes = new Map<string, Partial<Record<Part, string>>>();
 	private images = new Map<string, Promise<Buffer | undefined>>();
 	private root = '';
-	private addonImages = new Map<string, Map<string, NosZipImage>>();
+	private addonImages = new Map<string, ReadonlyMap<string, NosZipImage>>();
 
 	update(gameDirectory: string): NonNullable<AmongUsState['nosLoadedContents']> {
 		const file = path.join(gameDirectory, 'BepInEx', 'MoreCosmic', 'LoadedContents.json');
@@ -200,11 +200,15 @@ export class NosContentsTracker {
 		if (!asset) return undefined;
 		const cacheKey = `${key}:${color}`;
 		const existing = this.images.get(cacheKey);
-		if (existing) return existing;
-		if (this.images.size >= 128) this.images.clear();
+		if (existing) {
+			this.images.delete(cacheKey);
+			this.images.set(cacheKey, existing);
+			return existing;
+		}
+		if (this.images.size >= 128) this.images.delete(this.images.keys().next().value!);
 		const request = this.render(asset, color).catch(() => undefined);
 		this.images.set(cacheKey, request);
-		if (!(await request)) this.images.delete(cacheKey);
+		if (!(await request) && this.images.get(cacheKey) === request) this.images.delete(cacheKey);
 		return request;
 	}
 

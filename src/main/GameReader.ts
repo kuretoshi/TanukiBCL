@@ -1,12 +1,7 @@
 import { app } from 'electron';
 import { normalizeMeetingState } from '../common/meetingState';
-import { readMegaphoneState } from './megaphoneState';
-import { readDyingVoiceState } from './dyingVoiceState';
-import { readInterviewState } from './interviewState';
-import { readVoiceJammingState } from './voiceJammingState';
-import { readHeroTransformState } from './heroTransformState';
-import { readPortableMegaphoneState } from './portableMegaphoneState';
-import { readBibiriEchoState } from './bibiriEchoState';
+import { readTanukiAddonState } from './tanukiAddonState';
+import { hasTanukiAddon } from '../common/tanukiAddon';
 import { GameInfo } from '../common/GameInfo';
 import memoryjs from 'memoryjs';
 import type { DataType, ModuleObject, ProcessObject } from 'memoryjs';
@@ -571,26 +566,7 @@ export default class GameReader {
 				nosLocalMicPosition: nos?.localMicPosition,
 				nosLocalIsPseudocide: nos?.localIsPseudocide,
 				nosRadios: nos?.radios,
-				nosBibiriEchoes:
-					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
-						? readBibiriEchoState(this.pid)
-						: undefined,
-				nosMegaphones:
-					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readMegaphoneState(this.pid) : undefined,
-				nosInterviews:
-					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
-						? readInterviewState(this.pid)
-						: undefined,
-				nosVoiceJamming:
-					this.loadedMod.id === 'NoS' && state === GameState.DISCUSSION ? readVoiceJammingState(this.pid) : undefined,
-				nosHeroTransforms:
-					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readHeroTransformState(this.pid) : undefined,
-				nosDyingVoices:
-					this.loadedMod.id === 'NoS' && (state === GameState.TASKS || state === GameState.DISCUSSION)
-						? readDyingVoiceState(this.pid)
-						: undefined,
-				nosPortableMegaphones:
-					this.loadedMod.id === 'NoS' && state === GameState.TASKS ? readPortableMegaphoneState(this.pid) : undefined,
+				...readTanukiAddonState(this.pid, { mod: this.loadedMod.id, nosAddonIds: this.nosAddonIds, gameState: state }),
 				lobbyCode: lobbyCode,
 				lobbyCodeInt,
 				players,
@@ -661,7 +637,12 @@ export default class GameReader {
 					: {}),
 			});
 			//	const stateHasChanged = !equal(this.lastState, newState);
-			if (state !== GameState.MENU || this.oldGameState !== GameState.MENU || this.lastState.mod !== newState.mod) {
+			if (
+				state !== GameState.MENU ||
+				this.oldGameState !== GameState.MENU ||
+				this.lastState.mod !== newState.mod ||
+				hasTanukiAddon(this.lastState) !== hasTanukiAddon(newState)
+			) {
 				try {
 					this.sendIPC(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, newState);
 				} catch {

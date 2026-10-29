@@ -1,4 +1,5 @@
 import { AmongUsState, Client, GameState, Player } from './AmongUsState';
+import { hasTanukiAddon } from './tanukiAddon';
 
 export interface VoiceRoleIdentity {
 	lobbyCode: string;
@@ -30,7 +31,7 @@ export function voiceRoleIdentity(
 	player: Player | undefined
 ): VoiceRoleIdentity | undefined {
 	if (
-		state?.mod !== 'NoS' ||
+		!hasTanukiAddon(state) ||
 		!player ||
 		player.disconnected ||
 		![GameState.LOBBY, GameState.TASKS, GameState.DISCUSSION].includes(state.gameState)

@@ -74,7 +74,7 @@ function registerContents(
 	all: Map<string, NosZipImage>,
 	name: string,
 	entry: NosZipImage,
-	result: Map<string, Map<string, NosZipImage>>
+	result: Map<string, ReadonlyMap<string, NosZipImage>>
 ): void {
 	const contents = JSON.parse(
 		readNosZipImage(entry)
@@ -89,17 +89,23 @@ function registerContents(
 		if (!Array.isArray(contents[category])) continue;
 		const directory = `${root}${category}/`;
 		// Every costume in a category shares this directory; scan it once.
-		const images = [...all]
-			.filter(([name]) => name.startsWith(directory) && name.endsWith('.png'))
-			.map(([name, image]) => [name.slice(directory.length), image] as const);
+		const images = new Map(
+			[...all]
+				.filter(([name]) => name.startsWith(directory) && name.endsWith('.png'))
+				.map(([name, image]) => [name.slice(directory.length), image] as const)
+		);
 		for (const costume of contents[category]) {
 			if (typeof costume.Author !== 'string' || typeof costume.Name !== 'string') continue;
-			result.set(`${prefix}${costume.Author}_${costume.Name}`, new Map(images));
+			result.set(`${prefix}${costume.Author}_${costume.Name}`, images);
 		}
 	}
 }
 
-function indexArchive(gameDirectory: string, file: string, result: Map<string, Map<string, NosZipImage>>): void {
+function indexArchive(
+	gameDirectory: string,
+	file: string,
+	result: Map<string, ReadonlyMap<string, NosZipImage>>
+): void {
 	try {
 		const archive = fs.realpathSync(path.join(gameDirectory, 'Addons', file));
 		if (path.relative(gameDirectory, archive).startsWith('..')) return;
@@ -113,8 +119,8 @@ function indexArchive(gameDirectory: string, file: string, result: Map<string, M
 	}
 }
 
-export function indexNosAddonImages(gameDirectory: string): Map<string, Map<string, NosZipImage>> {
-	const result = new Map<string, Map<string, NosZipImage>>();
+export function indexNosAddonImages(gameDirectory: string): Map<string, ReadonlyMap<string, NosZipImage>> {
+	const result = new Map<string, ReadonlyMap<string, NosZipImage>>();
 	const directory = path.join(gameDirectory, 'Addons');
 	if (!fs.existsSync(directory)) return result;
 	for (const file of fs.readdirSync(directory)) {

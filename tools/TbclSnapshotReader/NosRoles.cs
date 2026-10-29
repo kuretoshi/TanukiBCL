@@ -7,13 +7,13 @@ internal static class NosRoles
         bool? IsRainbowStar = null);
     internal record PlayerRole(byte PlayerId, Role Role, NosBody.Layout? BodyLayout);
 
-    // Read managed fields from a process snapshot; never invoke MOD getters or methods.
+    // Read managed fields without cloning or suspending the game; never invoke MOD getters or methods.
     internal static PlayerRole[] Read(int pid)
     {
         using var process = Process.GetProcessById(pid);
         if (process.ProcessName != "Among Us") throw new InvalidOperationException("Among Us process required");
         long started = process.StartTime.ToUniversalTime().Ticks;
-        using var target = DataTarget.CreateSnapshotAndAttach(pid);
+        using var target = DataTarget.AttachToProcess(pid, suspend: false);
         using var runtime = (target.ClrVersions.FirstOrDefault()
             ?? throw new InvalidOperationException("CoreCLR not found")).CreateRuntime();
         var module = runtime.EnumerateModules().Single(m =>
@@ -26,6 +26,7 @@ internal static class NosRoles
         {
             var dictionary = manager.ReadObjectField("allModPlayers");
             var entries = dictionary.ReadObjectField("_entries");
+            int version = dictionary.ReadField<int>("_version");
             int count = dictionary.ReadField<int>("_count");
             if (count < 0 || count > 64 || (count > 0 && (!entries.IsArray || count > entries.AsArray().Length)))
                 throw new InvalidOperationException("Invalid NoS player registry");
@@ -49,7 +50,14 @@ internal static class NosRoles
                 result.Add(new PlayerRole(id, new Role(roleId, name, label, role.Type!.Name!, ReadRainbowStar(runtime, player)),
                     name == "berserker" ? NosBody.Resolve(target, player, id) : null));
             }
+            if (dictionary.ReadField<int>("_version") != version ||
+                manager.ReadObjectField("allModPlayers").Address != dictionary.Address ||
+                dictionary.ReadObjectField("_entries").Address != entries.Address ||
+                dictionary.ReadField<int>("_count") != count)
+                throw new InvalidOperationException("NoS player registry changed during read");
         }
+        if (managerType.GetStaticFieldByName("instance")!.ReadObject(module.AppDomain).Address != manager.Address)
+            throw new InvalidOperationException("NoS manager changed during read");
         using var current = Process.GetProcessById(pid);
         if (current.StartTime.ToUniversalTime().Ticks != started) throw new InvalidOperationException("NoS process changed");
         return result.ToArray();
@@ -115,6 +123,7 @@ internal static class NosRoles
             if (language.IsNull) continue;
             var dictionary = language.ReadObjectField("translationMap");
             var entries = dictionary.ReadObjectField("_entries");
+            int version = dictionary.ReadField<int>("_version");
             int count = dictionary.ReadField<int>("_count");
             if (count < 0 || count > 100000 || (count > 0 && (!entries.IsArray || count > entries.AsArray().Length)))
                 throw new InvalidOperationException("Invalid NoS translations");
@@ -127,6 +136,11 @@ internal static class NosRoles
                 string? value = entry.ReadObjectField("value").AsString(512);
                 if (value != null) result[key] = value;
             }
+            if (dictionary.ReadField<int>("_version") != version ||
+                language.ReadObjectField("translationMap").Address != dictionary.Address ||
+                dictionary.ReadObjectField("_entries").Address != entries.Address ||
+                dictionary.ReadField<int>("_count") != count)
+                throw new InvalidOperationException("NoS translations changed during read");
         }
         return result;
     }

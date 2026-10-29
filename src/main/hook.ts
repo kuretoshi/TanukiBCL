@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron';
 import GameReader from './GameReader';
-import { GameState } from '../common/AmongUsState';
+import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { isSnrJackalTeam } from '../common/SnrRole';
 import keyboardWatcherModule from 'node-keyboard-watcher';
 const { keyboardWatcher } = keyboardWatcherModule;
@@ -13,6 +13,13 @@ const store = new Store<ISettings>({ name: getVariantStoreName() });
 
 let readingGame = false;
 export let gameReader: GameReader;
+const gameStateListeners = new Set<(state: AmongUsState | undefined) => void>();
+export function onGameStateChanged(listener: (state: AmongUsState | undefined) => void): () => void {
+	gameStateListeners.add(listener);
+	return () => {
+		gameStateListeners.delete(listener);
+	};
+}
 
 let pushToTalkShortcut: K | undefined;
 let deafenShortcut: K | undefined;
@@ -198,6 +205,7 @@ ipcMain.handle(IpcHandlerMessages.START_HOOK, async (event) => {
 			let err: string | null = null;
 			try {
 				err = await gameReader.loop();
+				for (const listener of gameStateListeners) listener(gameReader.amongUs ? gameReader.lastState : undefined);
 				if (!err) reconcileActiveRadios();
 				for (const [keyId, kind] of pendingRadioKeys) {
 					const state = gameReader.lastState;

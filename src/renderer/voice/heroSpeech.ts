@@ -7,6 +7,7 @@ import {
 	type HeroSpeechPlayer,
 } from '../../common/HeroSpeech';
 import { GameState, type AmongUsState } from '../../common/AmongUsState';
+import { hasTanukiAddon } from '../../common/tanukiAddon';
 import { ipcRenderer } from '../lib/electron-bridge';
 
 type Message = { result?: { text?: string; partial?: string } };
@@ -70,12 +71,8 @@ export class HeroSpeech {
 	private lobby = '';
 	private state?: HeroSpeechState;
 	private retryAt = 0;
-	private timer: ReturnType<typeof setInterval>;
-	constructor(private context: AudioContext) {
-		this.timer = setInterval(() => {
-			void this.poll();
-		}, 200);
-	}
+	private timer?: ReturnType<typeof setInterval>;
+	constructor(private context: AudioContext) {}
 	setContext(state: AmongUsState): void {
 		if (this.lobby !== state.lobbyCode) {
 			this.platforms.clear();
@@ -84,8 +81,16 @@ export class HeroSpeech {
 		this.lobby = state.lobbyCode;
 		this.host = state.isHost;
 		this.local = state.players.find((p) => p.isLocal)?.id ?? -1;
-		this.enabled = state.mod === 'NoS' && [GameState.TASKS, GameState.DISCUSSION].includes(state.gameState);
-		if (!this.enabled) this.clear();
+		this.enabled = hasTanukiAddon(state) && [GameState.TASKS, GameState.DISCUSSION].includes(state.gameState);
+		if (!this.enabled) {
+			if (this.timer !== undefined) clearInterval(this.timer);
+			this.timer = undefined;
+			this.clear();
+		} else if (this.timer === undefined) {
+			this.timer = setInterval(() => {
+				void this.poll();
+			}, 200);
+		}
 	}
 	setPeerPlatform(key: string, platform: unknown): void {
 		if (platform === 'desktop' || platform === 'web' || platform === 'mobile')
@@ -153,8 +158,9 @@ export class HeroSpeech {
 		this.loading = true;
 		try {
 			const library = await loadLibrary();
+			if (this.disposed || !this.enabled) return;
 			const model = await library.createModel(asset('model-ja.tar.gz'), -1);
-			if (this.disposed) {
+			if (this.disposed || !this.enabled) {
 				model.terminate();
 				return;
 			}

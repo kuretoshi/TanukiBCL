@@ -1,4 +1,5 @@
 import { validInterview, type InterviewState } from '../../common/InterviewState';
+import { createRecordingCapture } from './recordingCapture';
 
 interface Slot {
 	entry: InterviewState;
@@ -10,8 +11,7 @@ interface Slot {
 }
 interface Input {
 	source: AudioNode;
-	processor: ScriptProcessorNode;
-	silent: GainNode;
+	capture: ReturnType<typeof createRecordingCapture>;
 	id: number;
 	allowed: () => boolean;
 }
@@ -38,15 +38,17 @@ export function createInterviewerRecording(context: AudioContext, destination: A
 	function remove(key: string) {
 		const input = inputs.get(key);
 		if (!input) return;
-		input.processor.onaudioprocess = null;
-		try {
-			input.source.disconnect(input.processor);
-		} catch {
-			/* source already removed */
-		}
-		input.processor.disconnect();
-		input.silent.disconnect();
+		input.capture.disconnect();
 		inputs.delete(key);
+	}
+	function syncCapture(input: Input) {
+		for (const slot of slots.values()) {
+			if (slot.entry.visible.includes(input.id) && context.currentTime < slot.end) {
+				input.capture.setActive(true);
+				return;
+			}
+		}
+		input.capture.setActive(false);
 	}
 	function record(input: Input, event: AudioProcessingEvent) {
 		if (!input.allowed()) return;
@@ -114,18 +116,14 @@ export function createInterviewerRecording(context: AudioContext, destination: A
 			if (old?.source === source) {
 				old.id = id;
 				old.allowed = allowed;
+				syncCapture(old);
 				return;
 			}
 			remove(key);
-			const processor = context.createScriptProcessor(2048, 1, 1);
-			const silent = context.createGain();
-			silent.gain.value = 0;
-			const input = { source, processor, silent, id, allowed };
-			processor.onaudioprocess = (event) => record(input, event);
-			source.connect(processor);
-			processor.connect(silent);
-			silent.connect(destination);
+			const capture = createRecordingCapture(context, source, destination, (event) => record(input, event));
+			const input = { source, capture, id, allowed };
 			inputs.set(key, input);
+			syncCapture(input);
 		},
 		removeInput: remove,
 		update(entries: readonly InterviewState[], active: boolean, meeting: boolean, volume: number, now = Date.now()) {
@@ -141,11 +139,13 @@ export function createInterviewerRecording(context: AudioContext, destination: A
 				slots.delete(id);
 			}
 			for (const entry of valid) updateEntry(entry, meeting, now);
+			for (const input of inputs.values()) syncCapture(input);
 			if (output.gain.value === 0) for (const slot of slots.values()) stop(slot);
 		},
 		clear() {
 			for (const slot of slots.values()) stop(slot);
 			slots.clear();
+			for (const input of inputs.values()) input.capture.setActive(false);
 		},
 		silence() {
 			output.gain.value = 0;

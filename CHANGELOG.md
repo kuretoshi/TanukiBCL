@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.56
+
+- NoSの定期取得と画像処理、待機中の録音処理を軽量化しました。
+- タヌキ丼の機能をアドオン検出時にだけ起動し、検出解除時に停止するようにしました。
+
 ## v3.2.50
 
 - 動作調整。

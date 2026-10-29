@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSocket } from 'node:dgram';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const mobile = resolve('../BetterCrewlink-mobile');
+const mobile = resolve(process.env.BCL_MOBILE_REPO ?? '../BetterCrewlink-mobile');
 const dir = await mkdtemp(join(tmpdir(), 'tanuki-mobile-roles-'));
 const udp = createSocket('udp4');
 let sender;
@@ -30,7 +30,7 @@ try {
 	const { VoiceRoleSources } = await bundle('src/common/VoiceRoleSource.ts');
 	const { NosVoiceRoleSender } = await bundle('src/main/nosVoiceRoleBridge.ts');
 	const player = { id: 7, clientId: 42, isLocal: true, isDead: false, disconnected: false };
-	const state = { mod: 'NoS', gameState: 1, lobbyCode: 'ABCDEF', players: [player] };
+	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: 1, lobbyCode: 'ABCDEF', players: [player] };
 	const client = { playerId: 7, clientId: 42 };
 	const packets = [];
 	udp.on('message', (data) => packets.push(data.toString().split('|')));
@@ -143,7 +143,7 @@ try {
 	const me = { id: 1, x: 0, y: 0 };
 	const other = { id: 2, x: 8, y: 0 };
 	const base = {
-		state: { mod: 'NoS', gameState: 1, map: 0, lightRadiusChanged: false },
+		state: { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: 1, map: 0, lightRadiusChanged: false },
 		settings: { enableSpatialAudio: true },
 		activeLobbySettings: {},
 		maxDistance: 5.32,
@@ -183,10 +183,40 @@ try {
 	} finally {
 		Date.now = oldNow;
 	}
-	assert.equal(
-		await readFile(join(mobile, 'src/app/voice/bibiriEcho.ts'), 'utf8'),
-		await readFile('src/renderer/voice/bibiriEcho.ts', 'utf8'),
-		'identical tested death-tail DSP on Web/APK'
+	function deathTail(module) {
+		const automation = [],
+			snapshots = [];
+		let nodeId = 0;
+		const context = { currentTime: 0, createGain: node, createDelay: node };
+		function node() {
+			const id = nodeId++;
+			const param = () => ({
+				value: 0,
+				cancelScheduledValues: (...args) => automation.push([id, 'cancel', ...args]),
+				setValueAtTime: (...args) => automation.push([id, 'set', ...args]),
+				exponentialRampToValueAtTime: (...args) => automation.push([id, 'ramp', ...args]),
+			});
+			return { context, gain: param(), delayTime: param(), connect() {}, disconnect() {} };
+		}
+		const effect = module.createBibiriEcho(context, node(), node());
+		for (const [active, dead, event, now] of [
+			[true, false, undefined, 1000],
+			[true, true, 1000, 1000],
+			[true, true, 1000, 1500],
+			[false, true, undefined, 2000],
+			[true, false, undefined, 4000],
+		]) {
+			context.currentTime = now / 1000;
+			module.updateBibiriEcho(effect, active, dead, event, now);
+			snapshots.push([effect.input.gain.value, effect.seen, effect.wasAlive, effect.until]);
+		}
+		module.disconnectBibiriEcho(effect);
+		return { automation, snapshots };
+	}
+	assert.deepEqual(
+		deathTail(await bundle(join(mobile, 'src/app/voice/bibiriEcho.ts'))),
+		deathTail(await bundle('src/renderer/voice/bibiriEcho.ts')),
+		'default death-tail automation and lifecycle stay compatible on Web/APK'
 	);
 	console.log(
 		'Web/APK: real UDP relay, roles/meeting/mic test, mute, identity, replay/lease/freshness checks, paired audio routing and desktop audio parity passed.'

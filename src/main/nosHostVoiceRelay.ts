@@ -1,13 +1,17 @@
 import { version as clientVersion } from '../../package.json';
-import { createSocket } from 'node:dgram';
+import { createSocket, type Socket } from 'node:dgram';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AmongUsState } from '../common/AmongUsState';
+import { hasTanukiAddon } from '../common/tanukiAddon';
 
-const socket = createSocket('udp4');
-socket.on('error', () => {});
-socket.unref();
+let socket: Socket | undefined;
 let sequence = 0;
+export function closeHostVoice(): void {
+	const current = socket;
+	socket = undefined;
+	current?.close();
+}
 export function sendHostVoice(
 	playerId: unknown,
 	rms: unknown,
@@ -15,6 +19,10 @@ export function sendHostVoice(
 	pid: number,
 	state?: AmongUsState
 ): boolean {
+	if (!hasTanukiAddon(state)) {
+		closeHostVoice();
+		return false;
+	}
 	if (
 		!state?.isHost ||
 		state.mod !== 'NoS' ||
@@ -43,6 +51,11 @@ export function sendHostVoice(
 			return false;
 		const now = Date.now();
 		sequence = Math.max(sequence + 1, now * 1000);
+		if (!socket) {
+			socket = createSocket('udp4');
+			socket.on('error', () => {});
+			socket.unref();
+		}
 		socket.send(
 			`TBCLH1|${d.token}|${player.id}|${sequence}|${now}|${rms}|${active ? 1 : 0}` +
 				(d.reportVersion === true ? `|${clientVersion}` : ''),

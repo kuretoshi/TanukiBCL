@@ -57,7 +57,7 @@ try {
  const audio=()=>({connect(){},disconnect(){}});
  const context={sampleRate:48000,createScriptProcessor:()=>audio(),createGain:()=>({...audio(),gain:{value:1}}),destination:audio()};
  const speech=new HeroSpeech(context);
- const state={mod:'NoS',isHost:true,lobbyCode:'ROOM01',gameState:GameState.TASKS,players:[{id:1,isLocal:true}]};
+ const state={mod:'NoS',nosAddonIds:['tanuki.bcl.roles'],isHost:true,lobbyCode:'ROOM01',gameState:GameState.TASKS,players:[{id:1,isLocal:true}]};
  speech.setContext(state);
  let localAllowed=true;
  for(const [key,id] of [['local',1],['pc',2],['web',3],['mobile',4],['unknown',5]]) speech.setInput(key,audio(),id,()=>key!=='local'||localAllowed);
@@ -94,6 +94,17 @@ try {
  speech.setContext({...state,gameState:GameState.MENU});
  assert.equal(speech.captures.size,0,'leaving game clears recognition');
  speech.dispose();
+ let createdAfterDispose=0;
+ window.Vosk.createModel=async()=>{createdAfterDispose++;return fakeModel;};
+ const lateSpeech=new HeroSpeech(context); lateSpeech.setContext(state);
+ const pendingLibrary=lateSpeech.ensureModel(); lateSpeech.dispose(); await pendingLibrary;
+ assert.equal(createdAfterDispose,0,'removed addon cannot start model loading after its library resolves');
+ let finishModel, terminated=false;
+ window.Vosk.createModel=()=>new Promise(resolve=>{finishModel=resolve;});
+ const loadingSpeech=new HeroSpeech(context); loadingSpeech.setContext(state);
+ const pendingModel=loadingSpeech.ensureModel(); await Promise.resolve();
+ loadingSpeech.dispose(); finishModel({...fakeModel,terminate(){terminated=true;}}); await pendingModel;
+ assert(terminated,'a model already loading when addon is removed is terminated on completion');
  console.log('PASS distributed speech: routing, shared recognizers, replay suppression, protocol and lifecycle');
 } finally {
  globalThis.setInterval=originalInterval; globalThis.clearInterval=originalClear; Date.now=originalNow;
