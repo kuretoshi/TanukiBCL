@@ -61,6 +61,8 @@ PiにはMariaDBと `python3-pymysql` が必要です。スクリプトを `/opt/
 
 HeidiSQLでは接続方式を「MariaDB/MySQL (SSH tunnel)」、ホストを `127.0.0.1`、ポートを `3306`、ユーザーを `tanuki_viewer`、データベースを `tanuki_player_view` にします。SSHホストはPiのIPアドレス、SSHユーザーはPiのログインユーザー、認証にはそのSSH秘密鍵を設定します。DBユーザーのパスワードは別途安全に管理します。閲覧専用ユーザーに書き込み権限は付与しません。
 
+iPhoneからはWireGuard VPNを通して直接MariaDBへ接続します。`mariadb-vpn.cnf` を `/etc/mysql/mariadb.conf.d/99-tanuki-viewer-vpn.cnf` に配置してMariaDBを再起動すると、ループバックとPiのVPNアドレスだけで待ち受けます。iPhoneのWireGuard割当IP `10.41.37.2` に対してだけ `tanuki_iphone` のSELECT権限を付け、UFWでVPNアドレス `10.41.37.1:3306` への接続は `wg0` 上の `10.41.37.2` からだけ許可します。iPhone側のMariaDBクライアントは接続先 `10.41.37.1:3306`、データベース `tanuki_player_view`、ユーザー `tanuki_iphone` を使います。VPN設定の `AllowedIPs` に `10.41.37.1` への経路が含まれている必要があります。パスワードはリポジトリに保存しません。
+
 ## お問い合わせのDiscord送信先
 
 デバッグパスワードとは別のSQLiteテーブル `inquiry_webhooks` に、本家用 `tanuki` と.NET用 `net` のWebhookを1件ずつ保存します。アプリにはWebhook URLを含めず、両アプリは `https://debug-auth.kuretoshi.work/v1/inquiries` に報告を送ります。製品識別子は送信先の選択用であり、認証情報ではありません。公開APIは1送信元あたり毎時10件・全体で毎時120件に制限します。
