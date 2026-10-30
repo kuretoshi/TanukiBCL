@@ -52,6 +52,36 @@ const useStyles = (props: UseStylesProps) => ({
 	},
 });
 
+function nosMeetingPlayerStyle(
+	width: number,
+	height: number,
+	viewportWidth: number,
+	viewportHeight: number,
+	count: number,
+	index: number
+) {
+	// NoS More15Helpers scales vote areas about their centers and changes the grid at 16/19 players.
+	const columns = count <= 18 ? 3 : 4;
+	const scale = count <= 18 ? 0.95 : 0.76;
+	// UI camera half-height 3; MeetingHud's AspectSize fits its 8.54 * 1.2-wide background on narrow screens.
+	const unit = Math.min(viewportHeight / 6, viewportWidth / (8.54 * 1.2));
+	// MeetingHud prefab: VoteOrigin(-3.1, 1.5), ButtonParent(+0.25, 0), sliced background(2.7, 0.63).
+	const originX = -3.1 + 0.25 + (count <= 18 ? 0.1 : -0.355);
+	const originY = 1.5 + (count <= 18 ? 0.145 : 0);
+	const cardWidth = 2.7 * scale * unit;
+	const cardHeight = 0.63 * scale * unit;
+	const columnStep = 2.9 * scale * (count <= 18 ? 1 : 0.974);
+	const rowStep = 0.76 * scale * (count <= 18 ? 0.89 : 1);
+	return {
+		position: 'absolute',
+		width: cardWidth,
+		height: cardHeight,
+		left: width / 2 + (originX + (index % columns) * columnStep) * unit - cardWidth / 2,
+		top: height / 2 - (originY - Math.floor(index / columns) * rowStep) * unit - cardHeight / 2,
+		margin: 0,
+	};
+}
+
 function useWindowSize() {
 	const [windowSize, setWindowSize] = useState<[number, number]>([0, 0]);
 
@@ -372,7 +402,8 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 	}, [gameState.players, meetingStartedAt]);
 	if (!players || gameState.gameState !== GameState.DISCUSSION) return null;
 
-	const overlays = players.map((player) => {
+	const largeNosMeeting = gameState.mod === 'NoS' && !gameState.oldMeetingHud && players.length > 15;
+	const overlays = players.map((player, index) => {
 		// Keep tablet order fixed, but use the current publication for NoS RGB.
 		const livePlayer = gameState.players.find((current) => current.id === player.id);
 		const color =
@@ -381,7 +412,14 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 		return (
 			<Box
 				key={player.id}
-				sx={classes.playerContainer}
+				sx={
+					largeNosMeeting
+						? {
+								...classes.playerContainer,
+								...nosMeetingPlayerStyle(width, height, windowWidth, windowheight, players.length, index),
+							}
+						: classes.playerContainer
+				}
 				style={{
 					opacity: voiceState.otherTalking[player.clientId] || (player.isLocal && voiceState.localTalking) ? 1 : 0,
 					border: 'solid',
@@ -396,7 +434,11 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 
 	return (
 		<Box sx={classes.meetingHud}>
-			<Box sx={classes.tabletContainer}>{overlays}</Box>
+			<Box
+				sx={largeNosMeeting ? { ...classes.tabletContainer, left: 0, top: 0, height: '100%' } : classes.tabletContainer}
+			>
+				{overlays}
+			</Box>
 		</Box>
 	);
 };

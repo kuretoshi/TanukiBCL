@@ -2,6 +2,12 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.59
+
+- Windowsの最前面設定で、ゲームウィンドウの後ろへ回る原因になる表示順の指定を調整しました。
+- NoSの16〜18人・19人以上の会議で、発話枠の大きさと配置を会議カードに合わせました。
+- 4:3などの画面比率でも、NoS会議画面の縮尺に合わせて発話枠を表示するようにしました。
+
 ## v3.2.58
 
 - NoS連携の自動再取得時に、音声や画面が一瞬途切れる原因になるゲームの一時停止処理を取り除きました。

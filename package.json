@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.58",
+	"version": "3.2.59",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -19,6 +19,7 @@
 		"url": "https://bettercrewlink.app"
 	},
 	"scripts": {
+		"test:nos-meeting-overlay": "node scripts/test-nos-meeting-overlay.mjs",
 		"test:distributed-speech": "node scripts/test-distributed-speech.mjs",
 		"test:hero-costume-voice": "node scripts/test-hero-costume-voice.mjs",
 		"test:snr-push-reverb": "node scripts/test-snr-push-reverb.mjs",

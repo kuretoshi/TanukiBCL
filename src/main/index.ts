@@ -877,6 +877,7 @@ if (!gotTheLock) {
 	});
 
 	ipcMain.on('setAlwaysOnTop', (_event, enable: boolean) => {
-		global.mainWindow?.setAlwaysOnTop(enable);
+		// Windows' default floating level moves the window behind the taskbar and other topmost game windows.
+		global.mainWindow?.setAlwaysOnTop(enable, process.platform === 'win32' ? 'screen-saver' : 'floating');
 	});
 }
