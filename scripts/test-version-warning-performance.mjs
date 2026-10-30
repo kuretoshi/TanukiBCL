@@ -12,7 +12,20 @@ const gitMarker = resolve('.git');
 const gitDirectory = (await stat(gitMarker)).isDirectory()
 	? gitMarker
 	: resolve((await readFile(gitMarker, 'utf8')).trim().replace(/^gitdir:\s*/, ''));
-const baseline = execFileSync('git', [`--git-dir=${gitDirectory}`, 'show', `HEAD:${file}`], { encoding: 'utf8' });
+const baselineRevision = '31dac1caafc27d0aeba374520f6c476211845e9a'; // v3.2.56, before warning reuse.
+let baseline;
+try {
+	baseline = execFileSync('git', [`--git-dir=${gitDirectory}`, 'show', `${baselineRevision}:${file}`], {
+		encoding: 'utf8',
+	});
+} catch (cause) {
+	throw new Error(
+		`Version warning baseline v3.2.56 (${baselineRevision}) is required. Fetch full Git history for a shallow clone.`,
+		{
+			cause,
+		}
+	);
+}
 const bundled = await build({
 	entryPoints: ['src/common/appVersion.ts'],
 	bundle: true,
@@ -236,5 +249,5 @@ update('unchanged warning after restart');
 assert.equal(current.count.required, beforeTeardown + 1);
 
 console.log(
-	'PASS version warnings: 100 unchanged updates -> 1 derivation; exact HEAD warning parity across rename, transport/player disconnect/reconnect, report changes, host migration, lobby reset and teardown/restart'
+	'PASS version warnings: 100 unchanged updates -> 1 derivation; exact v3.2.56 warning parity across rename, transport/player disconnect/reconnect, report changes, host migration, lobby reset and teardown/restart'
 );

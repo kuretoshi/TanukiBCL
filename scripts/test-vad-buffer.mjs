@@ -11,11 +11,22 @@ const gitPath = resolve('.git');
 const gitDirectory = (await stat(gitPath)).isDirectory()
 	? gitPath
 	: resolve((await readFile(gitPath, 'utf8')).trim().replace(/^gitdir:\s*/, ''));
-const referenceSource = execFileSync(
-	'git',
-	[`--git-dir=${gitDirectory}`, `--work-tree=${process.cwd()}`, 'show', `HEAD:${productionPath}`],
-	{ encoding: 'utf8', maxBuffer: 1024 * 1024 }
-);
+const baselineRevision = '31dac1caafc27d0aeba374520f6c476211845e9a'; // v3.2.56, before buffer reuse.
+let referenceSource;
+try {
+	referenceSource = execFileSync(
+		'git',
+		[`--git-dir=${gitDirectory}`, `--work-tree=${process.cwd()}`, 'show', `${baselineRevision}:${productionPath}`],
+		{ encoding: 'utf8', maxBuffer: 1024 * 1024 }
+	);
+} catch (cause) {
+	throw new Error(
+		`VAD regression baseline v3.2.56 (${baselineRevision}) is required. Fetch full Git history for a shallow clone.`,
+		{
+			cause,
+		}
+	);
+}
 
 async function runtime(text) {
 	const { code } = await transform(text, { loader: 'ts', format: 'cjs', target: 'es2022' });

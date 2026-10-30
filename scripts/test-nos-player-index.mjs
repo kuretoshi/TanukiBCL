@@ -11,9 +11,20 @@ const marker = path.resolve('.git');
 const gitDirectory = (await stat(marker)).isDirectory()
 	? marker
 	: path.resolve((await readFile(marker, 'utf8')).trim().replace(/^gitdir:\s*/, ''));
-const previousSource = execFileSync('git', [`--git-dir=${gitDirectory}`, 'show', `HEAD:${file}`], {
-	encoding: 'utf8',
-});
+const baselineRevision = '31dac1caafc27d0aeba374520f6c476211845e9a'; // v3.2.56, before player index reuse.
+let previousSource;
+try {
+	previousSource = execFileSync('git', [`--git-dir=${gitDirectory}`, 'show', `${baselineRevision}:${file}`], {
+		encoding: 'utf8',
+	});
+} catch (cause) {
+	throw new Error(
+		`NoS player index baseline v3.2.56 (${baselineRevision}) is required. Fetch full Git history for a shallow clone.`,
+		{
+			cause,
+		}
+	);
+}
 
 // Execute the actual appearance/missing-data statements and read-status expression.
 // Native memory reads and unrelated role processing remain outside this focused fixture.
