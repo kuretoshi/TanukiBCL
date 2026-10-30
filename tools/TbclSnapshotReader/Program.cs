@@ -111,7 +111,8 @@ internal static class Program
     {
         using Process process = ValidateProcess(pid);
         long started = process.StartTime.ToUniversalTime().Ticks;
-        using DataTarget target = DataTarget.CreateSnapshotAndAttach(pid);
+        // Read live metadata without the game suspension caused by snapshot attachment.
+        using DataTarget target = DataTarget.AttachToProcess(pid, suspend: false);
         using ClrRuntime runtime = (target.ClrVersions.FirstOrDefault()
             ?? throw new InvalidOperationException("CoreCLR not found")).CreateRuntime();
         var candidates = runtime.EnumerateModules()
@@ -122,6 +123,11 @@ internal static class Program
             .Where(x => x.array.IsArray && x.array.AsArray().Length == 32).ToArray();
         if (candidates.Length != 1) throw new InvalidOperationException("NoS color palette is not initialized or is ambiguous");
         var source = candidates[0];
+        if (source.field.ContainingType.IsCollectible || !source.field.IsObjectReference ||
+            !source.field.IsInitialized(source.module.AppDomain))
+            throw new InvalidOperationException("Unsupported NoS color palette static field");
+        ulong arraySlot = source.field.GetAddress(source.module.AppDomain);
+        ValidatePaletteReference(target, arraySlot, source.array);
         var type = source.array.Type!;
         var color = type.ComponentType ?? throw new InvalidOperationException("NoS color component type missing");
         int Channel(ClrType valueType, string name, int depth = 0)
@@ -136,13 +142,28 @@ internal static class Program
         }
         var metadata = new {
             pid, pointerSize = target.DataReader.PointerSize,
-            arraySlot = source.field.GetAddress(source.module.AppDomain),
+            arraySlot,
             arrayType = type.MethodTable, arrayLengthOffset = target.DataReader.PointerSize,
             arrayDataOffset = type.GetArrayElementAddress(source.array.Address, 0) - source.array.Address,
             stride = type.ComponentSize, r = Channel(color, "R"), g = Channel(color, "G"), b = Channel(color, "B")
         };
+        if (!source.field.IsInitialized(source.module.AppDomain) ||
+            source.field.GetAddress(source.module.AppDomain) != arraySlot)
+            throw new InvalidOperationException("NoS color palette static field changed during resolve");
+        ValidatePaletteReference(target, arraySlot, source.array);
         ValidateProcessUnchanged(pid, started);
         return metadata;
+    }
+
+    static void ValidatePaletteReference(DataTarget target, ulong slot, ClrObject array)
+    {
+        // Reject a moving/replaced managed array rather than returning a mixed live layout.
+        var reader = target.DataReader;
+        if (slot == 0 || array.Type is null || array.Type.IsCollectible ||
+            !reader.ReadPointer(slot, out ulong current) || current != array.Address ||
+            !reader.ReadPointer(array.Address, out ulong methodTable) || methodTable != array.Type.MethodTable ||
+            !reader.Read<int>(array.Address + (ulong)reader.PointerSize, out int length) || length != 32)
+            throw new InvalidOperationException("NoS color palette changed during resolve");
     }
 
     static ResolvedMetadata Resolve(int pid)
@@ -150,7 +171,7 @@ internal static class Program
         using Process process = ValidateProcess(pid);
         long started = process.StartTime.ToUniversalTime().Ticks;
 
-        using DataTarget target = DataTarget.CreateSnapshotAndAttach(pid);
+        using DataTarget target = DataTarget.AttachToProcess(pid, suspend: false);
         ClrInfo info = target.ClrVersions.FirstOrDefault()
             ?? throw new InvalidOperationException("CoreCLR not found");
         using ClrRuntime runtime = info.CreateRuntime();
@@ -171,7 +192,8 @@ internal static class Program
             ?? throw new InvalidOperationException("TBCLFields.nextIndex static field not found");
         ClrStaticField latest = tbcl.GetStaticFieldByName("Latest")
             ?? throw new InvalidOperationException("Latest static field not found");
-        if (tbcl.IsCollectible || nextIndex.ElementType != ClrElementType.Int32 || latest.ElementType != ClrElementType.Pointer)
+        if (tbcl.IsCollectible || nextIndex.ElementType != ClrElementType.Int32 || latest.ElementType != ClrElementType.Pointer ||
+            !nextIndex.IsInitialized(module.AppDomain))
             throw new InvalidOperationException("Unsupported TBCL static fields");
 
         // ClrMD classifies a pointer-typed static (Snapshot* Latest) as an object reference and
@@ -269,9 +291,8 @@ internal static class Program
 		}
 
         ValidateLayout(snapshotLayout, playerLayout, radioLayout, target.DataReader.PointerSize);
-        ValidateProcessUnchanged(pid, started);
 
-        return new ResolvedMetadata
+        var metadata = new ResolvedMetadata
         {
             Pid = pid,
             ProcessStartUtcTicks = started,
@@ -282,6 +303,10 @@ internal static class Program
             PlayerData = playerLayout,
             RadioData = radioLayout
         };
+        if (!nextIndex.IsInitialized(module.AppDomain) || nextIndex.GetAddress(module.AppDomain) != anchorAddress)
+            throw new InvalidOperationException("NoS snapshot static field changed during resolve");
+        ValidateProcessUnchanged(pid, started);
+        return metadata;
     }
 
     static object ReadSnapshot(int pid, ResolvedMetadata metadata)

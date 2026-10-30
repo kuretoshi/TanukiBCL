@@ -2,6 +2,11 @@
 
 A changelog for BetterCrewLink in case people want to see changes from the new/old versions.
 
+## v3.2.58
+
+- NoS連携の自動再取得時に、音声や画面が一瞬途切れる原因になるゲームの一時停止処理を取り除きました。
+- 読み取り途中で参照先が変わった場合は結果を破棄し、次の取得で再試行するようにしました。
+
 ## v3.2.57
 
 - NoSの画像読み込み、役職状態の取得、ゲーム情報の読み取りと音声処理の重複を減らしました。

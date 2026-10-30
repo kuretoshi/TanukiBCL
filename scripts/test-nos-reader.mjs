@@ -1,12 +1,26 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
-import memoryjs from 'memoryjs';
+
+for (const file of ['Program.cs', 'NosRoles.cs']) {
+	const source = await readFile(
+		file === 'Program.cs' && process.env.NOS_READER_SOURCE
+			? process.env.NOS_READER_SOURCE
+			: resolve('tools/TbclSnapshotReader', file),
+		'utf8'
+	);
+	assert.doesNotMatch(source, /\bCreateSnapshotAndAttach\s*\(/, 'NoS discovery must not pause the game to clone it');
+}
+if (process.argv.includes('--source-only')) {
+	console.log('PASS NoS reader source: stopping snapshot attachment is forbidden');
+	process.exit(0);
+}
+const { default: memoryjs } = await import('memoryjs');
 
 const cache = resolve('.cache/nos-reader-tests');
 await mkdir(cache, { recursive: true });
@@ -41,25 +55,47 @@ assert.equal(canHearNosJackalRadio(jackalB, 3), true);
 assert.equal(canHearNosJackalRadio([{ ...jackalA[0], kind: 0 }], 1), false);
 const architecture = process.argv.includes('--x64') ? 'x64' : 'x86';
 const fixture = resolve(cache, `fixture-${architecture}`);
-execFileSync(
-	'dotnet',
-	[
-		'publish',
-		'scripts/fixtures/nos-reader/Host/Host.csproj',
-		'-c',
-		'Release',
-		'-r',
-		`win-${architecture}`,
-		'-o',
-		fixture,
-	],
-	{
+const fixtureSource = resolve(cache, `source-${architecture}/fixture`);
+const readerSource = resolve(cache, `source-${architecture}/reader`);
+const readerOutput = resolve(cache, `reader-${architecture}`);
+const helperExecutable = resolve(readerOutput, 'TbclSnapshotReader.exe');
+const copyOptions = { recursive: true, filter: (path) => !/(?:^|[\\/])(?:bin|obj)(?:[\\/]|$)/.test(path) };
+await cp('scripts/fixtures/nos-reader', fixtureSource, copyOptions);
+await cp('tools/TbclSnapshotReader', readerSource, copyOptions);
+const hostProject = resolve(fixtureSource, 'Host/Host.csproj');
+await writeFile(
+	hostProject,
+	(await readFile(hostProject, 'utf8')).replace(
+		'<AssemblyName>Among Us</AssemblyName>',
+		'<AssemblyName>NoSReadPerfHost</AssemblyName>'
+	)
+);
+for (const file of ['Program.cs', 'NosRoles.cs']) {
+	const path = resolve(readerSource, file);
+	await writeFile(path, (await readFile(path, 'utf8')).replaceAll('"Among Us"', '"NoSReadPerfHost"'));
+}
+for (const [project, output] of [
+	[hostProject, fixture],
+	[resolve(readerSource, 'TbclSnapshotReader.csproj'), readerOutput],
+]) {
+	execFileSync('dotnet', ['publish', project, '-c', 'Release', '-r', `win-${architecture}`, '-o', output], {
 		windowsHide: true,
 		stdio: 'pipe',
-	}
-);
-const child = spawn(resolve(fixture, 'Among Us.exe'), [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+	});
+}
+const child = spawn(resolve(fixture, 'NoSReadPerfHost.exe'), [], {
+	windowsHide: true,
+	stdio: ['pipe', 'pipe', 'pipe'],
+});
 const lines = createInterface({ input: child.stdout });
+const published = new Promise((resolve) => {
+	lines.on('line', (line) => {
+		if (line === 'published') resolve();
+	});
+});
+const fixtureTimeout = new Promise((_, reject) => {
+	setTimeout(() => reject(new Error('NoS fixture timeout')), 15000).unref();
+});
 let handle;
 try {
 	await Promise.race([
@@ -67,14 +103,12 @@ try {
 		once(child, 'error').then(([error]) => {
 			throw error;
 		}),
-		new Promise((_, reject) => {
-			setTimeout(() => reject(new Error('NoS fixture timeout')), 15000).unref();
-		}),
+		fixtureTimeout,
 	]);
 	handle = memoryjs.openProcess(child.pid);
 	const read = (address, size) => memoryjs.readBuffer(handle.handle, address, size);
 	const paletteResponse = JSON.parse(
-		execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['palette', String(child.pid)], {
+		execFileSync(helperExecutable, ['palette', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
@@ -85,15 +119,14 @@ try {
 	assert.equal(isNosPaletteLayout(palette, child.pid + 1), false);
 	assert.equal(isNosPaletteLayout({ ...palette, stride: 2 }, child.pid), false);
 	assert.equal(readNosPalette(palette, read)[3], '#4080bf', 'Read lobby RGB before any role snapshot publication');
-	const published = once(lines, 'line');
 	const response = JSON.parse(
-		execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['layout', String(child.pid)], {
+		execFileSync(helperExecutable, ['layout', String(child.pid)], {
 			windowsHide: true,
 			timeout: 45000,
 			encoding: 'utf8',
 		})
 	);
-	await published;
+	await Promise.race([published, fixtureTimeout]);
 	const layout = response.metadata;
 	assert.ok(isNosLayout(layout, child.pid), JSON.stringify(response));
 	assert.ok(Number.isInteger(layout.snapshot.localIsPseudocide));
@@ -199,19 +232,73 @@ try {
 	const command = async (value) => {
 		const reply = once(lines, 'line');
 		child.stdin.write(value + '\n');
-		await reply;
+		let timer;
+		try {
+			const [line] = await Promise.race([
+				reply,
+				new Promise((_, reject) => {
+					timer = setTimeout(() => reject(new Error(`NoS fixture command timeout: ${value}`)), 5000);
+				}),
+			]);
+			return line;
+		} finally {
+			clearTimeout(timer);
+		}
 	};
+	const discover = (mode) => {
+		let output;
+		let status = 0;
+		try {
+			output = execFileSync(helperExecutable, [mode, String(child.pid)], {
+				windowsHide: true,
+				timeout: 45000,
+				encoding: 'utf8',
+			});
+		} catch (error) {
+			assert.equal(error.code, undefined, `${mode}: helper must not time out`);
+			assert.equal(error.status, 1, `${mode}: helper must not crash`);
+			output = error.stdout;
+			status = 1;
+		}
+		assert.ok(output?.trim(), `${mode}: helper must produce JSON`);
+		const result = JSON.parse(output);
+		assert.equal(result.status, status ? 'error' : 'ok', `${mode}: helper exit and JSON status must agree`);
+		assert.doesNotThrow(() => process.kill(child.pid, 0), 'The fixture must remain alive');
+		return result;
+	};
+	async function verifyGcDiscovery() {
+		const successes = { palette: 0, layout: 0 };
+		await command('gc-stress-start');
+		try {
+			for (const mode of Array.from({ length: 3 }, () => ['palette', 'layout']).flat()) {
+				const result = discover(mode);
+				if (result.status === 'error') continue;
+				assert.ok((mode === 'palette' ? isNosPaletteLayout : isNosLayout)(result.metadata, child.pid));
+				successes[mode]++;
+			}
+		} finally {
+			assert.match(await command('gc-stress-stop'), /^gc-stress-stop:[1-9]\d*$/, 'GC stress must actually run');
+		}
+		const stablePalette = discover('palette');
+		const stableLayout = discover('layout');
+		assert.equal(stablePalette.status, 'ok', 'Palette discovery must recover after GC stops');
+		assert.equal(stableLayout.status, 'ok', 'Layout discovery must recover after GC stops');
+		assert.ok(isNosPaletteLayout(stablePalette.metadata, child.pid));
+		assert.ok(isNosLayout(stableLayout.metadata, child.pid));
+		assert.equal(readNosPalette(stablePalette.metadata, read)[3], '#4080bf');
+		assert.equal(readNosSnapshot(stableLayout.metadata, read).players[0].name, 'テスト');
+		assert.equal(readNosSnapshot(stableLayout.metadata, read).players[0].colorB, 0.75);
+		assert.ok(successes.palette > 0 && successes.layout > 0, 'GC stress cannot pass with only error responses');
+		console.log(`PASS NoS ${architecture} live GC discovery: ${JSON.stringify(successes)}, stable RGB and snapshot`);
+	}
+	await verifyGcDiscovery();
 	const readRole = () =>
 		JSON.parse(
-			execFileSync(
-				process.env.NOS_ROLE_READER_EXECUTABLE ?? resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`),
-				['roles', String(child.pid)],
-				{
-					windowsHide: true,
-					timeout: 45000,
-					encoding: 'utf8',
-				}
-			)
+			execFileSync(process.env.NOS_ROLE_READER_EXECUTABLE ?? helperExecutable, ['roles', String(child.pid)], {
+				windowsHide: true,
+				timeout: 45000,
+				encoding: 'utf8',
+			})
 		).metadata[0].role;
 	const readStar = () => readRole().isRainbowStar;
 	if (process.env.NOS_ROLE_BENCHMARK === '1') {
