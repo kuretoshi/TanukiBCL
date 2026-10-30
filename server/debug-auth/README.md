@@ -51,13 +51,19 @@ sudo -u tanuki-debug-auth /opt/tanuki-debug-auth/.venv/bin/python /opt/tanuki-de
 
 BAN照合時にアプリから報告されたロビーのプレイヤーを `player_history` にUID単位で1件ずつ保存します。名前とFriend Codeは最後に得た値、`first_seen_at` は最初に報告された時刻、`last_seen_at` は最近報告された時刻です。デバッグ画面にはDBの全履歴を読み取り専用で表示します。別ウィンドウでは名前の部分一致と最終確認日の期間で検索して、記録済みUIDを選んで後からBANできます。日時は実際の対戦開始時刻ではなく、アプリが同じロビーで確認した時刻です。機能導入前の履歴は遡って生成されません。
 
+グローバルIPは `/check` にアクセスした本人のUIDだけに紐付け、`player_public_ips` に最新の値を保存します。他人から報告された `observedPlayers` のIPは推測しません。その本人がまだアクセスしていない場合は「未取得」です。IPが変わった場合は、履歴の30分間隔の更新とは別に反映します。IPはIPv4/IPv6の単一の公開アドレスを正規化して保存し、プライベート・ループバック・不正な値は保存しません。クライアントのJSON内のIPは採用しません。直前の接続元がループバックの場合だけnginxが上書きした `X-Real-IP` を使うため、Flaskとトンネル用nginxの待ち受けはループバックを維持してください。
+
+開発者は登録ごとに「ユーザー識別子（UID）」または「グローバルIP」を選択します。既存の登録と名前待ち登録はUID方式のままです。IP方式は `player_ip_bans` に登録時のIPを保存し、そのIPからの接続をUIDにかかわらずBANします。同じIPを共有する利用者にも適用されます。UID方式はIPが変わってもそのUIDをBANします。両方式は独立して登録・解除できます。管理一覧には方式と取得済みIPを表示します。IP未取得の履歴からはIP方式を登録できません。新しいIP操作は `add-ip`、`add-history-ip`、`remove-ip` を使い、旧サーバーで誤ってUID方式に登録されないようにしています。
+
+既存DBへの追加はサービス起動時の `initialize` または `auth.py init` で行います。既存テーブルを変更せず、IP用の2テーブルを追加します。運用DBをバックアップして受付サーバーを先に更新し、初期化後に閲覧ミラーとクライアントを更新してください。過去の接続IPは遡って生成できません。管理レスポンスの `ipBansAvailable: true` を確認できるまで、クライアントのIP方式は選択できません。
+
 クライアントはゲーム内の自分のUID取得後に照合します。照合中・BAN中・照合サーバーに接続できない間は通話画面を表示しません。ゲームを起動していない間はUIDを取得できません。旧バージョンや改変クライアント、クライアントが別のUIDを送る場合まで強制的に停止する仕組みではありません。
 
 ## HeidiSQLでプレイヤー情報を閲覧する
 
-運用DBは引き続きSQLiteです。`heidisql_mirror.py` は `player_history`、`player_bans`、`player_ban_uids`、`pending_player_name_bans` だけをMariaDBの `tanuki_player_view` にコピーします。パスワードハッシュ、問い合わせ本文、添付ファイルはコピーしません。`mirror_status` の `refreshed_at_utc` と件数で更新状態を確認できます。MariaDBには閲覧専用ユーザーだけを作り、127.0.0.1で待ち受けさせ、HeidiSQLからはSSHトンネル経由で接続します。
+運用DBは引き続きSQLiteです。`heidisql_mirror.py` は `player_history`、`player_bans`、`player_ban_uids`、`pending_player_name_bans`、`player_public_ips`、`player_ip_bans` をMariaDBの `tanuki_player_view` にコピーします。UID方式のBANとIPは `uid_digest` で対応します。パスワードハッシュ、問い合わせ本文、添付ファイルはコピーしません。`mirror_status` の `refreshed_at_utc` と件数で更新状態を確認できます。MariaDBには閲覧専用ユーザーだけを作り、127.0.0.1で待ち受けさせ、HeidiSQLからはSSHトンネル経由で接続します。
 
-PiにはMariaDBと `python3-pymysql` が必要です。スクリプトを `/opt/tanuki-debug-auth/` に、serviceとtimerを `/etc/systemd/system/` に配置し、`systemctl daemon-reload`、`systemctl start tanuki-heidisql-mirror.service`、`systemctl enable --now tanuki-heidisql-mirror.timer` を実行します。timerは5分ごとにSQLiteの一貫したスナップショットを取得し、MariaDBの4テーブルを同一トランザクションで更新します。アプリが読み書きするSQLiteには変更を加えません。
+PiにはMariaDBと `python3-pymysql` が必要です。スクリプトを `/opt/tanuki-debug-auth/` に、serviceとtimerを `/etc/systemd/system/` に配置し、`systemctl daemon-reload`、`systemctl start tanuki-heidisql-mirror.service`、`systemctl enable --now tanuki-heidisql-mirror.timer` を実行します。timerは5分ごとにSQLiteの一貫したスナップショットを取得し、MariaDBの6テーブルを同一トランザクションで更新します。IP用の新しいテーブルは初回更新時に作成されます。アプリが読み書きするSQLiteには変更を加えません。
 
 HeidiSQLでは接続方式を「MariaDB/MySQL (SSH tunnel)」、ホストを `127.0.0.1`、ポートを `3306`、ユーザーを `tanuki_viewer`、データベースを `tanuki_player_view` にします。SSHホストはPiのIPアドレス、SSHユーザーはPiのログインユーザー、認証にはそのSSH秘密鍵を設定します。DBユーザーのパスワードは別途安全に管理します。閲覧専用ユーザーに書き込み権限は付与しません。
 
@@ -122,6 +128,6 @@ npm run build
 ## テスト
 
 ```sh
-python -m unittest discover -s server/debug-auth -p test_auth.py
+python -m unittest discover -s server/debug-auth -p "test*.py"
 node scripts/test-remote-debug-auth.mjs
 ```

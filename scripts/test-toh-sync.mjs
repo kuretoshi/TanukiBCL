@@ -21,7 +21,7 @@ const { isToh4eHostName } = await bundle('src/common/Mods.ts');
 const { isTohRole, isTohRoleCatalog } = await bundle('src/common/TohRole.ts');
 const { isPlayerImpostor, withImpostorClassification, isTohImpostorEntries } = await bundle('src/common/Impostor.ts');
 const { defaultLobbySettings } = await bundle('src/common/defaultLobbySettings.ts');
-const { calculateVoiceAudio } = await bundle('src/renderer/voice/spatialAudio.ts');
+const { calculateVoiceAudio, voiceHearingDistance } = await bundle('src/renderer/voice/spatialAudio.ts');
 const source = ts.createSourceFile(
 	'VoiceController.ts',
 	await readFile('src/renderer/voice/VoiceController.ts', 'utf8'),
@@ -39,6 +39,8 @@ const names = [
 	'patch',
 	'handleGameStateTransition',
 	'updateRoleTransition',
+	'refreshMeetingDeathDisplay',
+	'syncNosPseudocide',
 	'wireConnection',
 	'claimLobbySettingsOwnership',
 	'broadcastLobbySettings',
@@ -79,6 +81,7 @@ function actor(clientId) {
 		withImpostorClassification,
 		isTohImpostorEntries,
 		defaultLobbySettings,
+		voiceHearingDistance,
 		OVERLAY_VOICE_KEYS: [],
 		TOH_SYNC_REFRESH_MS: 3000,
 		Date: { now: () => now },
@@ -116,7 +119,7 @@ function actor(clientId) {
 	c.connection.setMobileRunning = () => {};
 	c.connection.joinLobby = () => events.emit('lobbyReset');
 	c.connection.leaveLobby = () => events.emit('lobbyReset');
-	c.audio = { updateGameState() {}, setMaxDistance() {}, removePeer() {}, setJammed() {}, setLocalRadioPending() {} };
+	c.audio = { updateGameState() {}, setMaxDistance() {}, removePeer() {}, setJammed() {}, setLocalRadioPending() {}, setSpeechPlatform() {} };
 	c.emit = () => {};
 	for (const name of [
 		'unwireConnection',

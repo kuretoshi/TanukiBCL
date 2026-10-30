@@ -168,8 +168,20 @@ async function submitInquiry(inquiry: InquiryPayload) {
 	return result.issue_url;
 }
 
+function settingsWindowsOpen(): boolean {
+	return [global.settingsWindow, global.debugWindow].some((window) => window && !window.isDestroyed());
+}
+
+export function notifySettingsWindowPresence(): void {
+	if (global.mainWindow && !global.mainWindow.isDestroyed())
+		global.mainWindow.webContents.send(IpcSettingsMessages.NOTIFY_WINDOW_PRESENCE, settingsWindowsOpen());
+}
+
 // Listeners are fire and forget, they do not have "responses" or return values
 export const initializeIpcListeners = (): void => {
+	ipcMain.on(IpcMessages.REQUEST_SETTINGS_WINDOW_PRESENCE, (event) => {
+		event.reply(IpcSettingsMessages.NOTIFY_WINDOW_PRESENCE, settingsWindowsOpen());
+	});
 	ipcMain.on(IpcMessages.SHOW_ERROR_DIALOG, (e, opts: { title: string; content: string }) => {
 		if (typeof opts === 'object' && opts && typeof opts.title === 'string' && typeof opts.content === 'string') {
 			dialog.showErrorBox(opts.title, opts.content);

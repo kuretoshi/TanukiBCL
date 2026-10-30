@@ -83,6 +83,20 @@ const io = [],
 	sockets = [];
 globalThis.tanukiIo = { io, sockets, file: '' };
 const mainMocks = {
+	'node:fs/promises': `
+		import { readFileSync } from 'node:fs';
+		export async function open(path) {
+			const bytes = Buffer.from(readFileSync(path));
+			return {
+				async stat() { return { size: bytes.length }; },
+				async read(buffer, offset, length, position) {
+					const count = Math.max(0, Math.min(length, bytes.length - position));
+					bytes.copy(buffer, offset, position, position + count);
+					return { bytesRead: count };
+				},
+				async close() {},
+			};
+		}`,
 	'node:fs': `
 		export function existsSync(p) { globalThis.tanukiIo.io.push(p); return true; }
 		export function statSync(p) { globalThis.tanukiIo.io.push(p); return { size: 100 }; }
@@ -106,12 +120,12 @@ for (const state of [
 	{ ...plain, nosAddonIds: ['UchuAddon'] },
 	{ ...detected, mod: 'NONE' },
 ])
-	assert.deepEqual(readTanukiAddonState(123, state), {});
+	assert.deepEqual(await readTanukiAddonState(123, state), {});
 assert.equal(io.length, 0, 'undetected addon must not even stat or probe role state files');
-readTanukiAddonState(123, detected);
+await readTanukiAddonState(123, detected);
 assert.ok(io.length > 0, 'detected addon still reads its active role states');
 io.length = 0;
-readTanukiAddonState(123, { ...detected, gameState: GameState.LOBBY });
+await readTanukiAddonState(123, { ...detected, gameState: GameState.LOBBY });
 assert.equal(io.length, 0, 'role state reads remain stopped in the lobby');
 
 const handlers = new Map();
@@ -262,7 +276,13 @@ try {
 	audio.context = new AudioContext();
 	audio.createOutputBus('default');
 	await audio.createInputChain(globalThis.tanukiSettings, 0, 0);
+	const beforeJoining = nodes.length;
 	audio.addPeer('peer', globalThis.tanukiStream);
+	for (let i = 1; i < 14; i++) audio.addPeer(`unused-${i}`, globalThis.tanukiStream);
+	assert.equal(nodes.length - beforeJoining, 14 * 3, 'ordinary peers need only source, panner and gain nodes');
+	assert.equal(nodes.filter((n) => ['filter', 'convolver', 'delay'].includes(n.kind)).length, 0);
+	for (let i = 1; i < 14; i++) audio.removePeer(`unused-${i}`);
+	console.log('Ordinary voice: 14 peers allocate 42 nodes instead of 154; 112 unused effect nodes deferred');
 	audio.setSpeechPlatform('peer', 'web');
 	audio.updateGameState(plain);
 	const peer = audio.peers.get('peer');

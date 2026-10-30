@@ -9,7 +9,19 @@ export function readDyingVoiceState(
 ): DyingVoiceState[] {
 	try {
 		if (statSync(filePath).size > 32768) return [];
-		const data = JSON.parse(readFileSync(filePath, 'utf8'));
+		return parseDyingVoiceState(readFileSync(filePath, 'utf8'), pid, now);
+	} catch {
+		return [];
+	}
+}
+
+export function parseDyingVoiceState(
+	text: string | undefined,
+	pid: number,
+	now = Date.now()
+): ReturnType<typeof readDyingVoiceState> {
+	try {
+		const data = JSON.parse(text ?? '');
 		if (
 			data.protocol !== 1 ||
 			data.pid !== pid ||

@@ -45,6 +45,23 @@ namespace Nebula.Modules
         public static Language CurrentLanguage = DefaultLanguage;
         public static Language GuestLanguage = DefaultLanguage;
         public Dictionary<string, string> translationMap = new() { ["role.fixtureRole.name"] = "Fixture role" };
+
+        public static void Change(string command)
+        {
+            Language Make(string? label)
+            {
+                var language = new Language();
+                language.translationMap.Clear();
+                if (label != null) language.translationMap["role.fixtureRole.name"] = label;
+                int extra = command == "lang-large" ? 5000 : 4;
+                for (int i = 0; i < extra; i++) language.translationMap[$"unrelated.{i}"] = $"Text {i}";
+                return language;
+            }
+            DefaultLanguage = Make(command == "lang-missing" ? null : "Default role");
+            CurrentLanguage = Make(command is "lang-default" or "lang-missing" ? null : "Current role");
+            GuestLanguage = Make(command is "lang-default" or "lang-current" or "lang-missing" ? null : "Guest role");
+            if (command == "lang-update") GuestLanguage.translationMap["role.fixtureRole.name"] = "Updated role";
+        }
     }
 }
 namespace Nebula.Configuration

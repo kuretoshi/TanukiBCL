@@ -8,6 +8,8 @@ import type { AmongUsState, Player } from '../common/AmongUsState';
 import type { NosPlayerData } from '../common/NosSnapshot';
 
 const Jimp = createJimp({ formats: [png] });
+type Bitmap = Awaited<ReturnType<typeof Jimp.read>>['bitmap'];
+const DECODED_BUDGET = 16 * 1024 * 1024;
 type Part = 'hat' | 'hatBack' | 'visor' | 'skin' | 'bodyMask';
 interface ImageEntry {
 	Layer: string;
@@ -42,8 +44,12 @@ export class NosContentsTracker {
 	private assets = new Map<string, Asset>();
 	private costumes = new Map<string, Partial<Record<Part, string>>>();
 	private images = new Map<string, Promise<Buffer | undefined>>();
+	private decoded = new Map<string, Bitmap>();
+	private decoding = new Map<string, Promise<Bitmap>>();
+	private decodedBytes = 0;
+	private generation = 0;
 	private root = '';
-	private addonImages = new Map<string, ReadonlyMap<string, NosZipImage>>();
+	private addonImages?: Map<string, ReadonlyMap<string, NosZipImage>>;
 
 	update(gameDirectory: string): NonNullable<AmongUsState['nosLoadedContents']> {
 		const file = path.join(gameDirectory, 'BepInEx', 'MoreCosmic', 'LoadedContents.json');
@@ -56,7 +62,6 @@ export class NosContentsTracker {
 			if (signature === this.signature && this.result) return this.result;
 			this.clear();
 			this.root = fs.realpathSync(gameDirectory);
-			this.addonImages = indexNosAddonImages(this.root);
 			const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 			if (data.Version === 20261005) {
 				this.register(data.Hats, 'hat', signature);
@@ -77,10 +82,15 @@ export class NosContentsTracker {
 	}
 
 	private clear(): void {
+		this.generation++;
 		this.signature = '';
 		this.assets.clear();
 		this.costumes.clear();
 		this.images.clear();
+		this.decoded.clear();
+		this.decoding.clear();
+		this.decodedBytes = 0;
+		this.addonImages = undefined;
 	}
 
 	private localFile(base: string, address: string): string | undefined {
@@ -128,7 +138,7 @@ export class NosContentsTracker {
 				const findImage = (address: string) =>
 					typeof costume.RelatedRawLocalPath === 'string'
 						? this.localFile(costume.RelatedRawLocalPath, address)
-						: this.addonImages.get(id)?.get(address.replace(/\\/g, '/'));
+						: (this.addonImages ??= indexNosAddonImages(this.root)).get(id)?.get(address.replace(/\\/g, '/'));
 				const file = findImage(image.Address);
 				if (!file) continue;
 				const extra = typeof image.ExAddress === 'string' ? findImage(image.ExAddress) : undefined;
@@ -185,12 +195,14 @@ export class NosContentsTracker {
 	): Player['nosCosmetics'] {
 		if (!player) return undefined;
 		const result: NonNullable<Player['nosCosmetics']> = {};
+		const color = [player.colorR, player.colorG, player.colorB].join(',');
 		for (const kind of ['skin', 'hat', 'visor'] as const) {
 			const parts = this.costumes.get(`${kind}:${player[kind]?.name ?? ''}`);
 			if (parts)
-				for (const [part, key] of Object.entries(parts))
-					result[part as Part] =
-						`nos-cosmetic://image/${key}?color=${encodeURIComponent([player.colorR, player.colorG, player.colorB].join(','))}`;
+				for (const [part, key] of Object.entries(parts)) {
+					const tint = this.assets.get(key)?.adaptive ? color : '1,1,1';
+					result[part as Part] = `nos-cosmetic://image/${key}?color=${encodeURIComponent(tint)}`;
+				}
 		}
 		return Object.keys(result).length ? result : undefined;
 	}
@@ -198,6 +210,10 @@ export class NosContentsTracker {
 	async image(key: string, color: string): Promise<Buffer | undefined> {
 		const asset = this.assets.get(key);
 		if (!asset) return undefined;
+		const rgb = color.split(',').map(Number);
+		if (rgb.length !== 3 || !rgb.every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) return undefined;
+		// Fixed colors and body masks do not vary with the player's body color.
+		color = asset.adaptive ? rgb.join(',') : '1,1,1';
 		const cacheKey = `${key}:${color}`;
 		const existing = this.images.get(cacheKey);
 		if (existing) {
@@ -212,21 +228,62 @@ export class NosContentsTracker {
 		return request;
 	}
 
+	private async source(file: string | NosZipImage): Promise<Bitmap> {
+		const generation = this.generation;
+		const canonical = await fs.promises.realpath(typeof file === 'string' ? file : file.archive);
+		const relative = path.relative(this.root, canonical);
+		if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Image unavailable');
+		const stat = await fs.promises.stat(canonical, { bigint: true });
+		if (typeof file === 'string' && stat.size > 16 * 1024 * 1024) throw new Error('Image too large');
+		const entry = typeof file === 'string' ? '' : `${file.offset}:${file.compressedSize}:${file.size}:${file.method}`;
+		const key = `${canonical}:${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}:${entry}`;
+		const cached = this.decoded.get(key);
+		if (cached) {
+			this.decoded.delete(key);
+			this.decoded.set(key, cached);
+			return cached;
+		}
+		const pending = this.decoding.get(key);
+		if (pending) return pending;
+		const request = this.decode(typeof file === 'string' ? canonical : { ...file, archive: canonical }).then(
+			(bitmap) => {
+				if (generation === this.generation) this.rememberSource(key, bitmap);
+				return bitmap;
+			}
+		);
+		this.decoding.set(key, request);
+		try {
+			return await request;
+		} finally {
+			if (this.decoding.get(key) === request) this.decoding.delete(key);
+		}
+	}
+
+	private rememberSource(key: string, bitmap: Bitmap): void {
+		if (bitmap.data.length > DECODED_BUDGET) return;
+		while (this.decoded.size && (this.decoded.size >= 32 || this.decodedBytes + bitmap.data.length > DECODED_BUDGET)) {
+			const oldest = this.decoded.keys().next().value!;
+			this.decodedBytes -= this.decoded.get(oldest)!.data.length;
+			this.decoded.delete(oldest);
+		}
+		this.decoded.set(key, bitmap);
+		this.decodedBytes += bitmap.data.length;
+	}
+
+	private async decode(file: string | NosZipImage): Promise<Bitmap> {
+		const bytes = typeof file === 'string' ? await fs.promises.readFile(file) : readNosZipImage(file);
+		if (bytes.length < 24 || bytes.readUInt32BE(16) * bytes.readUInt32BE(20) > 16 * 1024 * 1024)
+			throw new Error('Image too large');
+		return (await Jimp.read(bytes)).bitmap;
+	}
+
 	private async render(asset: Asset, color: string): Promise<Buffer> {
 		const rgb = color.split(',').map(Number);
 		if (rgb.length !== 3 || !rgb.every((value) => Number.isFinite(value) && value >= 0 && value <= 1))
 			throw new Error('Invalid color');
 		const output = Buffer.alloc(300 * 375 * 4, asset.mask ? 255 : 0);
 		const draw = async (file: string | NosZipImage, adaptive: boolean) => {
-			// Recheck containment before each read, including files replaced by symlinks.
-			const localPath = typeof file === 'string' ? file : file.archive;
-			const relative = path.relative(this.root, fs.realpathSync(localPath));
-			if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Image unavailable');
-			const bytes = typeof file === 'string' ? await fs.promises.readFile(file) : readNosZipImage(file);
-			if (bytes.length < 24 || bytes.readUInt32BE(16) * bytes.readUInt32BE(20) > 16 * 1024 * 1024)
-				throw new Error('Image too large');
-			const image = await Jimp.read(bytes);
-			const { width, height, data } = image.bitmap;
+			const { width, height, data } = await this.source(file);
 			if (width % asset.columns || height % asset.rows) throw new Error('Invalid sprite divisions');
 			const w = width / asset.columns,
 				h = height / asset.rows;

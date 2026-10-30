@@ -19,12 +19,12 @@ export interface PeerAudioNodes {
 	dummyAudioElement: HTMLAudioElement;
 	gain: GainNode;
 	pan: PannerNode;
-	reverb: ConvolverNode;
+	reverb?: ConvolverNode;
 	reverbMix?: { dry: GainNode; wet: GainNode; output: GainNode };
-	radioEcho: RadioEchoNodes;
+	radioEcho?: RadioEchoNodes;
 	starEcho?: RadioEchoNodes;
 	starEchoConnected?: boolean;
-	muffle: BiquadFilterNode;
+	muffle?: BiquadFilterNode;
 	source: MediaStreamAudioSourceNode;
 	reverbConnected: boolean;
 	radioEchoConnected: boolean;

@@ -523,13 +523,13 @@ export default class GameReader {
 					? this.nosPalette.update(this.pid, (address, size) => readBuffer(this.amongUs!.handle, address, size))
 					: undefined;
 			if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosPalette.reset();
+			const nosPlayers = nos ? new Map(nos.players.map((player) => [player.playerId, player])) : undefined;
 			if (this.loadedMod.id === 'NoS') {
 				if (this.cosmeticsEnabled) this.nosContents.update(path.dirname(this.gamePath));
-				const data = new Map(nos?.players.map((player) => [player.playerId, player]));
 				for (const player of players) {
 					this.applyNosAppearance(
 						player,
-						player.disconnected ? undefined : data.get(player.id),
+						player.disconnected ? undefined : nosPlayers?.get(player.id),
 						nosLobbyColors?.[player.id],
 						state
 					);
@@ -544,9 +544,25 @@ export default class GameReader {
 				);
 				this.applyNosRoles(players, roles, publishedBody);
 			} else this.nosRoles.reset();
-			const missingNosPlayers = nos
-				? players.filter((player) => !player.disconnected && !nos.players.some((data) => data.playerId === player.id))
+			const missingNosPlayers = nosPlayers
+				? players.filter((player) => !player.disconnected && !nosPlayers.has(player.id))
 				: [];
+			const addonPid = this.pid;
+			const addonProcess = this.amongUs;
+			const addonMod = this.loadedMod.id;
+			const addonEnabled = hasTanukiAddon({ mod: this.loadedMod.id, nosAddonIds: this.nosAddonIds });
+			const addonState = await readTanukiAddonState(addonPid, {
+				mod: this.loadedMod.id,
+				nosAddonIds: this.nosAddonIds,
+				gameState: state,
+			});
+			if (
+				this.pid !== addonPid ||
+				this.amongUs !== addonProcess ||
+				this.loadedMod.id !== addonMod ||
+				this.reconnectRequested
+			)
+				return null;
 			const newState: AmongUsState = normalizeMeetingState({
 				nosReadStatus:
 					this.loadedMod.id === 'NoS'
@@ -566,7 +582,9 @@ export default class GameReader {
 				nosLocalMicPosition: nos?.localMicPosition,
 				nosLocalIsPseudocide: nos?.localIsPseudocide,
 				nosRadios: nos?.radios,
-				...readTanukiAddonState(this.pid, { mod: this.loadedMod.id, nosAddonIds: this.nosAddonIds, gameState: state }),
+				...(addonEnabled === hasTanukiAddon({ mod: this.loadedMod.id, nosAddonIds: this.nosAddonIds })
+					? addonState
+					: {}),
 				lobbyCode: lobbyCode,
 				lobbyCodeInt,
 				players,
@@ -1688,20 +1706,46 @@ export default class GameReader {
 		return 'Crewmate';
 	}
 
+	private readPosition(
+		objectPtr: number,
+		xOffsets: number[],
+		yOffsets: number[]
+	): { x: number; y: number } | undefined {
+		if (
+			!this.amongUs ||
+			!xOffsets.length ||
+			xOffsets.length !== yOffsets.length ||
+			yOffsets[yOffsets.length - 1] !== xOffsets[xOffsets.length - 1] + 4 ||
+			!xOffsets.slice(0, -1).every((offset, index) => offset === yOffsets[index])
+		)
+			return undefined;
+		const { address, last } = this.offsetAddress(objectPtr, xOffsets);
+		if (address === 0) return undefined;
+		const buffer = readBuffer(this.amongUs.handle, address + last, 8);
+		if (buffer.length < 8) return undefined;
+		return { x: buffer.readFloatLE(0), y: buffer.readFloatLE(4) };
+	}
+
 	parsePlayer(ptr: number, buffer: Buffer, LocalclientId = -1): Player | undefined {
 		if (!this.PlayerStruct || !this.offsets) return undefined;
 
 		const { data } = this.PlayerStruct.report<PlayerReport>(buffer as unknown as BufferSource, 0, {});
 
 		if (this.is_64bit) {
-			data.objectPtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('objectPtr')]);
-			data.outfitsPtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('outfitsPtr')]);
-			data.taskPtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('taskPtr')]);
-			data.rolePtr = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('rolePtr')]);
+			const pointer = (name: string): number => {
+				const offset = this.PlayerStruct!.getOffsetByName(name);
+				return offset >= 0 && offset + 8 <= buffer.length
+					? Number(buffer.readBigUInt64LE(offset))
+					: this.readMemory<number>('pointer', ptr, [offset]);
+			};
+			data.objectPtr = pointer('objectPtr');
+			data.outfitsPtr = pointer('outfitsPtr');
+			data.taskPtr = pointer('taskPtr');
+			data.rolePtr = pointer('rolePtr');
 
 			if (Object.prototype.hasOwnProperty.call(data, 'friendCode')) {
-				data.friendCode = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('friendCode')]);
-				data.puid = this.readMemory('pointer', ptr, [this.PlayerStruct.getOffsetByName('puid')]);
+				data.friendCode = pointer('friendCode');
+				data.puid = pointer('puid');
 			}
 		}
 		if (data.objectPtr === 0) {
@@ -1716,8 +1760,11 @@ export default class GameReader {
 			? [this.offsets.player.localX, this.offsets.player.localY]
 			: [this.offsets.player.remoteX, this.offsets.player.remoteY];
 
-		let x = this.readMemory<number>('float', data.objectPtr, positionOffsets[0]);
-		let y = this.readMemory<number>('float', data.objectPtr, positionOffsets[1]);
+		const position = this.amongUs
+			? this.readPosition(data.objectPtr, positionOffsets[0], positionOffsets[1])
+			: undefined;
+		let x = position?.x ?? this.readMemory<number>('float', data.objectPtr, positionOffsets[0]);
+		let y = position?.y ?? this.readMemory<number>('float', data.objectPtr, positionOffsets[1]);
 		const currentOutfit = this.readMemory<number>('uint32', data.objectPtr, this.offsets.player.currentOutfit);
 		const isDummy = this.readMemory<boolean>('boolean', data.objectPtr, this.offsets.player.isDummy);
 		const friendCode = this.readString(data.friendCode);

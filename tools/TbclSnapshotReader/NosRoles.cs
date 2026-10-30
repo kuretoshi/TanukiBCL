@@ -30,7 +30,6 @@ internal static class NosRoles
             int count = dictionary.ReadField<int>("_count");
             if (count < 0 || count > 64 || (count > 0 && (!entries.IsArray || count > entries.AsArray().Length)))
                 throw new InvalidOperationException("Invalid NoS player registry");
-            var translations = Translations(module);
             var ids = new HashSet<byte>();
             for (int i = 0; i < count; i++)
             {
@@ -46,9 +45,15 @@ internal static class NosRoles
                 var definition = Definition(role);
                 string? name = definition.IsNull ? null : definition.ReadStringField("<LocalizedName>k__BackingField", 256);
                 int? roleId = definition.IsNull ? null : definition.ReadField<int>("<Virial.Assignable.IRoleID.Id>k__BackingField");
-                translations.TryGetValue($"role.{name}.name", out var label);
-                result.Add(new PlayerRole(id, new Role(roleId, name, label, role.Type!.Name!, ReadRainbowStar(runtime, player)),
+                result.Add(new PlayerRole(id, new Role(roleId, name, null, role.Type!.Name!, ReadRainbowStar(runtime, player)),
                     name == "berserker" ? NosBody.Resolve(target, player, id) : null));
+            }
+            var translations = Translations(module, result.Select(row => $"role.{row.Role.RoleName}.name"));
+            for (int i = 0; i < result.Count; i++)
+            {
+                var row = result[i];
+                result[i] = row with { Role = row.Role with {
+                    DisplayName = translations.GetValueOrDefault($"role.{row.Role.RoleName}.name") } };
             }
             if (dictionary.ReadField<int>("_version") != version ||
                 manager.ReadObjectField("allModPlayers").Address != dictionary.Address ||
@@ -111,12 +116,16 @@ internal static class NosRoles
         return default;
     }
 
-    private static Dictionary<string, string> Translations(ClrModule module)
+    private static Dictionary<string, string> Translations(ClrModule module, IEnumerable<string> requestedKeys)
     {
         var result = new Dictionary<string, string>();
+        var missing = new HashSet<string>(requestedKeys, StringComparer.Ordinal);
+        if (missing.Count == 0) return result;
         var type = module.GetTypeByName("Nebula.Modules.Language")!;
-        foreach (string name in new[] { "DefaultLanguage", "CurrentLanguage", "GuestLanguage" })
+        // Resolve only active roles, respecting the same Guest > Current > Default precedence.
+        foreach (string name in new[] { "GuestLanguage", "CurrentLanguage", "DefaultLanguage" })
         {
+            if (missing.Count == 0) break;
             var field = type.GetStaticFieldByName(name);
             if (field == null) continue;
             var language = field.ReadObject(module.AppDomain);
@@ -127,16 +136,19 @@ internal static class NosRoles
             int count = dictionary.ReadField<int>("_count");
             if (count < 0 || count > 100000 || (count > 0 && (!entries.IsArray || count > entries.AsArray().Length)))
                 throw new InvalidOperationException("Invalid NoS translations");
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < count && missing.Count > 0; i++)
             {
                 var entry = entries.AsArray().GetStructValue(i);
                 if (entry.ReadField<int>("next") < -1) continue;
                 string? key = entry.ReadObjectField("key").AsString(512);
-                if (key == null || !key.StartsWith("role.") || !key.EndsWith(".name")) continue;
+                if (key == null || !missing.Contains(key)) continue;
                 string? value = entry.ReadObjectField("value").AsString(512);
-                if (value != null) result[key] = value;
+                if (value == null) continue;
+                result[key] = value;
+                missing.Remove(key);
             }
-            if (dictionary.ReadField<int>("_version") != version ||
+            if (field.ReadObject(module.AppDomain).Address != language.Address ||
+                dictionary.ReadField<int>("_version") != version ||
                 language.ReadObjectField("translationMap").Address != dictionary.Address ||
                 dictionary.ReadObjectField("_entries").Address != entries.Address ||
                 dictionary.ReadField<int>("_count") != count)

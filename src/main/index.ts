@@ -12,7 +12,7 @@ import { pathToFileURL } from 'url';
 import './hook';
 import overlayWindowModule from 'electron-overlay-window';
 const { overlayWindow } = overlayWindowModule;
-import { initializeIpcHandlers, initializeIpcListeners } from './ipc-handlers';
+import { initializeIpcHandlers, initializeIpcListeners, notifySettingsWindowPresence } from './ipc-handlers';
 import { AutoUpdaterState, IpcRendererMessages, IpcHandlerMessages } from '../common/ipc-messages';
 import { ProgressInfo, UpdateInfo } from 'builder-util-runtime';
 import { initSettingsIpc } from './settingsStore';
@@ -397,6 +397,7 @@ function createSettingsWindow() {
 	window.once('ready-to-show', () => window.show());
 	window.on('closed', () => {
 		global.settingsWindow = null;
+		notifySettingsWindowPresence();
 	});
 
 	loadView(window, 'settings');
@@ -440,6 +441,7 @@ function createDebugWindow() {
 	window.once('ready-to-show', () => window.show());
 	window.on('closed', () => {
 		global.debugWindow = null;
+		notifySettingsWindowPresence();
 		setVoiceDebugEnabled(!!voiceDebugEnabled);
 		setDebugLoggingEnabled(debugLoggingAtStartup || !!voiceDebugEnabled);
 	});
@@ -633,6 +635,7 @@ if (!gotTheLock) {
 			global.mainWindow = createMainWindow();
 			if (isDevelopment && !global.debugWindow && (voiceDebugEnabled || isDebugLoggingEnabled()))
 				global.debugWindow = createDebugWindow();
+			notifySettingsWindowPresence();
 		}
 
 		session.fromPartition('default').setPermissionRequestHandler((webContents, permission, callback) => {
@@ -724,6 +727,7 @@ if (!gotTheLock) {
 		initSettingsIpc();
 		global.mainWindow = createMainWindow();
 		if (isDevelopment && (voiceDebugEnabled || isDebugLoggingEnabled())) global.debugWindow = createDebugWindow();
+		notifySettingsWindowPresence();
 
 		if (isDevelopment && !isLiteApp) {
 			const { installExtension, REACT_DEVELOPER_TOOLS } = await import('electron-devtools-installer');
@@ -835,8 +839,10 @@ if (!gotTheLock) {
 		}
 		if (result !== 'authorized') return result;
 		if (event.sender.isDestroyed() || event.sender !== global.settingsWindow?.webContents) return 'denied';
-		if (!global.debugWindow) global.debugWindow = createDebugWindow();
-		else {
+		if (!global.debugWindow) {
+			global.debugWindow = createDebugWindow();
+			notifySettingsWindowPresence();
+		} else {
 			if (global.debugWindow.isMinimized()) global.debugWindow.restore();
 			global.debugWindow.show();
 			global.debugWindow.focus();
@@ -846,6 +852,7 @@ if (!gotTheLock) {
 	ipcMain.on(IpcHandlerMessages.OPEN_SETTINGS, () => {
 		if (!global.settingsWindow) {
 			global.settingsWindow = createSettingsWindow();
+			notifySettingsWindowPresence();
 		} else {
 			if (global.settingsWindow.isMinimized()) global.settingsWindow.restore();
 			global.settingsWindow.show();

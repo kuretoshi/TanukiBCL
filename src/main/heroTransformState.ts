@@ -9,7 +9,19 @@ export function readHeroTransformState(
 ): HeroTransformState[] {
 	try {
 		if (statSync(path).size > 8192) return [];
-		const data = JSON.parse(readFileSync(path, 'utf8'));
+		return parseHeroTransformState(readFileSync(path, 'utf8'), pid, now);
+	} catch {
+		return [];
+	}
+}
+
+export function parseHeroTransformState(
+	text: string | undefined,
+	pid: number,
+	now = Date.now()
+): ReturnType<typeof readHeroTransformState> {
+	try {
+		const data = JSON.parse(text ?? '');
 		if (
 			!data ||
 			data.protocol !== 1 ||

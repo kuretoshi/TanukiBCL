@@ -916,17 +916,7 @@ function peer() {
 	return {
 		gain: new Node(),
 		pan,
-		muffle: new Node(),
-		reverb: new Node(),
 		source: new Node(),
-		radioEcho: {
-			input: new Node(),
-			output: new Node(),
-			dry: new Node(),
-			wet: new Node(),
-			delay: new Node(),
-			feedback: new Node(),
-		},
 		reverbConnected: false,
 		muffleConnected: false,
 		radioEchoConnected: false,
@@ -938,6 +928,81 @@ const first = peer(),
 	second = peer();
 audio.peers.set('first', first);
 audio.peers.set('second', second);
+const lazy = peer();
+audio.peers.set('lazy', lazy);
+const ordinaryLobby = { ...lobby, voiceEffectEnabled: false, wallsBlockAudio: false };
+const ordinaryState = { ...state, mod: 'NONE' };
+audio.applyVoiceAudio('lazy', ordinaryState, settings, ordinaryLobby, me, other, -1);
+assert.equal(lazy.muffle, undefined);
+assert.equal(lazy.reverb, undefined);
+assert.equal(lazy.radioEcho, undefined);
+audio.applyVoiceAudio(
+	'lazy',
+	ordinaryState,
+	settings,
+	{ ...ordinaryLobby, impostorRadioEnabled: true },
+	{ ...me, isDead: true },
+	{ ...other, isImpostor: true },
+	other.clientId
+);
+const radioFilter = lazy.muffle,
+	radioEcho = lazy.radioEcho;
+assert.equal(radioFilter.type, 'highpass');
+assert.equal(lazy.radioEchoConnected, true);
+assert.ok(lazy.gain.connections.has(radioFilter));
+assert.ok(radioFilter.connections.has(radioEcho.input));
+assert.ok(radioEcho.output.connections.has(audio.masterGain));
+audio.applyVoiceAudio('lazy', ordinaryState, settings, ordinaryLobby, me, other, -1);
+assert.equal(lazy.radioEchoConnected, false);
+assert.equal(radioEcho.output.connections.size, 0);
+assert.ok(lazy.gain.connections.has(audio.masterGain));
+audio.applyVoiceAudio('lazy', ordinaryState, settings, ordinaryLobby, { ...me, inVent: true }, other, -1);
+assert.equal(lazy.muffle, radioFilter, 'vent filtering reuses the first radio filter');
+assert.equal(radioFilter.type, 'lowpass');
+audio.convolverBuffer = { impulse: 'already loaded' };
+audio.applyVoiceAudio(
+	'lazy',
+	ordinaryState,
+	settings,
+	{ ...ordinaryLobby, haunting: true },
+	{ ...me, isImpostor: true },
+	{ ...other, isDead: true },
+	-1
+);
+const reverb = lazy.reverb;
+assert.ok(lazy.reverbConnected);
+assert.equal(reverb.buffer, audio.convolverBuffer, 'late convolver creation uses the loaded impulse');
+assert.ok(lazy.reverbMix.wet.connections.has(lazy.reverbMix.output));
+audio.applyVoiceAudio('lazy', ordinaryState, settings, ordinaryLobby, me, other, -1);
+assert.equal(lazy.reverbConnected, false);
+assert.equal(reverb.connections.size, 0);
+assert.ok(lazy.gain.connections.has(audio.masterGain));
+audio.applyVoiceAudio(
+	'lazy',
+	ordinaryState,
+	settings,
+	{ ...ordinaryLobby, haunting: true },
+	{ ...me, isImpostor: true },
+	{ ...other, isDead: true },
+	-1
+);
+assert.equal(lazy.reverb, reverb, 'subsequent reverb activation reuses its nodes');
+const originalFetch = globalThis.fetch;
+try {
+	globalThis.fetch = async () => ({ arrayBuffer: async () => new ArrayBuffer(0) });
+	context.decodeAudioData = async () => ({ impulse: 'arrived after activation' });
+	await audio.loadConvolverBuffer();
+	assert.equal(reverb.buffer, audio.convolverBuffer);
+	assert.equal(second.reverb, undefined, 'loading the shared impulse does not allocate unused convolvers');
+} finally {
+	globalThis.fetch = originalFetch;
+}
+audio.removePeer('lazy');
+for (const node of [radioFilter, reverb, ...Object.values(radioEcho), ...Object.values(lazy.reverbMix)])
+	assert.equal(node.connections.size, 0, 'removing a peer disconnects all lazily created effects');
+console.log(
+	'ok lazy audio effects: ordinary allocation, radio/vent/reverb activation, reuse, impulse loading and cleanup'
+);
 audio.applyVoiceAudio('first', state, settings, lobby, me, other, -1);
 assert.ok(first.voiceEffectConnected);
 assert.ok(first.gain.connections.has(first.voiceEffect.input));

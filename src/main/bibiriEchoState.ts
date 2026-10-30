@@ -8,7 +8,19 @@ export function readBibiriEchoState(
 ): { playerId: number; unixMs: number }[] {
 	try {
 		if (!filePath || statSync(filePath).size > 16384) return [];
-		const data = JSON.parse(readFileSync(filePath, 'utf8'));
+		return parseBibiriEchoState(readFileSync(filePath, 'utf8'), pid, now);
+	} catch {
+		return [];
+	}
+}
+
+export function parseBibiriEchoState(
+	text: string | undefined,
+	pid: number,
+	now = Date.now()
+): ReturnType<typeof readBibiriEchoState> {
+	try {
+		const data = JSON.parse(text ?? '');
 		if (data.protocol !== 1 || data.pid !== pid || !Array.isArray(data.players) || data.players.length > 255) return [];
 		const ids = new Set<number>();
 		for (const p of data.players) {

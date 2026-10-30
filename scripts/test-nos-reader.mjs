@@ -201,14 +201,19 @@ try {
 		child.stdin.write(value + '\n');
 		await reply;
 	};
-	const readStar = () =>
+	const readRole = () =>
 		JSON.parse(
-			execFileSync(resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`), ['roles', String(child.pid)], {
-				windowsHide: true,
-				timeout: 45000,
-				encoding: 'utf8',
-			})
-		).metadata[0].role.isRainbowStar;
+			execFileSync(
+				process.env.NOS_ROLE_READER_EXECUTABLE ?? resolve(`out/nos-reader/${architecture}/TbclSnapshotReader.exe`),
+				['roles', String(child.pid)],
+				{
+					windowsHide: true,
+					timeout: 45000,
+					encoding: 'utf8',
+				}
+			)
+		).metadata[0].role;
+	const readStar = () => readRole().isRainbowStar;
 	if (process.env.NOS_ROLE_BENCHMARK === '1') {
 		const samples = [];
 		for (let i = 0; i < 8; i++) {
@@ -227,6 +232,31 @@ try {
 	]) {
 		await command(value);
 		assert.equal(readStar(), expected, `Managed Star state: ${value}`);
+	}
+	assert.equal(readRole().displayName, 'Fixture role');
+	for (const [value, expected] of [
+		['lang-guest', 'Guest role'],
+		['lang-current', 'Current role'],
+		['lang-default', 'Default role'],
+		['lang-missing', null],
+		['lang-update', 'Updated role'],
+	]) {
+		await command(value);
+		assert.equal(readRole().displayName, expected, `Translation precedence and live language changes: ${value}`);
+	}
+	await command('gc');
+	assert.equal(readRole().displayName, 'Updated role', 'Role labels remain correct after managed GC');
+	if (process.env.NOS_TRANSLATION_BENCHMARK === '1') {
+		await command('lang-large');
+		const samples = [];
+		for (let i = 0; i < 4; i++) {
+			const started = performance.now();
+			assert.equal(readRole().displayName, 'Guest role');
+			samples.push(performance.now() - started);
+		}
+		console.log(
+			`NoS ${architecture} translations (3 dictionaries x 5001 entries), milliseconds: ${JSON.stringify(samples)}`
+		);
 	}
 	await command('neck');
 	assert.equal(live().players[0].neckLength, 12);

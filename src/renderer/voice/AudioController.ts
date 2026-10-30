@@ -432,7 +432,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			const buffer = await context.decodeAudioData(await response.arrayBuffer());
 			this.convolverBuffer = buffer;
 			for (const peer of this.peers.values()) {
-				peer.reverb.buffer = buffer;
+				if (peer.reverb) peer.reverb.buffer = buffer;
 			}
 		} catch (error) {
 			console.warn('Failed to load reverb impulse response', error);
@@ -584,13 +584,6 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		pan.maxDistance = this.maxDistance;
 		pan.rolloffFactor = 1;
 
-		const muffle = context.createBiquadFilter();
-		muffle.type = 'lowpass';
-
-		const reverb = context.createConvolver();
-		reverb.buffer = this.convolverBuffer;
-		const radioEcho = createRadioEcho(context);
-
 		source.connect(pan);
 		pan.connect(gain);
 		gain.connect(masterGain);
@@ -601,9 +594,6 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			dummyAudioElement,
 			gain,
 			pan,
-			reverb,
-			radioEcho,
-			muffle,
 			muffleConnected: false,
 			reverbConnected: false,
 			radioEchoConnected: false,
@@ -633,7 +623,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		peer.reverb?.disconnect();
 		if (peer.reverbMix) for (const node of Object.values(peer.reverbMix)) node.disconnect();
 		peer.muffle?.disconnect();
-		disconnectRadioEcho(peer.radioEcho);
+		if (peer.radioEcho) disconnectRadioEcho(peer.radioEcho);
 		if (peer.starEcho) disconnectRadioEcho(peer.starEcho);
 	}
 
@@ -885,7 +875,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 					settings.nosBibiriEchoStrength ?? 100
 				);
 		}
-		const { pan, muffle } = peer;
+		const { pan } = peer;
 		const result = calculateVoiceAudio({
 			airshipSpawnFallback:
 				state.map === MapType.AIRSHIP && state.gameState === GameState.TASKS && Date.now() < this.airshipSpawnUntil,
@@ -905,14 +895,19 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		applyVoiceJamming(state, other.id, result);
 		pan.maxDistance = result.panMaxDistance ?? this.maxDistance;
 
-		if (result.muffle) {
-			muffle.type = result.muffle.type;
-			muffle.frequency.value = result.muffle.frequency;
-			muffle.Q.value = result.muffle.q;
+		if (result.muffle && this.context) {
+			peer.muffle ??= this.context.createBiquadFilter();
+			peer.muffle.type = result.muffle.type;
+			peer.muffle.frequency.value = result.muffle.frequency;
+			peer.muffle.Q.value = result.muffle.q;
 		}
 
 		const wantReverb = result.reverb === null ? peer.reverbConnected : result.reverb;
 		if (wantReverb && this.context) {
+			if (!peer.reverb) {
+				peer.reverb = this.context.createConvolver();
+				peer.reverb.buffer = this.convolverBuffer;
+			}
 			peer.reverbMix ??= createReverbMix(this.context);
 			const levels = reverbLevels(result.reverbStrength);
 			peer.reverbMix.dry.gain.value = levels.dry;
@@ -920,6 +915,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 		const wantMuffle = result.muffle === null ? peer.muffleConnected : result.muffle !== false;
 		const wantRadioEcho = result.radioEcho;
+		if (wantRadioEcho && this.context) peer.radioEcho ??= createRadioEcho(this.context);
 		let effect =
 			result.gain > 0
 				? selectVoiceEffect(
@@ -1021,9 +1017,9 @@ function rebuildEffectChain(
 	)
 		return;
 
-	for (const node of [peer.gain, peer.muffle, peer.reverb, peer.radioEcho.output]) {
+	for (const node of [peer.gain, peer.muffle, peer.reverb, peer.radioEcho?.output]) {
 		try {
-			node.disconnect();
+			node?.disconnect();
 		} catch {
 			/* not connected */
 		}
@@ -1038,7 +1034,7 @@ function rebuildEffectChain(
 		peer.gain.connect(peer.voiceEffect.input);
 		chain[0] = peer.voiceEffect.output;
 	}
-	if (wantMuffle) chain.push(peer.muffle);
+	if (wantMuffle && peer.muffle) chain.push(peer.muffle);
 	if (peer.reverbMix) for (const node of Object.values(peer.reverbMix)) node.disconnect();
 
 	try {
@@ -1046,9 +1042,9 @@ function rebuildEffectChain(
 			chain[index].connect(chain[index + 1]);
 		}
 		let chainOutput = chain[chain.length - 1];
-		if (wantReverb && peer.reverbMix) {
+		if (wantReverb && peer.reverb && peer.reverbMix) {
 			chainOutput = connectReverbMix(chainOutput, peer.reverb, peer.reverbMix);
-		} else if (wantReverb) {
+		} else if (wantReverb && peer.reverb) {
 			chainOutput.connect(peer.reverb);
 			chainOutput = peer.reverb;
 		}
@@ -1056,7 +1052,7 @@ function rebuildEffectChain(
 			chainOutput.connect(peer.starEcho.input);
 			chainOutput = peer.starEcho.output;
 		}
-		if (wantRadioEcho) {
+		if (wantRadioEcho && peer.radioEcho) {
 			chainOutput.connect(peer.radioEcho.input);
 			peer.radioEcho.output.connect(destination);
 		} else {

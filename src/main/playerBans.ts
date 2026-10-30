@@ -1,6 +1,8 @@
 const PLAYER_BAN_BASE_URL = 'https://debug-auth.kuretoshi.work/v1/player-bans';
 
 export interface PlayerBanRecord {
+	ban_type?: 'uid' | 'ip';
+	public_ip?: string;
 	uid_digest: string;
 	player_uid: string;
 	display_name: string;
@@ -22,6 +24,9 @@ export interface PlayerHistoryRecord {
 	first_seen_at: number;
 	last_seen_at: number;
 	is_banned: number;
+	public_ip?: string;
+	uid_banned?: number;
+	ip_banned?: number;
 }
 
 async function postBanRequest(path: 'check' | 'manage', payload: object, request: typeof fetch): Promise<unknown> {
@@ -60,6 +65,11 @@ export async function checkPlayerBan(
 						(typeof player.friendCode === 'undefined' ||
 							(typeof player.friendCode === 'string' && player.friendCode.length <= 80))
 				)
+				.map((player) => ({
+					playerUid: player.playerUid,
+					playerName: player.playerName,
+					friendCode: player.friendCode ?? '',
+				}))
 		: [];
 	try {
 		const result = (await postBanRequest(
@@ -85,6 +95,7 @@ export async function managePlayerBans(
 			history: PlayerHistoryRecord[];
 			historyTotal: number;
 			historyAvailable: boolean;
+			ipBansAvailable: boolean;
 	  }
 	| { error: string }
 > {
@@ -92,7 +103,19 @@ export async function managePlayerBans(
 	const data = payload as Record<string, unknown>;
 	if (typeof data.password !== 'string' || !data.password || data.password.length > 1024)
 		return { error: '管理者パスワードを入力してください。' };
-	if (!['list', 'add', 'remove', 'add-name', 'remove-name', 'add-history'].includes(String(data.action)))
+	if (
+		![
+			'list',
+			'add',
+			'remove',
+			'add-name',
+			'remove-name',
+			'add-history',
+			'add-ip',
+			'add-history-ip',
+			'remove-ip',
+		].includes(String(data.action))
+	)
 		return { error: '操作を確認してください。' };
 	try {
 		const result = (await postBanRequest('manage', data, request)) as {
@@ -100,6 +123,7 @@ export async function managePlayerBans(
 			pending?: PendingPlayerNameBan[];
 			history?: PlayerHistoryRecord[];
 			historyTotal?: number;
+			ipBansAvailable?: boolean;
 		};
 		return Array.isArray(result.bans) && Array.isArray(result.pending)
 			? {
@@ -108,6 +132,7 @@ export async function managePlayerBans(
 					history: result.history ?? [],
 					historyTotal: result.historyTotal ?? 0,
 					historyAvailable: Array.isArray(result.history),
+					ipBansAvailable: result.ipBansAvailable === true,
 				}
 			: { error: 'BAN一覧を取得できませんでした。' };
 	} catch (error) {

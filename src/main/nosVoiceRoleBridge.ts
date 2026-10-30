@@ -189,6 +189,7 @@ export function registerNosVoiceRoleBridge(
 	}
 	const unsubscribe = onStateChanged?.((state) => {
 		if (!hasTanukiAddon(state)) reset();
+		else if (!state?.isHost) closeHostVoice();
 	});
 	ipcMain.on('NOS_HOST_VOICE_SAMPLE', (event, player: unknown, rms: unknown, active: unknown) => {
 		if (!isMainRenderer(event.sender.id)) return;

@@ -98,7 +98,7 @@ try {
 		};
 		const lobby = tracker.lobbyCosmetics(lobbyPlayer, '#ff8000');
 		assert.ok(lobby.hat && lobby.visor && lobby.skin, 'Lobby outfits must load without round PlayerData');
-		assert.equal(new URL(lobby.hat).searchParams.get('color'), '1,0.5019607843137255,0');
+		assert.equal(new URL(lobby.hat).searchParams.get('color'), '1,1,1', 'Fixed-color costumes share a stable URL');
 		assert.equal(tracker.lobbyCosmetics({ ...lobbyPlayer, disconnected: true }, '#ff8000'), undefined);
 		assert.equal(
 			tracker.lobbyCosmetics({ ...lobbyPlayer, appearanceHatId: '', appearanceSkinId: '', appearanceVisorId: '' }),

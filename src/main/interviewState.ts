@@ -9,7 +9,19 @@ export function readInterviewState(
 ): InterviewState[] {
 	try {
 		if (statSync(path).size > 65536) return [];
-		const data = JSON.parse(readFileSync(path, 'utf8'));
+		return parseInterviewState(readFileSync(path, 'utf8'), pid, now);
+	} catch {
+		return [];
+	}
+}
+
+export function parseInterviewState(
+	text: string | undefined,
+	pid: number,
+	now = Date.now()
+): ReturnType<typeof readInterviewState> {
+	try {
+		const data = JSON.parse(text ?? '');
 		if (
 			data.protocol !== 1 ||
 			data.pid !== pid ||

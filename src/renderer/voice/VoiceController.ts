@@ -140,6 +140,7 @@ function emptyPrev() {
 		lobbySettingsHosted: false,
 		gameOpen: false,
 		gameInfo: '',
+		versionWarningInputs: '',
 		obsPayload: '',
 		obsSentAt: 0,
 		toh4eLobby: false,
@@ -210,18 +211,16 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	getEffectiveGameState(state: AmongUsState): AmongUsState {
 		if (state.mod === 'NoS') {
 			const now = Date.now();
-			return {
-				...state,
-				players: state.players?.map((player) => {
-					const report = this.nosPseudocideReports[player.id];
-					const active = player.isLocal
-						? state.nosLocalIsPseudocide
-						: report?.clientId === player.clientId && now - report.receivedAt < 10000
-							? report.active
-							: undefined;
-					return { ...player, nosIsPseudocide: active };
-				}),
-			};
+			const players = state.players?.map((player) => {
+				const report = this.nosPseudocideReports[player.id];
+				const active = player.isLocal
+					? state.nosLocalIsPseudocide
+					: report?.clientId === player.clientId && now - report.receivedAt < 10000
+						? report.active
+						: undefined;
+				return player.nosIsPseudocide === active ? player : { ...player, nosIsPseudocide: active };
+			});
+			return players?.some((player, index) => player !== state.players[index]) ? { ...state, players } : state;
 		}
 		if (!this.snapshot.toh4eLobby && state.mod !== 'TOH4E') return state;
 		return {
@@ -623,6 +622,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			this.connection.on('lobbyReset', () => {
 				this.peerVersions = {};
 				this.versionSentAt = 0;
+				this.prev.versionWarningInputs = '';
 				this.patch({ versionWarning: '' });
 				this.prev.tohLobbySentSignature = '';
 				this.prev.tohRoleSentSignatures = {};
@@ -842,6 +842,9 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			const player = state.players?.find((player) => player.clientId === clientId && !player.disconnected);
 			return player ? [{ name: player.name, version }] : [];
 		});
+		const inputs = JSON.stringify([packageJson.version, this.host.isHost, hostVersion, participants]);
+		if (inputs === this.prev.versionWarningInputs) return;
+		this.prev.versionWarningInputs = inputs;
 		const required = requiredAppVersion(
 			packageJson.version,
 			hostVersion,
@@ -976,11 +979,6 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					isToh4eHostName(hostPlayer?.appearanceName));
 			if (toh4eDetected && !this.snapshot.toh4eLobby) this.patch({ toh4eLobby: true });
 			this.claimLobbySettingsOwnership(state);
-
-			const activeLobbySettings = this.activeLobbySettings;
-			const effectiveState = this.getEffectiveGameState(state);
-			const effectiveMe = effectiveState.players.find((player) => player.isLocal) ?? myPlayer;
-			this.audio.setMaxDistance(voiceHearingDistance(effectiveState, activeLobbySettings, effectiveMe));
 		}
 
 		this.connection.setContext({
@@ -1021,8 +1019,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.syncNosPseudocide(state, myPlayer);
 		this.handlePublicLobby(state, myPlayer);
 		this.cleanupImpostorRadio(state, myPlayer);
-		this.updatePeerAudio(state, myPlayer);
-		this.publishMobileAndObs(state, myPlayer);
+		// Resolve after session transitions so audio and relays share the current role state.
+		const effectiveState = this.getEffectiveGameState(state);
+		const effectiveMe = effectiveState.players?.find((player) => player.isLocal) ?? myPlayer;
+		if (effectiveMe)
+			this.audio.setMaxDistance(voiceHearingDistance(effectiveState, this.activeLobbySettings, effectiveMe));
+		this.updatePeerAudio(effectiveState, effectiveMe);
+		this.publishMobileAndObs(effectiveState, effectiveMe);
 	}
 
 	private syncNosRadioReports(state: AmongUsState, myPlayer: Player | undefined): void {
@@ -1588,7 +1591,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private canUseRadio(state: AmongUsState, player: Player): boolean {
-		state = this.getEffectiveGameState(state);
+		if (state.mod !== 'NoS') state = this.getEffectiveGameState(state);
 		player = state.players?.find((value) => value.id === player.id && value.clientId === player.clientId) ?? player;
 		if (state.mod === 'NoS') {
 			const kind = player.isLocal ? this.heldNosRadio.kind : undefined;
@@ -1621,7 +1624,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private areRadioTeammates(state: AmongUsState, first: Player, second: Player): boolean {
-		state = this.getEffectiveGameState(state);
+		if (state.mod !== 'NoS') state = this.getEffectiveGameState(state);
 		first = state.players?.find((player) => player.clientId === first.clientId && player.id === first.id) ?? first;
 		second = state.players?.find((player) => player.clientId === second.clientId && player.id === second.id) ?? second;
 		if (state.mod === 'NoS') return this.canNosRadioReach(state, first, second);
@@ -1653,14 +1656,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		const settings = SettingsStore.store;
 		const activeLobbySettings = this.activeLobbySettings;
-		const audioState = this.getEffectiveGameState(state);
-		const audioMe = audioState.players.find((player) => player.isLocal) ?? myPlayer;
 		const playerSocketIds = this.connection.playerSocketIds;
 		const handledPeerIds: string[] = [];
 		const otherTalking = { ...this.snapshot.otherTalking };
 		let talkingChanged = false;
 
-		for (const player of audioState.players) {
+		for (const player of state.players) {
 			if (player.isLocal || player.clientId === myPlayer.clientId) continue;
 			const peerId = playerSocketIds[player.clientId];
 			if (!peerId || !this.audio.hasPeer(peerId)) continue;
@@ -1668,10 +1669,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			handledPeerIds.push(peerId);
 			let gain = this.audio.applyVoiceAudio(
 				peerId,
-				audioState,
+				state,
 				settings,
 				activeLobbySettings,
-				audioMe,
+				myPlayer,
 				player,
 				this.snapshot.impostorRadioClientId,
 				this.snapshot.impostorRadioClientIds,
@@ -1719,8 +1720,6 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private publishMobileAndObs(state: AmongUsState, myPlayer: Player | undefined): void {
-		state = this.getEffectiveGameState(state);
-		myPlayer = state.players?.find((player) => player.isLocal) ?? myPlayer;
 		const settings = SettingsStore.store;
 		if (!state.players) return;
 		if (!this.connection.isMobileRunning && !settings.obsOverlay) return;

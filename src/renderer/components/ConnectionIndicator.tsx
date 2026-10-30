@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Tooltip } from '@mui/material';
 import { ConnectionQuality, qualityBars } from '../voice/connectionQuality';
 
-export default function ConnectionIndicator({
+function ConnectionIndicator({
 	quality,
 	connected,
 	edgeInset = -2,
@@ -65,3 +65,5 @@ export default function ConnectionIndicator({
 		</Tooltip>
 	);
 }
+
+export default React.memo(ConnectionIndicator);

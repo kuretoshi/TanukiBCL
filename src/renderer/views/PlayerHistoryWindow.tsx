@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Box, Button, Paper, TextField, Typography } from '@mui/material';
+import { Box, Button, Paper, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { StyledEngineProvider, ThemeProvider } from '@mui/material/styles';
+import type { PlayerHistoryRecord } from '../../main/playerBans';
 import theme from '../lib/theme';
 import { ipcRenderer } from '../lib/electron-bridge';
 import '../css/index.css';
-
-interface PlayerHistoryRecord {
-	uid_digest: string;
-	display_name: string;
-	friend_code: string;
-	first_seen_at: number;
-	last_seen_at: number;
-	is_banned: number;
-}
 
 interface HistoryFilter {
 	name: string;
@@ -44,10 +36,12 @@ function PlayerHistoryWindow(): React.JSX.Element {
 	const [total, setTotal] = useState(0);
 	const [busy, setBusy] = useState(false);
 	const [confirmDigest, setConfirmDigest] = useState('');
+	const [banType, setBanType] = useState<'uid' | 'ip'>('uid');
+	const [ipBansAvailable, setIpBansAvailable] = useState(false);
 	const [message, setMessage] = useState('管理者パスワードを入力し、検索してください。');
 
 	const operate = async (
-		action: 'list' | 'add-history',
+		action: 'list' | 'add-history' | 'add-history-ip',
 		nextFilter: HistoryFilter,
 		nextOffset: number,
 		digest?: string
@@ -65,11 +59,20 @@ function PlayerHistoryWindow(): React.JSX.Element {
 				historyFrom: nextFilter.from,
 				historyTo: nextFilter.to,
 				historyOffset: nextOffset,
-			})) as { history?: PlayerHistoryRecord[]; historyTotal?: number; historyAvailable?: boolean; error?: string };
+			})) as {
+				history?: PlayerHistoryRecord[];
+				historyTotal?: number;
+				historyAvailable?: boolean;
+				ipBansAvailable?: boolean;
+				error?: string;
+			};
 			if (result.error) {
 				setMessage(result.error);
 				return;
 			}
+			setIpBansAvailable(result.ipBansAvailable === true);
+			if (result.ipBansAvailable !== true) setBanType('uid');
+			setConfirmDigest('');
 			if (result.historyAvailable === false) {
 				setMessage('履歴機能はサーバーに未反映です。サーバーの更新後に利用できます。');
 				return;
@@ -78,8 +81,7 @@ function PlayerHistoryWindow(): React.JSX.Element {
 			setTotal(result.historyTotal ?? 0);
 			setFilter(nextFilter);
 			setOffset(nextOffset);
-			setConfirmDigest('');
-			setMessage(action === 'add-history' ? 'BANを登録しました。' : '履歴を更新しました。');
+			setMessage(action === 'list' ? '履歴を更新しました。' : 'BANを登録しました。');
 		} catch {
 			setMessage('BANサーバーに接続できませんでした。');
 		} finally {
@@ -130,6 +132,27 @@ function PlayerHistoryWindow(): React.JSX.Element {
 							slotProps={{ htmlInput: { maxLength: 500 } }}
 						/>
 					</Box>
+					<ToggleButtonGroup
+						exclusive
+						size="small"
+						value={banType}
+						aria-label="BANの対象"
+						onChange={(_, value: 'uid' | 'ip' | null) => {
+							if (!value || (value === 'ip' && !ipBansAvailable)) return;
+							setBanType(value);
+							setConfirmDigest('');
+						}}
+					>
+						<ToggleButton value="uid" disabled={busy}>
+							ユーザー識別子（UID）
+						</ToggleButton>
+						<ToggleButton value="ip" disabled={busy || !ipBansAvailable}>
+							IPアドレス
+						</ToggleButton>
+					</ToggleButtonGroup>
+					<Typography variant="caption" sx={{ display: 'block', my: 1 }}>
+						IP BANは同じグローバルIPを使う他のユーザーにも適用されます。IP未取得のプレイヤーはIPでBANできません。
+					</Typography>
 					<Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: 1 }}>
 						<TextField
 							size="small"
@@ -174,28 +197,41 @@ function PlayerHistoryWindow(): React.JSX.Element {
 									<Typography variant="body2">
 										{item.display_name} ／ ID: …{item.uid_digest.slice(-8)}
 										{item.friend_code ? ` ／ ${item.friend_code}` : ''}
+										{' ／ '}IP: {item.public_ip || '未取得'}
+									</Typography>
+									<Typography variant="caption" component="div">
+										UID: {(item.uid_banned ?? item.is_banned) ? 'BAN済み' : '未BAN'} ／ IP:{' '}
+										{item.ip_banned === undefined ? '未確認' : item.ip_banned ? 'BAN済み' : '未BAN'}
 									</Typography>
 									<Typography variant="caption">
 										初回: {formatSeenAt(item.first_seen_at)} ／ 最終: {formatSeenAt(item.last_seen_at)}
 									</Typography>
 								</Box>
-								{item.is_banned ? (
-									<Typography variant="caption">BAN済み</Typography>
+								{(banType === 'ip' ? item.ip_banned : (item.uid_banned ?? item.is_banned)) ? (
+									<Typography variant="caption">{banType === 'ip' ? 'IP' : 'UID'} BAN済み</Typography>
 								) : (
 									<Button
 										color="error"
 										variant="outlined"
-										disabled={busy || !password}
+										disabled={busy || !password || (banType === 'ip' && (!ipBansAvailable || !item.public_ip))}
 										onClick={() => {
 											if (confirmDigest !== item.uid_digest) {
 												setConfirmDigest(item.uid_digest);
-												setMessage(`${item.display_name}をBANする場合は、もう一度押してください。`);
+												setMessage(
+													`${item.display_name}を${banType === 'ip' ? 'IP' : 'UID'}でBANする場合は、もう一度押してください。`
+												);
 												return;
 											}
-											void operate('add-history', filter, offset, item.uid_digest);
+											void operate(
+												banType === 'ip' ? 'add-history-ip' : 'add-history',
+												filter,
+												offset,
+												item.uid_digest
+											);
 										}}
 									>
-										{confirmDigest === item.uid_digest ? 'BANを確定' : 'BAN登録'}
+										{banType === 'ip' ? 'IP' : 'UID'}
+										{confirmDigest === item.uid_digest ? ' BANを確定' : 'でBAN登録'}
 									</Button>
 								)}
 							</Paper>

@@ -94,6 +94,7 @@ export default function (
 	const analyser = audioContext.createAnalyser();
 	analyser.smoothingTimeConstant = options.smoothingTimeConstant;
 	analyser.fftSize = options.fftSize;
+	let frequencies = new Uint8Array(analyser.frequencyBinCount);
 
 	const channels = options.stereo ? 2 : 1;
 	const scriptProcessorNode = audioContext.createScriptProcessor(options.bufferLen, channels, channels);
@@ -159,7 +160,7 @@ export default function (
 				}
 			}
 		}
-		const frequencies = new Uint8Array(analyser.frequencyBinCount);
+		if (frequencies.length !== analyser.frequencyBinCount) frequencies = new Uint8Array(analyser.frequencyBinCount);
 		analyser.getByteFrequencyData(frequencies);
 
 		const average = analyserFrequency(analyser, frequencies, options.minCaptureFreq, options.maxCaptureFreq);

@@ -129,24 +129,45 @@ export function indexNosAddonImages(gameDirectory: string): Map<string, Readonly
 	return result;
 }
 
-/** Identify installed NoS addons by addon.meta, independent of ZIP filenames. */
+const addonIdsByFile = new Map<string, { signature: string; ids: readonly string[] }>();
+let addonIdsDirectory = '';
+
+function archiveSignature(archive: string): string {
+	const stat = fs.statSync(archive, { bigint: true });
+	return `${archive}:${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+}
+
+/** Identify addons without rereading unchanged ZIP directories and metadata. */
 export function readNosAddonIds(gameDirectory: string): string[] {
+	const root = path.resolve(gameDirectory);
+	if (root !== addonIdsDirectory) {
+		addonIdsByFile.clear();
+		addonIdsDirectory = root;
+	}
 	const result = new Set<string>();
+	const seen = new Set<string>();
 	try {
-		for (const file of fs.readdirSync(path.join(gameDirectory, 'Addons'))) {
+		for (const file of fs.readdirSync(path.join(root, 'Addons'))) {
 			if (!file.toLowerCase().endsWith('.zip')) continue;
-			collectNosAddonIds(gameDirectory, file, result);
+			seen.add(file);
+			for (const id of collectNosAddonIds(root, file)) result.add(id);
 		}
 	} catch {
 		/* The addon folder is optional. */
 	}
+	for (const file of addonIdsByFile.keys()) if (!seen.has(file)) addonIdsByFile.delete(file);
 	return [...result].sort();
 }
 
-function collectNosAddonIds(gameDirectory: string, file: string, result: Set<string>): void {
+function collectNosAddonIds(gameDirectory: string, file: string): readonly string[] {
 	try {
 		const archive = fs.realpathSync(path.join(gameDirectory, 'Addons', file));
-		if (path.relative(gameDirectory, archive).startsWith('..')) return;
+		const relative = path.relative(gameDirectory, archive);
+		if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Addon outside game');
+		const signature = archiveSignature(archive);
+		const cached = addonIdsByFile.get(file);
+		if (cached?.signature === signature) return cached.ids;
+		const result = new Set<string>();
 		for (const [name, entry] of entries(archive)) {
 			if ((!name.endsWith('/addon.meta') && name !== 'addon.meta') || entry.size > 65536) continue;
 			// NoS metadata can contain non-JSON True/False literals.
@@ -154,7 +175,12 @@ function collectNosAddonIds(gameDirectory: string, file: string, result: Set<str
 			const id = /"Id"\s*:\s*"([A-Za-z0-9_.-]{1,128})"/.exec(text)?.[1];
 			if (id) result.add(id);
 		}
+		if (signature !== archiveSignature(archive)) throw new Error('Addon changed during read');
+		const ids = [...result];
+		addonIdsByFile.set(file, { signature, ids });
+		return ids;
 	} catch {
-		/* Ignore unreadable addons. */
+		addonIdsByFile.delete(file);
+		return [];
 	}
 }

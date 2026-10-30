@@ -1,30 +1,12 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { Box, Button, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import type { Player } from '../../common/AmongUsState';
+import type {
+	PlayerBanRecord as BanRecord,
+	PendingPlayerNameBan as PendingNameBan,
+	PlayerHistoryRecord,
+} from '../../main/playerBans';
 import { ipcRenderer } from '../lib/electron-bridge';
-
-interface BanRecord {
-	uid_digest: string;
-	player_uid: string;
-	display_name: string;
-	friend_code: string;
-	reason: string;
-	created_at: number;
-}
-
-interface PendingNameBan {
-	player_name: string;
-	reason: string;
-}
-
-interface PlayerHistoryRecord {
-	uid_digest: string;
-	display_name: string;
-	friend_code: string;
-	first_seen_at: number;
-	last_seen_at: number;
-	is_banned: number;
-}
 
 const formatSeenAt = (seconds: number) => new Date(seconds * 1000).toLocaleString('ja-JP');
 
@@ -35,7 +17,11 @@ const HistoryRecords = React.memo(function HistoryRecords({ records }: { records
 				<Box key={item.uid_digest} sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
 					<Typography variant="body2">
 						{item.display_name} ／ ID: …{item.uid_digest.slice(-8)}
-						{item.friend_code ? ` ／ ${item.friend_code}` : ''} ／ {item.is_banned ? 'BAN済み' : '未BAN'}
+						{item.friend_code ? ` ／ ${item.friend_code}` : ''} ／ IP: {item.public_ip || '未取得'}
+					</Typography>
+					<Typography variant="caption" component="div">
+						UID: {(item.uid_banned ?? item.is_banned) ? 'BAN済み' : '未BAN'} ／ IP:{' '}
+						{item.ip_banned === undefined ? '未確認' : item.ip_banned ? 'BAN済み' : '未BAN'}
 					</Typography>
 					<Typography variant="caption">
 						初回: {formatSeenAt(item.first_seen_at)} ／ 最終: {formatSeenAt(item.last_seen_at)}
@@ -60,6 +46,8 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 	const [busy, setBusy] = useState(false);
 	const [confirmUid, setConfirmUid] = useState('');
 	const [confirmName, setConfirmName] = useState('');
+	const [banType, setBanType] = useState<'uid' | 'ip'>('uid');
+	const [ipBansAvailable, setIpBansAvailable] = useState(false);
 
 	const operate = async (payload: Record<string, unknown>) => {
 		if (busy) return;
@@ -75,6 +63,7 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 				history?: PlayerHistoryRecord[];
 				historyTotal?: number;
 				historyAvailable?: boolean;
+				ipBansAvailable?: boolean;
 				error?: string;
 			};
 			if (result.error) setMessage(result.error);
@@ -84,6 +73,8 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 				setHistory(result.history ?? []);
 				setHistoryTotal(result.historyTotal ?? 0);
 				setHistoryAvailable(result.historyAvailable !== false);
+				setIpBansAvailable(result.ipBansAvailable === true);
+				setBanType((current) => (result.ipBansAvailable === true ? current : 'uid'));
 				setHistoryLoaded(true);
 				setMessage('BAN一覧を更新しました。');
 				setConfirmUid('');
@@ -121,6 +112,29 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 				onChange={(event) => setReason(event.target.value)}
 				slotProps={{ htmlInput: { maxLength: 500 } }}
 			/>
+			<ToggleButtonGroup
+				exclusive
+				size="small"
+				value={banType}
+				aria-label="BANの対象"
+				onChange={(_, value: 'uid' | 'ip' | null) => {
+					if (!value || (value === 'ip' && !ipBansAvailable)) return;
+					setBanType(value);
+					setConfirmUid('');
+					setConfirmName('');
+				}}
+			>
+				<ToggleButton value="uid" disabled={busy}>
+					ユーザー識別子（UID）
+				</ToggleButton>
+				<ToggleButton value="ip" disabled={busy || !ipBansAvailable}>
+					IPアドレス
+				</ToggleButton>
+			</ToggleButtonGroup>
+			<Typography variant="caption">
+				IP BANは同じグローバルIPを使う他のユーザーにも適用されます。DBに記録済みの本人のIPを使用します。
+				{historyLoaded && !ipBansAvailable && ' IP BANはサーバーに未反映です。'}
+			</Typography>
 			<Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
 				<TextField
 					label="UID待ちのプレイヤー名（完全一致）"
@@ -148,6 +162,7 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 					{confirmName === playerName.trim() ? '名前登録を確定' : '名前で登録'}
 				</Button>
 			</Box>
+			<Typography variant="caption">名前での予約はユーザー識別子（UID）のBANとして登録します。</Typography>
 			<Typography role="status" variant="caption">
 				{message}
 			</Typography>
@@ -167,11 +182,13 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 							onClick={() => {
 								if (confirmUid !== player.playerUid) {
 									setConfirmUid(player.playerUid);
-									setMessage(`${player.name}をBANする場合は、もう一度押してください。`);
+									setMessage(
+										`${player.name}を${banType === 'ip' ? 'IP' : 'UID'}でBANする場合は、もう一度押してください。`
+									);
 									return;
 								}
 								void operate({
-									action: 'add',
+									action: banType === 'ip' ? 'add-ip' : 'add',
 									playerUid: player.playerUid,
 									displayName: player.name,
 									friendCode: player.friendCode,
@@ -179,7 +196,8 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 								});
 							}}
 						>
-							{confirmUid === player.playerUid ? 'BANを確定' : 'BAN登録'}
+							{banType === 'ip' ? 'IP' : 'UID'}
+							{confirmUid === player.playerUid ? ' BANを確定' : 'でBAN登録'}
 						</Button>
 					</Box>
 				))}
@@ -217,13 +235,26 @@ export default function PlayerBanPanel({ players }: { players: Player[] }): Reac
 			))}
 			<Typography variant="subtitle2">登録済み</Typography>
 			{bans.map((ban) => (
-				<Box key={ban.uid_digest} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+				<Box
+					key={`${ban.ban_type ?? 'uid'}:${ban.ban_type === 'ip' ? ban.public_ip : ban.uid_digest}`}
+					sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+				>
 					<Typography variant="body2" sx={{ flex: 1, minWidth: 180 }}>
-						{ban.display_name || '名前なし'} ／ UID: {ban.player_uid || '旧登録・未保存'}
+						{ban.display_name || '名前なし'} ／ {ban.ban_type === 'ip' ? 'IP BAN' : 'UID BAN'}
+						{' ／ '}UID: {ban.player_uid || '旧登録・未保存'} ／ IP: {ban.public_ip || '未取得'}
 						{ban.friend_code ? ` ／ ${ban.friend_code}` : ''}
 						{ban.reason ? ` ／ ${ban.reason}` : ''}
 					</Typography>
-					<Button disabled={busy} onClick={() => void operate({ action: 'remove', uidDigest: ban.uid_digest })}>
+					<Button
+						disabled={busy || !password || (ban.ban_type === 'ip' && !ipBansAvailable)}
+						onClick={() =>
+							void operate(
+								ban.ban_type === 'ip'
+									? { action: 'remove-ip', publicIp: ban.public_ip }
+									: { action: 'remove', uidDigest: ban.uid_digest }
+							)
+						}
+					>
 						解除
 					</Button>
 				</Box>

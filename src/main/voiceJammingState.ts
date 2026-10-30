@@ -9,7 +9,19 @@ export function readVoiceJammingState(
 ): VoiceJammingState[] {
 	try {
 		if (statSync(path).size > 65536) return [];
-		const data = JSON.parse(readFileSync(path, 'utf8'));
+		return parseVoiceJammingState(readFileSync(path, 'utf8'), pid, now);
+	} catch {
+		return [];
+	}
+}
+
+export function parseVoiceJammingState(
+	text: string | undefined,
+	pid: number,
+	now = Date.now()
+): ReturnType<typeof readVoiceJammingState> {
+	try {
+		const data = JSON.parse(text ?? '');
 		if (
 			data.protocol !== 1 ||
 			data.pid !== pid ||

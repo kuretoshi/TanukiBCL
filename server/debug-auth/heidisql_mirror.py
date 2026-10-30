@@ -51,6 +51,25 @@ TABLES = {
             created_at BIGINT NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4''',
     ),
+    'player_public_ips': (
+        'uid_digest,public_ip,updated_at',
+        '''CREATE TABLE IF NOT EXISTS player_public_ips (
+            uid_digest CHAR(64) PRIMARY KEY,
+            public_ip VARCHAR(45) NOT NULL,
+            updated_at BIGINT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4''',
+    ),
+    'player_ip_bans': (
+        'public_ip,uid_digest,display_name,friend_code,reason,created_at',
+        '''CREATE TABLE IF NOT EXISTS player_ip_bans (
+            public_ip VARCHAR(45) PRIMARY KEY,
+            uid_digest CHAR(64) NOT NULL,
+            display_name TEXT NOT NULL,
+            friend_code TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            created_at BIGINT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4''',
+    ),
 }
 
 

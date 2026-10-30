@@ -70,7 +70,11 @@ export interface CanvasProps {
 	borderColor: string;
 	color: number;
 	nosColor?: string;
-	nosCosmetics?: Player['nosCosmetics'];
+	nosSkin?: string;
+	nosHat?: string;
+	nosHatBack?: string;
+	nosVisor?: string;
+	nosBodyMask?: string;
 	usingRadio: boolean | undefined;
 	onClick?: () => void;
 	mod: ModsType;
@@ -248,9 +252,11 @@ const Avatar: React.FC<AvatarProps> = function ({
 	) : (
 		<Canvas
 			color={displayColor}
-			nosCosmetics={
-				mod === 'NoS' ? (showHat === false ? { skin: player.nosCosmetics?.skin } : player.nosCosmetics) : undefined
-			}
+			nosSkin={mod === 'NoS' ? player.nosCosmetics?.skin : undefined}
+			nosHat={mod === 'NoS' && showHat !== false ? player.nosCosmetics?.hat : undefined}
+			nosHatBack={mod === 'NoS' && showHat !== false ? player.nosCosmetics?.hatBack : undefined}
+			nosVisor={mod === 'NoS' && showHat !== false ? player.nosCosmetics?.visor : undefined}
+			nosBodyMask={mod === 'NoS' && showHat !== false ? player.nosCosmetics?.bodyMask : undefined}
 			nosColor={mod === 'NoS' ? (player.nosLobbyColor ?? nosColorHex(player.nosPlayer)) : undefined}
 			hat={showHat === false ? '' : displayHat}
 			visor={showHat === false ? '' : displayVisor}
@@ -413,28 +419,32 @@ const Canvas = React.memo(function Canvas({
 	borderColor,
 	color,
 	nosColor,
-	nosCosmetics,
+	nosSkin,
+	nosHat,
+	nosHatBack,
+	nosVisor,
+	nosBodyMask,
 	usingRadio,
 	onClick,
 	mod,
 }: CanvasProps) {
 	const nosAvatar = useNosAvatar(isAlive, nosColor);
-	const bodyMask = useNosBodyMask(isAlive ? nosCosmetics?.bodyMask : undefined);
+	const bodyMask = useNosBodyMask(isAlive ? nosBodyMask : undefined);
 	const hatsLoaded = useHatsLoaded();
 	const hatImg = useMemo(() => {
 		return {
 			base: getCosmetic(color, isAlive, cosmeticType.base),
 			hat_front:
-				nosCosmetics?.hat ??
+				nosHat ??
 				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat, mod)),
 			hat_back:
-				nosCosmetics?.hatBack ??
+				nosHatBack ??
 				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat_back, hat, mod)),
 			skin:
-				nosCosmetics?.skin ??
+				nosSkin ??
 				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.skin, skin, mod)),
 			visor:
-				nosCosmetics?.visor ??
+				nosVisor ??
 				(!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor, mod)),
 			hat2_front:
 				!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.hat, hat2, mod),
@@ -443,24 +453,20 @@ const Canvas = React.memo(function Canvas({
 			visor2:
 				!hatsLoaded && mod !== 'SUPER_NEW_ROLES' ? '' : getCosmetic(color, isAlive, cosmeticType.visor, visor2, mod),
 			dementions: {
-				hat: nosCosmetics?.hat
-					? { top: '-52%', width: '140%', left: '-18px' }
-					: getHatDementions(hat, mod, cosmeticType.hat),
-				hatBack: nosCosmetics?.hatBack
+				hat: nosHat ? { top: '-52%', width: '140%', left: '-18px' } : getHatDementions(hat, mod, cosmeticType.hat),
+				hatBack: nosHatBack
 					? { top: '-52%', width: '140%', left: '-18px' }
 					: getHatDementions(hat, mod, cosmeticType.hat_back),
 				hat2: getHatDementions(hat2, mod, cosmeticType.hat),
 				hat2Back: getHatDementions(hat2, mod, cosmeticType.hat_back),
-				visor: nosCosmetics?.visor
+				visor: nosVisor
 					? { top: '-52%', width: '140%', left: '-18px' }
 					: getHatDementions(visor, mod, cosmeticType.visor),
 				visor2: getHatDementions(visor2, mod, cosmeticType.visor),
-				skin: nosCosmetics?.skin
-					? { top: '-52%', width: '140%', left: '-18px' }
-					: getHatDementions(skin, mod, cosmeticType.skin),
+				skin: nosSkin ? { top: '-52%', width: '140%', left: '-18px' } : getHatDementions(skin, mod, cosmeticType.skin),
 			},
 		};
-	}, [color, hat, hat2, skin, visor, visor2, hatsLoaded, isAlive, mod, nosCosmetics]);
+	}, [color, hat, hat2, skin, visor, visor2, hatsLoaded, isAlive, mod, nosSkin, nosHat, nosHatBack, nosVisor]);
 
 	const classes = useCanvasStyles({
 		isAlive,

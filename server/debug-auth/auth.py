@@ -4,6 +4,7 @@ from contextlib import closing
 import getpass
 import hashlib
 import hmac
+import ipaddress
 import os
 from pathlib import Path
 import secrets
@@ -70,6 +71,19 @@ def initialize(path):
                 last_seen_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS player_history_last_seen ON player_history(last_seen_at DESC);
+            CREATE TABLE IF NOT EXISTS player_public_ips (
+                uid_digest TEXT PRIMARY KEY,
+                public_ip TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS player_ip_bans (
+                public_ip TEXT PRIMARY KEY,
+                uid_digest TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                friend_code TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
         """)
     os.chmod(path, 0o600)
     inquiry.initialize(path)
@@ -130,10 +144,19 @@ def validate_uid_digest(digest):
 def list_bans(path):
     with closing(connect(path)) as db:
         return [dict(row) for row in db.execute(
-            '''SELECT b.uid_digest,b.display_name,b.friend_code,b.reason,b.created_at,
-                      COALESCE(u.player_uid,'') AS player_uid
+            '''SELECT b.uid_digest AS uid_digest,b.display_name,b.friend_code,b.reason,b.created_at,
+                      COALESCE(u.player_uid,h.player_uid,'') AS player_uid,
+                      'uid' AS ban_type,COALESCE(p.public_ip,'') AS public_ip
                FROM player_bans b LEFT JOIN player_ban_uids u ON b.uid_digest=u.uid_digest
-               ORDER BY b.created_at DESC''')]
+               LEFT JOIN player_history h ON b.uid_digest=h.uid_digest
+               LEFT JOIN player_public_ips p ON b.uid_digest=p.uid_digest
+               UNION ALL
+               SELECT b.uid_digest,b.display_name,b.friend_code,b.reason,b.created_at,
+                      COALESCE(u.player_uid,h.player_uid,'') AS player_uid,
+                      'ip' AS ban_type,b.public_ip
+               FROM player_ip_bans b LEFT JOIN player_ban_uids u ON b.uid_digest=u.uid_digest
+               LEFT JOIN player_history h ON b.uid_digest=h.uid_digest
+               ORDER BY created_at DESC,ban_type,uid_digest,public_ip''')]
 
 
 def list_pending_name_bans(path):
@@ -159,8 +182,14 @@ def list_player_history(path, name='', from_seen=None, to_seen=None, offset=0, l
         where = 'WHERE ' + ' AND '.join(conditions) if conditions else ''
         total = db.execute('SELECT COUNT(*) FROM player_history h ' + where, params).fetchone()[0]
         sql = '''SELECT h.uid_digest,h.display_name,h.friend_code,h.first_seen_at,h.last_seen_at,
-                                    CASE WHEN b.uid_digest IS NULL THEN 0 ELSE 1 END AS is_banned
+                             COALESCE(p.public_ip,'') AS public_ip,
+                             CASE WHEN b.uid_digest IS NULL THEN 0 ELSE 1 END AS uid_banned,
+                             CASE WHEN i.public_ip IS NULL THEN 0 ELSE 1 END AS ip_banned,
+                             CASE WHEN b.uid_digest IS NOT NULL OR i.public_ip IS NOT NULL
+                                  THEN 1 ELSE 0 END AS is_banned
                              FROM player_history h LEFT JOIN player_bans b ON h.uid_digest=b.uid_digest
+                             LEFT JOIN player_public_ips p ON h.uid_digest=p.uid_digest
+                             LEFT JOIN player_ip_bans i ON p.public_ip=i.public_ip
                              ''' + where + ''' ORDER BY h.last_seen_at DESC,h.uid_digest'''
         if limit is None:
             rows = db.execute(sql, params).fetchall()
@@ -202,6 +231,42 @@ def record_player_history(db, uid, name, friend_code, now):
                (digest, uid, name, friend_code.strip(), now, now,
                 PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS, PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS))
     return digest
+
+
+def canonical_public_ip(value):
+    try:
+        if not isinstance(value, str) or len(value) > 64 or '%' in value:
+            raise ValueError()
+        address = ipaddress.ip_address(value.strip())
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            address = address.ipv4_mapped
+        if (not address.is_global or address.is_multicast or address.is_reserved or
+                (isinstance(address, ipaddress.IPv6Address) and address.is_site_local)):
+            raise ValueError()
+        return str(address)
+    except ValueError:
+        raise ValueError('A valid public IPv4 or IPv6 address is required.') from None
+
+
+def request_public_ip(request):
+    source = request.remote_addr
+    if source in ('127.0.0.1', '::1'):
+        source = request.headers.get('X-Real-IP', source)
+    try:
+        return canonical_public_ip(source)
+    except ValueError:
+        return None
+
+
+def record_player_public_ip(db, digest, public_ip, now):
+    if public_ip is None:
+        return
+    db.execute('''INSERT INTO player_public_ips VALUES(?,?,?)
+                  ON CONFLICT(uid_digest) DO UPDATE SET
+                    public_ip=excluded.public_ip,updated_at=excluded.updated_at
+                  WHERE player_public_ips.public_ip<>excluded.public_ip
+                     OR excluded.updated_at>=player_public_ips.updated_at+?''',
+               (digest, public_ip, now, PLAYER_HISTORY_UPDATE_INTERVAL_SECONDS))
 
 
 def add_pending_name_ban(path, name, reason=''):
@@ -257,7 +322,60 @@ def remove_ban(path, digest):
     digest = validate_uid_digest(digest)
     with closing(connect(path)) as db, db:
         db.execute('DELETE FROM player_bans WHERE uid_digest=?', (digest,))
-        db.execute('DELETE FROM player_ban_uids WHERE uid_digest=?', (digest,))
+        remove_unused_ban_identity(db, digest)
+
+
+def remove_unused_ban_identity(db, digest):
+    db.execute('''DELETE FROM player_ban_uids WHERE uid_digest=?
+                  AND NOT EXISTS(SELECT 1 FROM player_bans WHERE uid_digest=?)
+                  AND NOT EXISTS(SELECT 1 FROM player_ip_bans WHERE uid_digest=?)''',
+               (digest, digest, digest))
+
+
+def add_ip_ban(path, uid, display_name='', friend_code='', reason='', public_ip=None):
+    digest = uid_digest(uid)
+    for value, limit in ((display_name, 80), (friend_code, 80), (reason, 500)):
+        if not isinstance(value, str) or len(value) > limit:
+            raise ValueError('Ban details are invalid.')
+    with closing(connect(path)) as db, db:
+        if public_ip is None:
+            record = db.execute('SELECT public_ip FROM player_public_ips WHERE uid_digest=?',
+                                (digest,)).fetchone()
+            if not record:
+                raise ValueError('No verified public IP is available for this player.')
+            public_ip = record['public_ip']
+        public_ip = canonical_public_ip(public_ip)
+        previous = db.execute('SELECT uid_digest FROM player_ip_bans WHERE public_ip=?',
+                              (public_ip,)).fetchone()
+        db.execute('''INSERT INTO player_ip_bans VALUES(?,?,?,?,?,?)
+                      ON CONFLICT(public_ip) DO UPDATE SET uid_digest=excluded.uid_digest,
+                      display_name=excluded.display_name,friend_code=excluded.friend_code,
+                      reason=excluded.reason''',
+                   (public_ip, digest, display_name.strip(), friend_code.strip(), reason.strip(), int(time.time())))
+        db.execute('''INSERT INTO player_ban_uids VALUES(?,?)
+                      ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''', (digest, uid))
+        if previous and previous['uid_digest'] != digest:
+            remove_unused_ban_identity(db, previous['uid_digest'])
+    return public_ip
+
+
+def add_ip_ban_from_history(path, digest, reason=''):
+    digest = validate_uid_digest(digest)
+    with closing(connect(path)) as db:
+        record = db.execute('SELECT player_uid,display_name,friend_code FROM player_history WHERE uid_digest=?',
+                            (digest,)).fetchone()
+    if not record:
+        raise ValueError('Player history was not found.')
+    return add_ip_ban(path, record['player_uid'], record['display_name'], record['friend_code'], reason)
+
+
+def remove_ip_ban(path, public_ip):
+    public_ip = canonical_public_ip(public_ip)
+    with closing(connect(path)) as db, db:
+        record = db.execute('SELECT uid_digest FROM player_ip_bans WHERE public_ip=?', (public_ip,)).fetchone()
+        db.execute('DELETE FROM player_ip_bans WHERE public_ip=?', (public_ip,))
+        if record:
+            remove_unused_ban_identity(db, record['uid_digest'])
 
 
 def issue_invitation(path, name, hours=72):
@@ -377,7 +495,9 @@ def create_app(database=None):
         with closing(connect(database)) as db, db:
             db.execute('BEGIN IMMEDIATE')
             now = int(time.time())
-            for player in [{'playerUid': uid, 'playerName': name}, *observed]:
+            public_ip = request_public_ip(request)
+            record_player_public_ip(db, digest, public_ip, now)
+            for player in [{'playerUid': uid, 'playerName': name, 'friendCode': data.get('friendCode', '')}, *observed]:
                 if not isinstance(player, dict):
                     continue
                 candidate_uid = player.get('playerUid')
@@ -398,7 +518,8 @@ def create_app(database=None):
                                   ON CONFLICT(uid_digest) DO UPDATE SET player_uid=excluded.player_uid''',
                                (candidate_digest, candidate_uid))
                     db.execute('DELETE FROM pending_player_name_bans WHERE player_name=?', (candidate_name,))
-            banned = db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (digest,)).fetchone() is not None
+            banned = (db.execute('SELECT 1 FROM player_bans WHERE uid_digest=?', (digest,)).fetchone() is not None
+                      or db.execute('SELECT 1 FROM player_ip_bans WHERE public_ip=?', (public_ip,)).fetchone() is not None)
         return jsonify(banned=banned)
 
     @app.post('/v1/player-bans/manage')
@@ -424,12 +545,19 @@ def create_app(database=None):
             if action == 'add':
                 add_ban(database, data.get('playerUid'), data.get('displayName', ''),
                         data.get('friendCode', ''), data.get('reason', ''))
+            elif action == 'add-ip':
+                add_ip_ban(database, data.get('playerUid'), data.get('displayName', ''),
+                           data.get('friendCode', ''), data.get('reason', ''), data.get('publicIp'))
             elif action == 'add-name':
                 add_pending_name_ban(database, data.get('playerName'), data.get('reason', ''))
             elif action == 'add-history':
                 add_ban_from_history(database, data.get('uidDigest'), data.get('reason', ''))
+            elif action == 'add-history-ip':
+                add_ip_ban_from_history(database, data.get('uidDigest'), data.get('reason', ''))
             elif action == 'remove':
                 remove_ban(database, data.get('uidDigest'))
+            elif action == 'remove-ip':
+                remove_ip_ban(database, data.get('publicIp'))
             elif action == 'remove-name':
                 remove_pending_name_ban(database, data.get('playerName'))
             elif action != 'list':
@@ -438,7 +566,7 @@ def create_app(database=None):
                                                          history_to, history_offset,
                                                          limit=None if history_all else 50)
             return jsonify(bans=list_bans(database), pending=list_pending_name_bans(database),
-                           history=history, historyTotal=history_total)
+                           history=history, historyTotal=history_total, ipBansAvailable=True)
         except ValueError as error:
             return jsonify(error=str(error)), 400
 

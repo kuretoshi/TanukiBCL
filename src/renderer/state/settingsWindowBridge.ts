@@ -5,6 +5,7 @@ import { voiceController } from '../voice/useVoiceController';
 import { gameStore } from './gameStore';
 
 let started = false;
+let windowsOpen = false;
 let unsubscribeGameStore: (() => void) | undefined;
 let unsubscribeVoice: (() => void) | undefined;
 let lastSentGameState: unknown;
@@ -15,6 +16,7 @@ let lastSentTohLobby: boolean | undefined;
 let lastSentTohRole: unknown;
 let lastSentTohNames: unknown;
 let lastSentTohCatalog: unknown;
+let lastSentDebugVoice: Record<string, unknown> | undefined;
 
 function sendGameState(): void {
 	const { gameState } = gameStore.getSnapshot();
@@ -53,9 +55,9 @@ function sendHostId(): void {
 	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_HOST_ID_CHANGED, hostId);
 }
 
-function sendDebugVoice(): void {
+function sendDebugVoice(force = false): void {
 	const voice = voiceController.getSnapshot();
-	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_DEBUG_VOICE_CHANGED, {
+	const debugVoice = {
 		connected: voice.connected,
 		error: voice.error,
 		muted: voice.muted,
@@ -69,10 +71,15 @@ function sendDebugVoice(): void {
 		nosRadiosByPlayer: voice.nosRadiosByPlayer,
 		toh4eLobby: voice.toh4eLobby,
 		tohRole: voice.tohRole,
-	});
+	};
+	const previous = lastSentDebugVoice;
+	if (!force && previous && Object.entries(debugVoice).every(([key, value]) => value === previous[key])) return;
+	lastSentDebugVoice = debugVoice;
+	ipcRenderer.send(IpcMessages.SEND_TO_SETTINGS, IpcSettingsMessages.NOTIFY_DEBUG_VOICE_CHANGED, debugVoice);
 }
 function sendAll(): void {
-	sendDebugVoice();
+	if (!started) return;
+	sendDebugVoice(true);
 	sendGameState();
 	sendPlayerColors();
 	sendActiveLobbySettings();
@@ -100,22 +107,36 @@ function onVoiceChanged(): void {
 	if (hostId !== lastSentHostId) sendHostId();
 }
 
+function onWindowPresence(_: unknown, present: unknown): void {
+	if (!started || windowsOpen === (present === true)) return;
+	windowsOpen = present === true;
+	if (windowsOpen) {
+		unsubscribeGameStore = gameStore.subscribe(onGameStoreChanged);
+		unsubscribeVoice = voiceController.subscribe(onVoiceChanged);
+		sendAll();
+	} else {
+		lastSentDebugVoice = undefined;
+		unsubscribeGameStore?.();
+		unsubscribeGameStore = undefined;
+		unsubscribeVoice?.();
+		unsubscribeVoice = undefined;
+	}
+}
+
 export function startSettingsWindowBridge(): void {
 	if (started) return;
 	started = true;
 
-	unsubscribeGameStore = gameStore.subscribe(onGameStoreChanged);
-	unsubscribeVoice = voiceController.subscribe(onVoiceChanged);
+	ipcRenderer.on(IpcSettingsMessages.NOTIFY_WINDOW_PRESENCE, onWindowPresence);
 	ipcRenderer.on(IpcSettingsMessages.REQUEST_INITVALUES, sendAll);
-	sendAll();
+	// Replies and window changes use the same ordered event channel.
+	ipcRenderer.send(IpcMessages.REQUEST_SETTINGS_WINDOW_PRESENCE);
 }
 
 export function stopSettingsWindowBridge(): void {
 	if (!started) return;
+	onWindowPresence(undefined, false);
 	started = false;
-	unsubscribeGameStore?.();
-	unsubscribeGameStore = undefined;
-	unsubscribeVoice?.();
-	unsubscribeVoice = undefined;
+	ipcRenderer.off(IpcSettingsMessages.NOTIFY_WINDOW_PRESENCE, onWindowPresence);
 	ipcRenderer.off(IpcSettingsMessages.REQUEST_INITVALUES, sendAll);
 }
