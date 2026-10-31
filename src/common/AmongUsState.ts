@@ -32,6 +32,7 @@ export interface AmongUsState {
 	nosAddonIds?: string[];
 	tohRoleCatalog?: TohRoleDefinition[];
 	oldMeetingHud: boolean;
+	snrMeeting?: import('./SnrMeeting').SnrMeeting;
 	airshipMeetingByOutfit: boolean;
 	nosReadStatus?: { failed: boolean; message: string; schemaVersion?: number };
 	nosLoadedContents?: { path: string; status: string; data?: unknown };

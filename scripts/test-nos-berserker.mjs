@@ -3,6 +3,10 @@ import { build } from 'esbuild';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Buffer } from 'node:buffer';
+import { setImmediate } from 'node:timers';
+import process from 'node:process';
+import console from 'node:console';
 
 const directory = resolve('.cache/nos-berserker-tests');
 await mkdir(directory, { recursive: true });
@@ -24,7 +28,7 @@ const me = { id: 1, clientId: 101, isDead: false, name: 'listener' };
 const other = { id: 0, clientId: 100, name: 'speaker', nosRole: { ...role, bodyType: 2, isBerserking: true } };
 const select = (speaker = other, game = state, lobby = defaultLobbySettings, listener = me) =>
 	selectVoiceEffect(game, { voiceEffectStrength: 0 }, lobby, listener, speaker, -1);
-const expected = { strength: 100, berserker: true };
+const expected = { id: 'nosBerserker', tuning: { pitch: 0, reverb: 100, echo: 100 } };
 assert.equal(
 	select({ ...other, nosRole: { ...other.nosRole, bodyType: 0 } }),
 	null,
@@ -67,12 +71,14 @@ const neck = (length, bodyType = 3) => ({
 	nosRole: { ...role, roleName: 'rokurokubi' },
 	nosPlayer: { bodyType, neckLength: length, bodyRateX: 1, bodyRateY: 1 },
 });
-let lastPitch = 1;
 for (const length of [0.1, 1, 5, 10, 20, 40, 100]) {
 	const fx = select(neck(length));
-	assert.ok(fx.sourceFilter.pitch >= lastPitch && fx.sourceFilter.pitch <= 2);
-	lastPitch = fx.sourceFilter.pitch;
-	assert.equal(fx.sourceFilter.formant, 1);
+	assert.equal(fx.id, 'nosRokurokubi');
+	assert.deepEqual(
+		fx.tuning,
+		{ pitch: 100, reverb: 0, echo: 0 },
+		'neck length gates the configured pitch without reversing it'
+	);
 }
 for (const value of [0, -1, NaN, Infinity, undefined]) assert.equal(select(neck(value)), null);
 for (const bodyType of [0, 1, 2, undefined])

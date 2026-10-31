@@ -1,8 +1,11 @@
 import { GamePlatform } from './GamePlatform';
+import type { VoiceEffectTunings } from './VoiceEffectTuning';
+import type { RokuroVoiceSettings } from './RokuroVoice';
 
 export type AppPlayerLayout = 'standard' | 'aliveAboveGhosts';
 
 export interface ISettings {
+	rokuroVoice?: Partial<RokuroVoiceSettings>;
 	alwaysOnTop: boolean;
 	language: string;
 	microphone: string;
@@ -30,6 +33,7 @@ export interface ISettings {
 	microphoneGain: number;
 	microphoneGainEnabled: boolean;
 	voiceEffectStrength: number;
+	voiceEffectTunings: VoiceEffectTunings;
 	snrPushReverbStrength: number;
 	snrJumboVoiceEffectStrength: number;
 	nosSizeVoiceEffectStrength: number;

@@ -9,6 +9,7 @@ import discord
 
 import inquiry
 import issue_bridge
+import github_forum
 
 
 LOG = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class InquiryDiscordClient(discord.Client):
             self.forums[forum_id] = product
             self.source_since[forum_id] = issue_bridge.discord_source_since(DATABASE, forum_id)
         self._import_locks = {}
+        self._resolution_lock = asyncio.Lock()
 
     async def on_ready(self):
         LOG.info('Discord bridge connected as %s', self.user)
@@ -44,7 +46,15 @@ class InquiryDiscordClient(discord.Client):
     async def _maintain(self):
         while not self.is_closed():
             try:
+                try:
+                    await asyncio.to_thread(github_forum.import_issues, DATABASE)
+                except Exception:
+                    LOG.exception('Could not import GitHub issues into the addon forum')
                 await asyncio.to_thread(inquiry.mirror_pending, DATABASE)
+                try:
+                    await asyncio.to_thread(github_forum.sync_comments, DATABASE)
+                except Exception:
+                    LOG.exception('Could not mirror GitHub comments into the addon forum')
                 try:
                     await self._scan_new_threads()
                 except Exception:
@@ -141,6 +151,11 @@ class InquiryDiscordClient(discord.Client):
 
     async def _reconcile(self, row):
         try:
+            await self._sync_resolution(row['thread_id'])
+        except Exception:
+            # Retry on the next maintenance pass without blocking reply mirroring.
+            LOG.exception('Failed to sync Discord resolution %s', row['thread_id'])
+        try:
             channel = await self._thread(row['thread_id'])
             if channel is None:
                 return
@@ -149,7 +164,8 @@ class InquiryDiscordClient(discord.Client):
             await asyncio.to_thread(issue_bridge.ensure_discord_link, DATABASE, row)
             direct = row['fingerprint'].startswith('discord:')
             tag = await asyncio.to_thread(self._tag_for_thread, channel) if direct else None
-            await asyncio.to_thread(issue_bridge.rename_issue, DATABASE, channel.id, channel.name, tag)
+            if not row['fingerprint'].startswith('github:'):
+                await asyncio.to_thread(issue_bridge.rename_issue, DATABASE, channel.id, channel.name, tag)
             row = await asyncio.to_thread(issue_bridge.get_by_thread, DATABASE, channel.id)
             seen = set()
             initial_seen = False
@@ -238,8 +254,47 @@ class InquiryDiscordClient(discord.Client):
         if self._is_new_source_thread(thread):
             try:
                 await self._import_thread(thread)
+                await self._sync_resolution(thread.id)
             except Exception:
                 LOG.exception('Failed to create Issue from Discord thread %s', thread.id)
+
+    async def _sync_resolution(self, thread_id):
+        # Serialize events and maintenance. Fetch current tags even for archived or
+        # uncached threads, so an old gateway event cannot close an untagged Issue.
+        async with self._resolution_lock:
+            row = await asyncio.to_thread(issue_bridge.get_by_thread, DATABASE, thread_id)
+            if row is None:
+                return
+            thread = await self.fetch_channel(int(thread_id))
+            if not isinstance(thread, discord.Thread):
+                return
+            product = self.forums.get(thread.parent_id)
+            if (product != row['product'] or not row['guild_id']
+                    or str(thread.guild.id) != row['guild_id']
+                    or issue_bridge.repository_for(product) != row['repository']):
+                return
+            applied = {tag.id for tag in thread.applied_tags}
+            forum = await self.fetch_channel(thread.parent_id)
+            if (not isinstance(forum, discord.ForumChannel)
+                    or forum.guild.id != thread.guild.id):
+                return
+            tags = [tag for tag in forum.available_tags if tag.name == '解決済み']
+            if not tags:
+                return
+            tag = next((tag for tag in tags if tag.id in applied), tags[0])
+            state = await asyncio.to_thread(issue_bridge.sync_discord_resolution, DATABASE,
+                                            thread_id, tag.id, tag.id in applied)
+            if state:
+                LOG.info('Synced GitHub Issue %s#%s to %s from Discord thread %s',
+                         row['repository'], row['issue_number'], state, thread_id)
+
+    async def on_raw_thread_update(self, payload):
+        if payload.parent_id not in self.forums or 'applied_tags' not in payload.data:
+            return
+        try:
+            await self._sync_resolution(payload.thread_id)
+        except Exception:
+            LOG.exception('Failed to sync Discord resolution %s', payload.thread_id)
 
     async def on_raw_message_edit(self, payload):
         row = await asyncio.to_thread(issue_bridge.get_by_thread, DATABASE, payload.channel_id)

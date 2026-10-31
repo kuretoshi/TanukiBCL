@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import console from 'node:console';
 
 const directory = await mkdtemp(join(tmpdir(), 'tanuki-megaphone-'));
 try {
@@ -48,7 +49,12 @@ try {
 	assert.deepEqual(readMegaphoneState(123, now, file), []);
 	const speaker = { id: 2, x: 8, y: 0 };
 	const me = { id: 1, x: 0, y: 0 };
-	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: GameState.TASKS, nosMegaphones: snapshot.players };
+	const state = {
+		mod: 'NoS',
+		nosAddonIds: ['tanuki.bcl.roles'],
+		gameState: GameState.TASKS,
+		nosMegaphones: snapshot.players,
+	};
 	const input = {
 		state,
 		settings: {},
@@ -67,7 +73,7 @@ try {
 	);
 	assert.equal(calculateVoiceAudio({ ...input, other: { ...speaker, nosPlayer: { isJammed: true } } }).gain, 0);
 	const select = (game = state, other = speaker) => selectVoiceEffect(game, {}, {}, me, other, -1);
-	assert.ok(select().sourceFilter);
+	assert.deepEqual(select(), { id: 'nosMegaphone', tuning: { pitch: -100, reverb: 0, echo: 0 } });
 	const unprocessed = { ...state, nosMegaphones: snapshot.players.map((entry) => ({ ...entry, voiceEffect: false })) };
 	assert.equal(select(unprocessed), null);
 	assert.equal(calculateVoiceAudio({ ...input, state: unprocessed }).gain, 1);

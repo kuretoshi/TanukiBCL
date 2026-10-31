@@ -127,6 +127,8 @@ npm run build
 
 ## テスト
 
+連携済みのDiscordフォーラム投稿に名前が完全一致する「解決済み」タグが付くと、対応するGitHub Issueを `completed` としてクローズします。通常のタグ変更イベントのほか、起動後と既存の5分間隔の巡回で確認するため、停止中の変更やアーカイブ済み投稿も対象です。解決タグの同期履歴はSQLiteに保存し、タグを外すと対応するIssueを再オープンします。停止中のタグ解除も次の巡回で反映します。解決タグの付与履歴がない手動クローズ済みIssueや、フォーラムからタグ定義自体が削除・改名された場合は自動再オープンしません。未連携の投稿や別フォーラム、別製品のIssueは対象外です。既に閉じているIssueへの重複更新や追加コメント・Discordへの通知は行いません。各製品フォーラムに「解決済み」タグが必要です。
+
 ```sh
 python -m unittest discover -s server/debug-auth -p "test*.py"
 node scripts/test-remote-debug-auth.mjs

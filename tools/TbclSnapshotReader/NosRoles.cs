@@ -87,7 +87,7 @@ internal static class NosRoles
                 var config = field.ReadObject(modifier.Type.Module.AppDomain);
                 var value = config.ReadObjectField("val");
                 if (value.Type?.Name != "Nebula.Configuration.BoolConfigurationValue") return null;
-                return value.ReadField<bool>("currentValue");
+                return value.ReadField<bool>("<currentValue>k__BackingField");
             }
             return false;
         }

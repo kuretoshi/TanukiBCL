@@ -10,10 +10,13 @@ export interface ExtendedAudioElement extends HTMLAudioElement {
 }
 
 export interface PeerAudioNodes {
+	rokuroVoice?: ReturnType<typeof import('./rokuroVoice').createRokuroVoice>;
+	rokuroDestinationChanged?: boolean;
 	dyingVoiceRecording?: ReturnType<typeof import('./dyingVoiceRecording').createDyingVoiceRecording>;
 	megaphoneRecording?: ReturnType<typeof import('./megaphoneRecording').createMegaphoneRecording>;
 	bibiriEcho?: ReturnType<typeof import('./bibiriEcho').createBibiriEcho>;
 	voiceEffect?: VoiceProcessingEffect;
+	peakGuard?: ReturnType<typeof import('./voicePeakGuard').createVoicePeakGuard>;
 	voiceEffectConnected: boolean;
 	stream: MediaStream;
 	dummyAudioElement: HTMLAudioElement;
@@ -21,9 +24,8 @@ export interface PeerAudioNodes {
 	pan: PannerNode;
 	reverb?: ConvolverNode;
 	reverbMix?: { dry: GainNode; wet: GainNode; output: GainNode };
+	roleReverbConnected?: boolean;
 	radioEcho?: RadioEchoNodes;
-	starEcho?: RadioEchoNodes;
-	starEchoConnected?: boolean;
 	muffle?: BiquadFilterNode;
 	source: MediaStreamAudioSourceNode;
 	reverbConnected: boolean;

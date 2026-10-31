@@ -14,6 +14,8 @@ export interface MuffleSetting {
 }
 
 export interface VoiceAudioInput {
+	/** Internal second-source calculation; never overrides the listener's head position. */
+	rokuroBodyOrigin?: boolean;
 	state: AmongUsState;
 	settings: ISettings;
 	activeLobbySettings: ILobbySettings;
@@ -74,6 +76,16 @@ function cameraPanPosition(state: AmongUsState, other: Player): [number, number]
 	return undefined;
 }
 
+function followsRokuroPosition(state: AmongUsState, player: Player): boolean {
+	return (
+		state.mod === 'NoS' &&
+		state.gameState === GameState.TASKS &&
+		!player.isDead &&
+		!player.disconnected &&
+		(player.nosRole?.roleName === 'rokurokubi' || player.nosPlayer?.bodyType === 3)
+	);
+}
+
 export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const { state, settings, activeLobbySettings, impostorRadioClientId } = input;
 	const useNosPositions = state.mod === 'NoS' && activeLobbySettings.nosVoicePositions === true;
@@ -92,16 +104,26 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const remoteVoicePlayer = falling(remotePlayer)
 		? { ...remotePlayer, ...remotePlayer.snrPushOrigin, isDead: false }
 		: remotePlayer;
+	// NoS publishes the Rokurokubi camera/head endpoints and restores them on retraction.
+	const micPosition = state.nosLocalMicPosition;
+	const speaker = remoteVoicePlayer.nosPlayer;
 	const me =
-		useNosPositions && state.nosLocalMicPosition
-			? { ...localVoicePlayer, ...state.nosLocalMicPosition }
+		(useNosPositions || followsRokuroPosition(state, localVoicePlayer)) &&
+		micPosition &&
+		Number.isFinite(micPosition.x) &&
+		Number.isFinite(micPosition.y)
+			? { ...localVoicePlayer, ...micPosition }
 			: localVoicePlayer;
 	const other =
-		useNosPositions && remoteVoicePlayer.nosPlayer
+		!input.rokuroBodyOrigin &&
+		(useNosPositions || followsRokuroPosition(state, remoteVoicePlayer)) &&
+		speaker &&
+		Number.isFinite(speaker.speakerPositionX) &&
+		Number.isFinite(speaker.speakerPositionY)
 			? {
 					...remoteVoicePlayer,
-					x: remoteVoicePlayer.nosPlayer.speakerPositionX,
-					y: remoteVoicePlayer.nosPlayer.speakerPositionY,
+					x: speaker.speakerPositionX,
+					y: speaker.speakerPositionY,
 				}
 			: remoteVoicePlayer;
 

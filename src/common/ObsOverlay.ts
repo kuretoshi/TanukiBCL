@@ -28,6 +28,7 @@ export interface overlayPlayer {
 }
 
 export interface ObsVoiceState {
+	snrMeeting?: import('./SnrMeeting').SnrMeeting;
 	assetSession?: string;
 	overlayState: OverlayState;
 	otherTalking: ClientBoolMap;

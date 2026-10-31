@@ -5,6 +5,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import { GamePlatform } from '../common/GamePlatform';
 import { ILobbySettings, ISettings } from '../common/ISettings';
 import { pushToTalkOptions } from '../common/pushToTalkOptions';
+import { voiceEffectDefinitions } from '../common/VoiceEffectTuning';
 
 export { pushToTalkOptions };
 
@@ -200,6 +201,31 @@ export const settingsStore = new Store<ISettings>({
 		voiceEffectStrength: {
 			type: 'number',
 			default: 100,
+		},
+		voiceEffectTunings: {
+			// Per-role pitch/reverb/echo remains separate from the two spatial voice sources.
+			type: 'object',
+			default: {},
+			propertyNames: { enum: Object.keys(voiceEffectDefinitions) },
+			additionalProperties: {
+				type: 'object',
+				additionalProperties: false,
+				properties: {
+					pitch: { type: 'number', minimum: -100, maximum: 100 },
+					reverb: { type: 'number', minimum: 0, maximum: 100 },
+					echo: { type: 'number', minimum: 0, maximum: 100 },
+				},
+			},
+		},
+		rokuroVoice: {
+			type: 'object',
+			default: { headVolume: 100, bodyVolume: 35, bodyEcho: 50 },
+			additionalProperties: false,
+			properties: {
+				headVolume: { type: 'number', minimum: 0, maximum: 100 },
+				bodyVolume: { type: 'number', minimum: 0, maximum: 100 },
+				bodyEcho: { type: 'number', minimum: 0, maximum: 100 },
+			},
 		},
 		snrPushReverbStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },
 		snrJumboVoiceEffectStrength: { type: 'number', default: 100, minimum: 0, maximum: 100 },

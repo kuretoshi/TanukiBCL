@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 import issue_bridge
 
 
-PRODUCTS = ('tanuki', 'net')
+PRODUCTS = ('tanuki', 'net', 'addon')
 TAGS = ('question', 'bug', 'request')
 ATTACHMENT_LIMIT = 24 * 1024 * 1024
 REQUEST_LIMIT = 26 * 1024 * 1024
@@ -32,7 +32,7 @@ def initialize(path):
     with closing(connect(path)) as db, db:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS inquiry_webhooks (
-                product TEXT PRIMARY KEY CHECK(product IN ('tanuki','net')),
+                product TEXT PRIMARY KEY CHECK(product IN ('tanuki','net','addon')),
                 webhook_url TEXT NOT NULL,
                 kind TEXT NOT NULL CHECK(kind IN ('forum','text')),
                 question_tag TEXT,
@@ -47,6 +47,17 @@ def initialize(path):
             CREATE INDEX IF NOT EXISTS inquiry_attempts_timestamp
                 ON inquiry_attempts(timestamp);
         """)
+        schema = db.execute("SELECT sql FROM sqlite_master WHERE name='inquiry_webhooks'").fetchone()[0]
+        if "'addon'" not in schema:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('ALTER TABLE inquiry_webhooks RENAME TO inquiry_webhooks_legacy')
+            db.execute("""CREATE TABLE inquiry_webhooks (
+                product TEXT PRIMARY KEY CHECK(product IN ('tanuki','net','addon')),
+                webhook_url TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('forum','text')),
+                question_tag TEXT, bug_tag TEXT, request_tag TEXT, updated_at INTEGER NOT NULL
+            )""")
+            db.execute('INSERT INTO inquiry_webhooks SELECT * FROM inquiry_webhooks_legacy')
+            db.execute('DROP TABLE inquiry_webhooks_legacy')
     issue_bridge.initialize(path)
 
 
@@ -67,7 +78,7 @@ def validate_webhook(url):
 
 def set_webhook(path, product, url, kind='forum', tags=None):
     if product not in PRODUCTS or kind not in ('forum', 'text'):
-        raise ValueError('Choose product tanuki/net and kind forum/text.')
+        raise ValueError('Choose product tanuki/net/addon and kind forum/text.')
     validate_webhook(url)
     tags = tags or {}
     if kind == 'text' and any(tags.values()):
@@ -138,9 +149,9 @@ def _multipart(payload, files):
 
 
 def send_to_discord(route, tag, subject, body, files, issue_url=None):
-    content = f'{body}\n\nGitHub Issue: {issue_url}' if issue_url else body
+    content = f'{body[:1700]}\n\nGitHub Issue: {issue_url}' if issue_url else body
     if route['kind'] == 'forum':
-        payload = {'thread_name': subject, 'content': content, 'allowed_mentions': {'parse': []}}
+        payload = {'thread_name': subject[:100], 'content': content, 'allowed_mentions': {'parse': []}}
         tag_id = route[f'{tag}_tag']
         if tag_id:
             payload['applied_tags'] = [tag_id]
@@ -213,6 +224,8 @@ def receive(request, database):
             return {'error': 'この報告先は現在利用できません。'}, 503
         files = _files(request)
         subject, body = subject.strip(), body.strip()
+        if product == 'addon' and data.get('public_issue_consent') is not True:
+            raise ValueError('Public disclosure consent is required for addon reports.')
         # Older clients stay on the private Discord route until they show public disclosure.
         if data.get('public_issue_consent') is not True:
             send_to_discord(route, tag, subject, body, files)

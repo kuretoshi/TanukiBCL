@@ -139,6 +139,7 @@ export interface SliderRowProps extends Omit<SettingRowProps, 'control'> {
 	min?: number;
 	max?: number;
 	step?: number;
+	marks?: { value: number; label?: ReactNode }[];
 	format?: (value: number) => string;
 	onChange: (value: number, persist: boolean) => void;
 	color?: 'primary' | 'secondary';
@@ -153,6 +154,7 @@ export const SliderRow: React.FC<SliderRowProps> = function ({
 	min = 0,
 	max = 100,
 	step = 1,
+	marks,
 	format,
 	onChange,
 	color = 'primary',
@@ -192,6 +194,7 @@ export const SliderRow: React.FC<SliderRowProps> = function ({
 						min={min}
 						max={max}
 						step={step}
+						marks={marks}
 						onChange={(_, newValue) => {
 							dragging.current = true;
 							setLocalValue(newValue as number);

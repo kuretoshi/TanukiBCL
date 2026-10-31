@@ -3,28 +3,29 @@ import { captureMicrophone } from '../lib/captureMicrophone';
 import Button from '@mui/material/Button';
 
 import { ExtendedAudioElement } from '../voice/types';
-import { createVoiceEffectPreview, VoiceEffectPreview, VoiceEffectPreviewKind } from './voiceEffectPreview';
-
-export type { VoiceEffectPreviewKind } from './voiceEffectPreview';
+import { createVoiceEffectPreview, VoiceEffectPreview } from './voiceEffectPreview';
+import type { VoiceEffectId, VoiceEffectTuning } from '../../common/VoiceEffectTuning';
 
 interface TestVoiceEffectButtonProps {
 	t: (key: string) => string;
 	microphone: string;
 	speaker: string;
-	voiceEffectStrength: number;
-	effectKind?: VoiceEffectPreviewKind;
+	tuning: VoiceEffectTuning;
+	effectKind?: VoiceEffectId;
 }
 
 const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	t,
 	microphone,
 	speaker,
-	voiceEffectStrength,
-	effectKind = 'voiceEffectStrength',
+	tuning,
+	effectKind = 'disguise',
 }: TestVoiceEffectButtonProps) => {
 	const [playing, setPlaying] = useState(false);
 	const cleanupRef = useRef<(() => void) | undefined>(undefined);
 	const effectNodesRef = useRef<VoiceEffectPreview | undefined>(undefined);
+	const tuningRef = useRef(tuning);
+	tuningRef.current = tuning;
 	const playingRef = useRef(false);
 	const stopRequestedRef = useRef(false);
 
@@ -41,9 +42,9 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 
 	useEffect(() => {
 		if (effectNodesRef.current) {
-			effectNodesRef.current.update(voiceEffectStrength);
+			effectNodesRef.current.update(tuning);
 		}
-	}, [voiceEffectStrength]);
+	}, [tuning]);
 
 	const testVoiceEffect = async () => {
 		if (playingRef.current) {
@@ -78,7 +79,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 			pendingContext = context;
 			const source = context.createMediaStreamSource(stream);
 			const destination = context.createMediaStreamDestination();
-			const effectNodes = await createVoiceEffectPreview(context, effectKind, voiceEffectStrength);
+			const effectNodes = await createVoiceEffectPreview(context, effectKind, tuningRef.current);
 			if (stopRequestedRef.current) {
 				effectNodes.dispose();
 				stream.getTracks().forEach((track) => track.stop());
@@ -86,6 +87,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 				return;
 			}
 			effectNodesRef.current = effectNodes;
+			effectNodes.update(tuningRef.current);
 			source.connect(effectNodes.input);
 			effectNodes.output.connect(destination);
 			const audio = document.createElement('audio') as ExtendedAudioElement;

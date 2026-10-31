@@ -10,6 +10,7 @@ import { ISettings } from '../../common/ISettings';
 import { DEFAULT_PLAYERCOLORS } from '../../common/playerColors';
 import { nosColorHex } from '../../common/NosSnapshot';
 import { modList } from '../../common/Mods';
+import { snrMeetingPage } from '../../common/SnrMeeting';
 import { reconcileMeetingPlayers, sortMeetingPlayers } from '../../common/meetingOrder';
 
 interface UseStylesProps {
@@ -403,7 +404,10 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 	if (!players || gameState.gameState !== GameState.DISCUSSION) return null;
 
 	const largeNosMeeting = gameState.mod === 'NoS' && !gameState.oldMeetingHud && players.length > 15;
-	const overlays = players.map((player, index) => {
+	const visiblePlayers = snrMeetingPage(gameState.mod, gameState.players, gameState.snrMeeting) ?? players;
+	const overlays = visiblePlayers.map((player, index) => {
+		// A temporarily missing player must keep its vote-area slot, never shift the following frames.
+		if (!player) return <Box key={`snr-empty-${index}`} sx={classes.playerContainer} style={{ opacity: 0 }} />;
 		// Keep tablet order fixed, but use the current publication for NoS RGB.
 		const livePlayer = gameState.players.find((current) => current.id === player.id);
 		const color =
@@ -412,6 +416,7 @@ const MeetingHud: React.FC<MeetingHudProps> = ({ voiceState, gameState, playerCo
 		return (
 			<Box
 				key={player.id}
+				data-meeting-player={player.id}
 				sx={
 					largeNosMeeting
 						? {

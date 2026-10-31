@@ -207,7 +207,13 @@ export function registerSourceFilterProcessor() {
 				const sample = source?.[i] ?? 0;
 				this.input[this.n - this.hop + this.cursor] = Number.isFinite(sample) ? sample : 0;
 				const out = this.output[this.cursor];
-				target[i] = Number.isFinite(out) ? Math.max(-1, Math.min(1, out)) : 0;
+				const magnitude = Math.abs(out);
+				// Preserve ordinary speech exactly; soften only peaks instead of flat-clipping at full scale.
+				target[i] = Number.isFinite(out)
+					? magnitude <= 0.8
+						? out
+						: Math.sign(out) * (0.8 + 0.18 * Math.tanh((magnitude - 0.8) / 0.18))
+					: 0;
 				this.cursor++;
 				if (this.cursor === this.hop) {
 					this.output.copyWithin(0, this.hop);

@@ -1,4 +1,5 @@
 import { hasSnrJumbo, SnrEnumValue, SnrLiveRole } from '../common/SnrRole';
+import type { SnrMeetingLayout } from './snrMeetingMemory';
 
 interface JumboLayout {
 	abilityType: number;
@@ -31,6 +32,7 @@ interface NumberField {
 }
 
 export interface SnrLiveLayout {
+	meeting?: SnrMeetingLayout | null;
 	pid: number;
 	pointerSize: 4 | 8;
 	arraySlot: number;

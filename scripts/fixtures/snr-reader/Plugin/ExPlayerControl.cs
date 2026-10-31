@@ -23,6 +23,7 @@ public sealed class ExPlayerControl
     public static void Initialize(string mode)
     {
         if (mode == "empty") return;
+        SuperNewRoles.Patches.MeetingPagingManager.Initialize();
         _exPlayerControlsArray[3] = new() {
             PlayerId = (byte)(mode == "mismatch" ? 4 : 3), Role = RoleId.Jackal,
             ModifierRole = ModifierRoleId.JumboModifier
@@ -36,6 +37,7 @@ public sealed class ExPlayerControl
 
     public static void Change(string command)
     {
+        SuperNewRoles.Patches.MeetingPagingManager.Change(command);
         switch (command)
         {
             case "push":

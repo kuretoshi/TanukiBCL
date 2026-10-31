@@ -46,7 +46,7 @@ function overlaySignature(state: AmongUsState | undefined): string {
 			].join(',')
 		)
 		.join(';');
-	return `${state.mixupSabotaged}|${state.camouflaged}|${state.gameState}|${state.oldMeetingHud ? 1 : 0}|${state.mod}|${players}`;
+	return `${state.mixupSabotaged}|${state.camouflaged}|${state.gameState}|${state.oldMeetingHud ? 1 : 0}|${state.mod}|${JSON.stringify(state.snrMeeting ?? null)}|${players}`;
 }
 
 function sendGameState(): void {

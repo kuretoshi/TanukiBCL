@@ -2,40 +2,24 @@ import { voiceJammingFor } from '../../common/VoiceJammingState';
 import { isHeroTransformed } from '../../common/HeroTransformState';
 import { AmongUsState, GameState, Player } from '../../common/AmongUsState';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
-import type { PitchShiftDirection } from '../voiceEffect';
-import type { SourceFilterParameters } from './sourceFilterEffect';
+import {
+	getVoiceEffectTuning,
+	isNeutralVoiceEffectTuning,
+	VoiceEffectId,
+	VoiceEffectTuning,
+} from '../../common/VoiceEffectTuning';
 import { hasSnrJumbo, isSnrJackalTeam } from '../../common/SnrRole';
 import { MapType } from '../../common/AmongusMap';
 import { chargingMegaphone } from './megaphoneVoice';
 
 export interface VoiceEffectSetting {
-	strength: number;
-	berserker?: boolean;
-	direction?: PitchShiftDirection;
-	formantScale?: number;
-	jumbo?: boolean;
-	squash?: number;
-	toneRate?: number;
-	directPitch?: boolean;
-	sourceFilter?: SourceFilterParameters;
+	id: VoiceEffectId;
+	tuning: VoiceEffectTuning;
 }
 
-function effectStrength(value: number | undefined): number {
-	return Number.isFinite(value) ? Math.min(1, Math.max(0, value! / 100)) : 1;
-}
-
-function scaledFilter(filter: SourceFilterParameters, strength: number | undefined): VoiceEffectSetting | null {
-	const amount = effectStrength(strength);
-	return amount > 0
-		? {
-				strength: 0,
-				sourceFilter: {
-					pitch: 1 + (filter.pitch - 1) * amount,
-					formant: 1 + (filter.formant - 1) * amount,
-					squash: filter.squash * amount,
-				},
-			}
-		: null;
+function configuredEffect(settings: ISettings, id: VoiceEffectId): VoiceEffectSetting | null {
+	const tuning = getVoiceEffectTuning(settings, id);
+	return isNeutralVoiceEffectTuning(tuning) ? null : { id, tuning };
 }
 
 export function shouldApplyRainbowStarEcho(
@@ -47,7 +31,7 @@ export function shouldApplyRainbowStarEcho(
 	return (
 		state.mod === 'NoS' &&
 		lobby?.nosRainbowStarEcho !== false &&
-		effectStrength(settings?.nosRainbowStarEchoStrength) > 0 &&
+		!isNeutralVoiceEffectTuning(getVoiceEffectTuning(settings ?? {}, 'nosRainbowStar')) &&
 		(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
 		!other.isDead &&
 		!other.disconnected &&
@@ -68,35 +52,19 @@ export function selectVoiceEffect(
 ): VoiceEffectSetting | null {
 	const jamming = voiceJammingFor(state, other.id);
 	if (jamming && jamming.pitch !== 1 && !other.disconnected && !other.bugged && !other.isDummy)
-		return scaledFilter({ pitch: jamming.pitch, formant: 1, squash: 0 }, settings.nosVoiceJammingEffectStrength);
+		return configuredEffect(settings, 'nosVoiceJamming');
 	if (other.isDead || other.disconnected || other.bugged || other.isDummy) return null;
 	const megaphone = chargingMegaphone(state, other);
-	if (megaphone && megaphone.voiceEffect !== false) {
-		const wave = Math.sin((Date.now() / 1000) * Math.PI * 8);
-		return scaledFilter(
-			{
-				pitch: 0.85 + wave * (0.12 + megaphone.energy * 0.2),
-				formant: 0.75 + wave * 0.12,
-				squash: 0.65,
-			},
-			settings.nosMegaphoneEffectStrength
-		);
-	}
-	// Hero costumes change appearance without changing the speaker's voice.
+	if (megaphone && megaphone.voiceEffect !== false) return configuredEffect(settings, 'nosMegaphone');
 	if (isHeroTransformed(state, other.id)) return null;
-	// Citrus changes the actual outfit at meeting start, rather than BodyType.
-	// Keep the disguise throughout tasks and meetings while that outfit is visible.
 	if (
 		state.mod === 'NoS' &&
 		lobby.nosCitrusVoiceEffect !== false &&
 		(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
 		(other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Orange' ||
 			other.nosPlayer?.hat?.name === 'noshat_catudon_Citrus_Lemon')
-	) {
-		const configured = settings.nosCitrusVoiceEffectStrength;
-		const strength = Number.isFinite(configured) ? Math.min(100, Math.max(0, configured)) : 100;
-		return strength > 0 ? { strength, direction: 'up' } : null;
-	}
+	)
+		return configuredEffect(settings, 'nosCitrus');
 	if (state.gameState !== GameState.TASKS) return null;
 	if (
 		state.map === MapType.AIRSHIP &&
@@ -115,62 +83,30 @@ export function selectVoiceEffect(
 		(other.nosPlayer?.bodyType !== undefined
 			? other.nosPlayer.bodyType === 2
 			: other.nosRole.bodyType === 2 && other.nosRole.isBerserking === true)
-	) {
-		const strength = effectStrength(settings.nosBerserkerVoiceEffectStrength) * 100;
-		return strength > 0 ? { strength, berserker: true } : null;
-	}
-	if (state.mod === 'NoS' && lobby.nosRokurokubiVoiceEffect !== false && other.nosPlayer?.bodyType === 3) {
-		const length = other.nosPlayer.neckLength;
-		if (Number.isFinite(length) && length > 0) {
-			// Smooth monotonic curve; about 40 game units raises pitch by one octave.
-			const pitch = 1 + Math.min(1, Math.log1p(length) / Math.log1p(40));
-			const x = other.nosPlayer.bodyRateX;
-			const formant = Number.isFinite(x) && x > 0 ? Math.min(1.7, Math.max(0.55, 1 / x)) : 1;
-			return scaledFilter({ pitch, formant, squash: 0 }, settings.nosRokurokubiVoiceEffectStrength);
-		}
-	}
+	)
+		return configuredEffect(settings, 'nosBerserker');
+	if (
+		state.mod === 'NoS' &&
+		lobby.nosRokurokubiVoiceEffect !== false &&
+		other.nosPlayer?.bodyType === 3 &&
+		Number.isFinite(other.nosPlayer.neckLength) &&
+		other.nosPlayer.neckLength > 0
+	)
+		return configuredEffect(settings, 'nosRokurokubi');
 	if (state.mod === 'NoS' && lobby.nosSizeVoiceEffect !== false && other.nosPlayer) {
-		const { bodyRateX, bodyRateY } = other.nosPlayer;
-		if (
-			bodyRateX !== undefined &&
-			bodyRateY !== undefined &&
-			Number.isFinite(bodyRateX) &&
-			Number.isFinite(bodyRateY) &&
-			bodyRateX > 0 &&
-			bodyRateY >= 0
-		) {
-			const formant = Math.min(1.7, Math.max(0.55, 1 / bodyRateX));
-			if (Math.abs(bodyRateX - 1) <= 0.02 && bodyRateY < 0.98) {
-				const amount = 1 - bodyRateY;
-				const squash = amount * amount * (3 - 2 * amount);
-				return scaledFilter({ pitch: 1 + squash * 0.25, formant: 1, squash }, settings.nosSizeVoiceEffectStrength);
-			}
-			const pitch =
-				bodyRateY < 0.98
-					? 1 + Math.min(1, Math.log(1 / Math.max(0.1, bodyRateY)) / Math.log(10))
-					: bodyRateY > 1.02
-						? 1 - Math.min(1, Math.log(bodyRateY) / Math.log(5)) * 0.6
-						: 1;
-			if (pitch !== 1 || bodyRateX < 0.98 || bodyRateX > 1.02)
-				return scaledFilter({ pitch, formant, squash: 0 }, settings.nosSizeVoiceEffectStrength);
-		}
+		const { bodyRateX: x, bodyRateY: y } = other.nosPlayer;
+		if (Number.isFinite(x) && Number.isFinite(y) && x > 0 && y >= 0 && (x < 0.98 || x > 1.02 || y < 0.98 || y > 1.02))
+			return configuredEffect(settings, 'nosSize');
 	}
 	if (state.mod === 'SUPER_NEW_ROLES' && lobby.snrJumboVoice && hasSnrJumbo(other.snrRole)) {
 		const size = other.snrRole?.jumbo;
-		if (
-			size &&
+		return size &&
 			Number.isFinite(size.currentSize) &&
 			Number.isFinite(size.maxSize) &&
 			size.maxSize > 0 &&
 			size.currentSize > 0
-		) {
-			const growth = Math.min(1, size.currentSize / size.maxSize);
-			return scaledFilter(
-				{ pitch: 1 - growth * 0.6, formant: 1 - growth * 0.45, squash: 0 },
-				settings.snrJumboVoiceEffectStrength
-			);
-		}
-		return null;
+			? configuredEffect(settings, 'snrJumbo')
+			: null;
 	}
 	if (lobby.voiceEffectEnabled === false || me.isDead) return null;
 	if (
@@ -184,12 +120,7 @@ export function selectVoiceEffect(
 	)
 		return null;
 	const changed = (player: Player) => (player.appearanceName || player.name) !== player.name;
-	if (
-		settings.voiceEffectStrength > 0 &&
-		changed(other) &&
-		state.players?.some((player) => !player.disconnected && !player.bugged && changed(player))
-	) {
-		return { strength: settings.voiceEffectStrength };
-	}
-	return null;
+	return changed(other) && state.players?.some((player) => !player.disconnected && !player.bugged && changed(player))
+		? configuredEffect(settings, 'disguise')
+		: null;
 }

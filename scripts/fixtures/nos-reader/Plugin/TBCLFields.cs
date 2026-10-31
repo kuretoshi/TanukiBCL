@@ -4,7 +4,8 @@ namespace Nebula.Collab;
 
 public static unsafe class TBCLFields
 {
-    public const int Version = 20261009;
+    // Published by NoS v3.6.1. Keep the field order identical to the release.
+    public const int Version = 20261029;
     private static int nextIndex;
     public static Snapshot* Latest;
     static TBCLFields() { nextIndex = 0; Latest = null; }
@@ -25,12 +26,12 @@ public static unsafe class TBCLFields
         public bool IsKiller, IsImpostor, IsCrewmate, IsNeutral, IsImpostorlike, IsJammed;
         public float SpeakerPositionX, SpeakerPositionY;
         public float BodyRateX, BodyRateY;
+        public int BodyType;
+        public float NeckLength;
         public byte NameLength;
         public fixed char Name[32];
         public float ColorR, ColorG, ColorB;
         public CostumeData Skin, Hat, Visor;
-        public int BodyType;
-        public float NeckLength;
     }
     public enum RadioKind { Impostor, Jackal, Lovers }
     public struct RadioData {

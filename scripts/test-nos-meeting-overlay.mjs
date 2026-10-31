@@ -44,17 +44,18 @@ const rect = node => {
   const r = node.getBoundingClientRect();
   const style = getComputedStyle(node);
   return { x: r.x, y: r.y, width: r.width, height: r.height,
-    marginBottom: style.marginBottom, marginLeft: style.marginLeft, marginRight: style.marginRight,
+    id: node.dataset.meetingPlayer, marginBottom: style.marginBottom, marginLeft: style.marginLeft, marginRight: style.marginRight,
     boxSizing: style.boxSizing, position: style.position, opacity: node.style.opacity, shadow: style.boxShadow };
 };
 let key = 0;
-globalThis.renderMeeting = async ({ count, mod = 'NoS', oldHud = false, talking = 'all', reverse = false, dead = [], remount = true }) => {
+globalThis.renderMeeting = async ({ count, mod = 'NoS', oldHud = false, talking = 'all', reverse = false, dead = [], remount = true, snrMeeting, missing }) => {
   const players = Array.from({ length: count }, (_, id) => ({
     id, clientId: id + 100, colorId: id % DEFAULT_PLAYERCOLORS.length,
     name: 'Player ' + id, isLocal: id === 0, disconnected: false, isDead: dead.includes(id),
     nosPlayer: { colorR: id / 255, colorG: (50 + id) / 255, colorB: (100 + id) / 255 },
   }));
-  const gameState = { gameState: GameState.DISCUSSION, mod, oldMeetingHud: oldHud, players: reverse ? [...players].reverse() : players };
+  const present = players.filter(player => player.id !== missing);
+  const gameState = { gameState: GameState.DISCUSSION, mod, snrMeeting, oldMeetingHud: oldHud, players: reverse ? [...present].reverse() : present };
   const voiceState = { localTalking: talking === 'all' || talking === 0,
     otherTalking: Object.fromEntries(players.map(player => [player.clientId, talking === 'all' || talking === player.id])) };
   if (remount) key++;
@@ -64,7 +65,7 @@ globalThis.renderMeeting = async ({ count, mod = 'NoS', oldHud = false, talking 
   const tablet = frames[0]?.parentElement;
   const hud = tablet?.parentElement;
   return { viewport: { width: innerWidth, height: innerHeight }, count, mod, oldHud,
-    frames: frames.map(rect), tablet: tablet ? rect(tablet) : null, hud: hud ? rect(hud) : null };
+    snrMeeting, missing, talking, frames: frames.map(rect), tablet: tablet ? rect(tablet) : null, hud: hud ? rect(hud) : null };
 };
 `;
 const bundled = await build({
@@ -142,6 +143,15 @@ app.whenReady().then(async () => {
         const outcome = await window.webContents.executeJavaScript('renderMeeting(' + JSON.stringify(scenario) + ')');
         outcomes.push({ ...outcome, scenario });
       }
+      const ids = Array.from({ length: 45 }, (_, id) => 44 - id);
+      for (const scenario of [
+        ...[1, 2, 3, 1].map(currentPage => ({ count: 45, snrMeeting: { enabled: true, currentPage, playerIds: ids } })),
+        { count: 45, snrMeeting: { enabled: true, currentPage: 2, playerIds: ids }, missing: 28 },
+        ...[16, 30, 31].map(count => ({ count, snrMeeting: { enabled: true, currentPage: Math.ceil(count / 15), playerIds: ids.slice(45 - count) } })),
+        { count: 45 },
+        { count: 45, snrMeeting: { enabled: true, currentPage: 4, playerIds: ids } },
+        { count: 15 },
+      ]) outcomes.push(await window.webContents.executeJavaScript('renderMeeting(' + JSON.stringify({ ...scenario, mod: 'SUPER_NEW_ROLES', talking: 15, dead: [15], reverse: true, remount: scenario.count === 15 }) + ')'));
       window.destroy();
     }
     fs.writeFileSync(path.join(directory, 'measurements-' + label + '.json'), JSON.stringify(outcomes, null, 2));
@@ -163,7 +173,7 @@ assert.equal(result.status, 0, result.stdout + result.stderr + String(result.err
 const line = result.stdout.split(/\r?\n/).find((line) => line.startsWith('RESULT:'));
 assert.ok(line, result.stdout + result.stderr);
 const measurements = JSON.parse(await readFile(resolve(directory, `measurements-${label}.json`), 'utf8'));
-assert.equal(measurements.length, viewports.length * 12);
+assert.equal(measurements.length, viewports.length * 23);
 if (measureOnly) {
 	console.log(
 		`Measured ${measurements.length} actual React/MUI meeting scenarios: ${resolve(directory, `measurements-${label}.json`)}`
@@ -226,6 +236,28 @@ function geometryFor(measurement) {
 for (const measurement of measurements) {
 	const expected = geometryFor(measurement);
 	const { viewport, frames, count, mod, oldHud } = measurement;
+	if (mod === 'SUPER_NEW_ROLES') {
+		const page = measurement.snrMeeting;
+		const expectedIds =
+			count <= 15 && !page
+				? Array.from({ length: count }, (_, id) => id)
+				: !page || page.currentPage > Math.ceil(page.playerIds.length / 15)
+					? []
+					: page.playerIds.slice((page.currentPage - 1) * 15, page.currentPage * 15);
+		assert.deepEqual(
+			frames.map((frame) => Number(frame.id)),
+			expectedIds.filter((id) => id !== measurement.missing)
+		);
+		for (const frame of frames) {
+			const slot = expectedIds.indexOf(Number(frame.id));
+			near(frame.width, expected.cardWidth, 'SNR retains normal card width');
+			near(frame.height, expected.cardHeight, 'SNR retains normal card height');
+			near(frame.x, expected.x + (slot % 3) * expected.stepX, 'SNR page column');
+			near(frame.y, expected.y + Math.floor(slot / 3) * expected.stepY, 'SNR page row including missing player');
+			assert.equal(frame.opacity, Number(frame.id) === measurement.talking ? '1' : '0');
+		}
+		continue;
+	}
 	assert.ok(viewports.some(([width, height]) => viewport.width === width && viewport.height === height));
 	assert.equal(frames.length, count);
 	const description = `${viewport.width}x${viewport.height} ${mod} ${count} oldHud=${oldHud}`;

@@ -1,4 +1,6 @@
-/** Close, gritty overload and a short room tail, distinct from the ghost convolver. */
+import { setEffectGain } from './effectGain';
+
+/** The Berserker's gritty voice profile. Pitch and tails use the shared tuning graph. */
 export interface BerserkerEffect {
 	kind: 'berserker';
 	input: GainNode;
@@ -7,7 +9,6 @@ export interface BerserkerEffect {
 	processed: GainNode;
 	nodes: AudioNode[];
 }
-
 export function createBerserkerEffect(context: AudioContext): BerserkerEffect {
 	const input = context.createGain(),
 		output = context.createGain();
@@ -26,23 +27,10 @@ export function createBerserkerEffect(context: AudioContext): BerserkerEffect {
 	lowpass.Q.value = Math.SQRT1_2;
 	const dry = context.createGain(),
 		grit = context.createGain(),
-		wet = context.createGain();
+		mix = context.createGain(),
+		compressor = context.createDynamicsCompressor();
 	dry.gain.value = 0.8;
 	grit.gain.value = 0.12;
-	wet.gain.value = 0.06;
-	const preDelay = context.createDelay(0.1);
-	preDelay.delayTime.value = 0.012;
-	const room = context.createConvolver();
-	const impulse = context.createBuffer(1, Math.floor(context.sampleRate * 0.22), context.sampleRate);
-	const data = impulse.getChannelData(0);
-	let seed = 12345;
-	for (let i = 0; i < data.length; i++) {
-		seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-		data[i] = ((seed / 0xffffffff) * 2 - 1) * Math.pow(1 - i / data.length, 3);
-	}
-	room.buffer = impulse;
-	const mix = context.createGain(),
-		compressor = context.createDynamicsCompressor();
 	compressor.threshold.value = -14;
 	compressor.knee.value = 12;
 	compressor.ratio.value = 3;
@@ -59,31 +47,26 @@ export function createBerserkerEffect(context: AudioContext): BerserkerEffect {
 	shape.connect(lowpass);
 	lowpass.connect(grit);
 	grit.connect(mix);
-	lowpass.connect(preDelay);
-	preDelay.connect(room);
-	room.connect(wet);
-	wet.connect(mix);
 	mix.connect(compressor);
 	compressor.connect(processed);
 	processed.connect(output);
-	updateBerserkerEffect({ bypass, processed }, 100);
+	bypass.gain.value = 0;
+	processed.gain.value = 0.78;
 	return {
 		kind: 'berserker',
 		input,
 		output,
 		bypass,
 		processed,
-		nodes: [highpass, shape, lowpass, dry, grit, wet, preDelay, room, mix, compressor, bypass, processed],
+		nodes: [highpass, shape, lowpass, dry, grit, mix, compressor, bypass, processed],
 	};
 }
-
 export function updateBerserkerEffect(effect: Pick<BerserkerEffect, 'bypass' | 'processed'>, strength: number): void {
 	const amount = Math.min(1, Math.max(0, strength / 100));
-	effect.bypass.gain.value = 1 - amount;
-	effect.processed.gain.value = 0.78 * amount;
+	setEffectGain(effect.bypass, 1 - amount);
+	setEffectGain(effect.processed, 0.78 * amount);
 }
-
-export function disconnectBerserkerEffect(effect: BerserkerEffect) {
+export function disconnectBerserkerEffect(effect: BerserkerEffect): void {
 	effect.input.disconnect();
 	effect.output.disconnect();
 	for (const node of effect.nodes) node.disconnect();

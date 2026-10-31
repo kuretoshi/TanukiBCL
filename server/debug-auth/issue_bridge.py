@@ -73,6 +73,13 @@ def initialize(path):
             CREATE TABLE IF NOT EXISTS inquiry_discord_ignored (
                 thread_id TEXT PRIMARY KEY
             );
+            CREATE TABLE IF NOT EXISTS inquiry_discord_resolution (
+                thread_id TEXT PRIMARY KEY,
+                repository TEXT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                tag_id TEXT NOT NULL,
+                resolved INTEGER NOT NULL CHECK(resolved IN (0,1))
+            );
         """)
 
 
@@ -137,6 +144,17 @@ def save_discord_attachment(path, message_id, attachment_id, filename, data):
 
 
 def _github(method, repository, endpoint, payload=None):
+    addon_repository = os.environ.get('INQUIRY_GITHUB_REPO_ADDON', '')
+    if addon_repository and repository == addon_repository:
+        token = os.environ.get('INQUIRY_GITHUB_TOKEN_ADDON', '')
+        if not token:
+            raise RuntimeError('Addon GitHub issue token is not configured.')
+    else:
+        token = _existing_github_token(repository)
+    return _github_request(method, repository, endpoint, payload, token)
+
+
+def _existing_github_token(repository):
     net_repository = os.environ.get('INQUIRY_GITHUB_REPO_NET', '')
     token = (os.environ.get('INQUIRY_GITHUB_TOKEN_NET', '')
              if repository == net_repository and net_repository else '')
@@ -144,6 +162,10 @@ def _github(method, repository, endpoint, payload=None):
         token = os.environ.get('INQUIRY_GITHUB_TOKEN', '')
     if not token:
         raise RuntimeError('GitHub issue token is not configured.')
+    return token
+
+
+def _github_request(method, repository, endpoint, payload, token):
     if not REPOSITORY.fullmatch(repository):
         raise ValueError('Invalid GitHub repository.')
     url = f'{API_ROOT}/repos/{repository}{endpoint}'
@@ -347,6 +369,57 @@ def comment_message_ids(path, thread_id):
 def list_linked(path):
     with closing(connect(path)) as db:
         return db.execute('SELECT * FROM inquiry_issues WHERE thread_id IS NOT NULL').fetchall()
+
+
+def resolve_issue(path, thread_id, resolved=True):
+    """Update only the persisted counterpart; never create an Issue or comment."""
+    row = get_by_thread(path, thread_id)
+    if row is None:
+        return False
+    endpoint = f"/issues/{row['issue_number']}"
+    current = _github('GET', row['repository'], endpoint)
+    if (not isinstance(current, dict) or current.get('number') != row['issue_number']
+            or 'pull_request' in current or current.get('state') not in ('open', 'closed')):
+        raise RuntimeError('GitHub did not confirm the linked Issue.')
+    state = 'closed' if resolved else 'open'
+    if current['state'] == state:
+        return False
+    result = _github('PATCH', row['repository'], endpoint,
+                     {'state': state, 'state_reason': 'completed' if resolved else 'reopened'})
+    if (not isinstance(result, dict) or result.get('number') != row['issue_number']
+            or result.get('state') != state
+            or (resolved and result.get('state_reason') != 'completed')):
+        raise RuntimeError('GitHub did not confirm Issue resolution.')
+    return True
+
+
+def sync_discord_resolution(path, thread_id, tag_id, resolved):
+    """Remember tag transitions across restarts; leave unobserved manual closes alone."""
+    row = get_by_thread(path, thread_id)
+    if row is None:
+        return None
+    identity = (str(thread_id), row['repository'], row['issue_number'], str(tag_id))
+    with closing(connect(path)) as db:
+        prior = db.execute('''SELECT resolved FROM inquiry_discord_resolution
+            WHERE thread_id=? AND repository=? AND issue_number=? AND tag_id=?''', identity).fetchone()
+    if not resolved and (prior is None or not prior['resolved']):
+        return None
+
+    def remember(value):
+        with closing(connect(path)) as db, db:
+            db.execute('''INSERT INTO inquiry_discord_resolution VALUES(?,?,?,?,?)
+                ON CONFLICT(thread_id) DO UPDATE SET repository=excluded.repository,
+                issue_number=excluded.issue_number,tag_id=excluded.tag_id,resolved=excluded.resolved''',
+                (*identity, int(value)))
+
+    # Record the close intent first: if the process exits after GitHub accepts
+    # the close, a subsequent tag removal must still be able to reopen it.
+    if resolved and (prior is None or not prior['resolved']):
+        remember(True)
+    changed = resolve_issue(path, thread_id, resolved)
+    if not resolved:
+        remember(False)
+    return ('closed' if resolved else 'open') if changed else None
 
 
 def ensure_discord_link(path, row):

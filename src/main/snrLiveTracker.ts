@@ -1,5 +1,6 @@
 import { hasSnrJumbo, isSnrJackal, SnrEnumValue, SnrLiveRole } from '../common/SnrRole';
 import { isSnrLiveLayout, readSnrLiveRoles, SnrLiveLayout } from './snrLiveMemory';
+import { readSnrMeeting } from './snrMeetingMemory';
 
 function readTeam(value: unknown): SnrEnumValue | null | undefined {
 	if (value === null) return null;
@@ -31,6 +32,10 @@ export class SnrLiveTracker {
 	message = 'SNR役職未取得';
 
 	constructor(private discover: (pid: number) => Promise<unknown>) {}
+
+	readMeeting(read: (address: number, size: number) => Buffer) {
+		return this.layout ? readSnrMeeting(this.layout, read) : undefined;
+	}
 
 	reset(): void {
 		this.request++;

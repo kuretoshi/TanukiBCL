@@ -8,6 +8,9 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import vm from 'node:vm';
 import { pbkdf2Sync } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import console from 'node:console';
+import { setImmediate } from 'node:timers';
 
 globalThis.window = { electron: { ipcRenderer: { on() {}, off() {}, send() {} }, shell: {}, platform: 'win32' } };
 const cache = resolve('.tools/test-cache');
@@ -80,41 +83,35 @@ const state = {
 	closedDoors: [],
 };
 const rule = (s = state, l = lobby, a = me, b = other, radio = -1) => selectVoiceEffect(s, settings, l, a, b, radio);
-assert.equal(rule().strength, 70);
+assert.deepEqual(rule(), { id: 'disguise', tuning: { pitch: -70, reverb: 0, echo: 0 } });
 assert.equal(rule({ ...state, gameState: GameState.DISCUSSION }), null);
 assert.equal(rule(state, { ...lobby, voiceEffectEnabled: false }), null);
 const nosVoiceState = { ...state, mod: 'NoS' };
 const nosSizedPlayer = (x, y) => ({ ...other, appearanceName: other.name, nosPlayer: { bodyRateX: x, bodyRateY: y } });
 assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 1)), null);
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(0.1, 0.1)), {
-	strength: 0,
-	sourceFilter: { pitch: 2, formant: 1.7, squash: 0 },
-});
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(5, 5)), {
-	strength: 0,
-	sourceFilter: { pitch: 0.4, formant: 0.55, squash: 0 },
-});
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 0.5)), {
-	strength: 0,
-	sourceFilter: { pitch: 1.125, formant: 1, squash: 0.5 },
-});
-assert.deepEqual(rule(nosVoiceState, lobby, me, nosSizedPlayer(1, 0)), {
-	strength: 0,
-	sourceFilter: { pitch: 1.25, formant: 1, squash: 1 },
-});
-for (const y of [0.97, 0.75, 0.5, 0.25, 0]) {
-	const fx = rule(nosVoiceState, lobby, me, nosSizedPlayer(1, y)).sourceFilter;
-	assert.ok(fx.pitch >= 1 && fx.pitch <= 1.25);
-	assert.equal(fx.formant, 1);
-	assert.ok(fx.squash >= 0 && fx.squash <= 1);
-}
-for (const y of [0, 0.5, 1, 2, 5]) {
-	const narrow = rule(nosVoiceState, lobby, me, nosSizedPlayer(0.5, y)).sourceFilter;
-	const wide = rule(nosVoiceState, lobby, me, nosSizedPlayer(2, y)).sourceFilter;
-	assert.equal(narrow.pitch, wide.pitch);
-	assert.equal(narrow.squash, wide.squash);
-	assert.ok(narrow.formant > wide.formant);
-}
+for (const { x, y } of combinations({ x: [0.98, 1, 1.02], y: [0.98, 1, 1.02] }))
+	assert.equal(
+		rule(nosVoiceState, lobby, me, nosSizedPlayer(x, y)),
+		null,
+		'inclusive ordinary-size boundaries do not activate DSP'
+	);
+for (const [x, y] of [
+	[0.1, 0.1],
+	[5, 5],
+	[1, 0.5],
+	[1, 0],
+	[1, 0.97],
+	[0.5, 2],
+	[2, 0.5],
+])
+	assert.deepEqual(
+		rule(nosVoiceState, lobby, me, nosSizedPlayer(x, y)),
+		{
+			id: 'nosSize',
+			tuning: { pitch: -100, reverb: 0, echo: 0 },
+		},
+		'size changes activate the selected profile without reversing the user pitch direction'
+	);
 assert.equal(rule(nosVoiceState, { ...lobby, nosSizeVoiceEffect: false }, me, nosSizedPlayer(2, 2)), null);
 assert.equal(rule(nosVoiceState, lobby, me, nosSizedPlayer(NaN, 1)), null);
 assert.equal(rule({ ...nosVoiceState, gameState: GameState.DISCUSSION }, lobby, me, nosSizedPlayer(5, 5)), null);
@@ -524,16 +521,15 @@ const snr = (name, jumbo, metadata = {}) => ({
 const jumboLobby = { ...lobby, snrJumboVoice: true, voiceEffectEnabled: false };
 const jumboPlayer = { ...other, appearanceName: 'B', snrRole: snr('Jackal', { currentSize: 2, maxSize: 4 }) };
 assert.deepEqual(rule(state, jumboLobby, me, jumboPlayer), {
-	strength: 0,
-	sourceFilter: { pitch: 0.7, formant: 0.775, squash: 0 },
+	id: 'snrJumbo',
+	tuning: { pitch: -100, reverb: 0, echo: 0 },
 });
 for (const currentSize of [0.001, 1, 4, 8]) {
-	const growth = Math.min(1, currentSize / 4);
 	assert.deepEqual(
 		rule(state, jumboLobby, me, { ...jumboPlayer, snrRole: snr('Jackal', { currentSize, maxSize: 4 }) }),
 		{
-			strength: 0,
-			sourceFilter: { pitch: 1 - growth * 0.6, formant: 1 - growth * 0.45, squash: 0 },
+			id: 'snrJumbo',
+			tuning: { pitch: -100, reverb: 0, echo: 0 },
 		}
 	);
 }
@@ -817,9 +813,17 @@ assert.equal(spatial({ state: meeting, other: { ...restored, isDead: true } }).g
 console.log('ok meeting reset: canonical appearance, stable identity, normal voice and task-state preservation');
 
 class Node {
+	constructor() {
+		this.context = context;
+	}
 	connections = new Set();
 	gain = {
 		value: 1,
+		cancelScheduledValues() {},
+		setValueAtTime(value) {
+			this.value = value;
+		},
+		linearRampToValueAtTime() {},
 		setTargetAtTime(value) {
 			this.value = value;
 		},
@@ -1010,7 +1014,8 @@ const effect = first.voiceEffect;
 audio.applyVoiceAudio('first', { ...state, gameState: GameState.DISCUSSION }, settings, lobby, me, other, -1);
 assert.equal(first.voiceEffect, undefined);
 assert.equal(first.voiceEffectConnected, false);
-assert.ok(effect.delayModA.stopped);
+assert.equal(effect.input.connections.size, 0);
+assert.equal(effect.output.connections.size, 0);
 assert.ok(first.gain.connections.has(audio.masterGain));
 audio.applyVoiceAudio('first', state, settings, lobby, me, other, -1);
 audio.silenceAllPeers();
@@ -1069,16 +1074,18 @@ audio.peers.set('size-test', sizePeer);
 audio.sourceFilterReady = true;
 audio.applyVoiceAudio('size-test', state, settings, lobby, me, other, -1);
 const oldDisguise = sizePeer.voiceEffect;
+const oldPitch = oldDisguise.pitch;
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
-assert.equal(sizePeer.voiceEffect.kind, 'source-filter');
-assert.ok(oldDisguise.delayModA.stopped);
+assert.equal(sizePeer.voiceEffect.kind, 'tuned');
+assert.equal(sizePeer.voiceEffect, oldDisguise, 'one generic processor is shared across effect profiles');
+assert.equal(sizePeer.voiceEffect.pitch, oldPitch);
 assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
-assert.equal(sizePeer.voiceEffect.node.parameters.get('pitch').value, 1.125);
-const sourceFilter = sizePeer.voiceEffect;
+assert.equal(sizePeer.voiceEffect.pitch.node.parameters.get('pitch').value, 0.5);
+const sourceFilter = sizePeer.voiceEffect.pitch;
 audio.applyVoiceAudio('size-test', state, settings, lobby, me, other, -1);
-assert.equal(sourceFilter.node.port.message, 'stop');
-assert.equal(sourceFilter.node.port.closed, true);
-assert.ok(!('kind' in sizePeer.voiceEffect));
+assert.equal(sourceFilter.node.parameters.get('pitch').value, 2 ** -0.7);
+assert.equal(sourceFilter.node.port.closed, undefined);
+assert.equal(sizePeer.voiceEffect.kind, 'tuned');
 assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
 audio.applyVoiceAudio(
@@ -1093,7 +1100,7 @@ audio.applyVoiceAudio(
 assert.equal(sizePeer.voiceEffect, undefined);
 assert.ok(sizePeer.gain.connections.has(audio.masterGain));
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
-const previousSource = sizePeer.voiceEffect;
+const previousSource = sizePeer.voiceEffect.pitch;
 const ragingPlayer = {
 	...other,
 	appearanceName: other.name,
@@ -1101,18 +1108,29 @@ const ragingPlayer = {
 	nosPlayer: { bodyType: 2, neckLength: 0, bodyRateX: 1, bodyRateY: 1 },
 };
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, ragingPlayer, -1);
-assert.equal(sizePeer.voiceEffect.kind, 'berserker');
+assert.equal(sizePeer.voiceEffect.kind, 'tuned');
+assert.ok(sizePeer.voiceEffect.berserker);
+assert.ok(sizePeer.voiceEffect.echo);
+assert.equal(sizePeer.voiceEffect.pitch, undefined);
 assert.equal(previousSource.node.port.message, 'stop');
 assert.ok(sizePeer.gain.connections.has(sizePeer.voiceEffect.input));
-const ragingEffect = sizePeer.voiceEffect;
+const ragingEffect = sizePeer.voiceEffect.berserker;
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, { ...ragingPlayer, isDead: true }, -1);
 assert.equal(sizePeer.voiceEffect, undefined);
 assert.ok(ragingEffect.nodes.every((node) => node.connections.size === 0));
 assert.ok(sizePeer.gain.connections.has(audio.masterGain));
 audio.sourceFilterReady = false;
 audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
-assert.equal(sizePeer.voiceEffect, undefined);
-assert.ok(sizePeer.gain.connections.has(audio.masterGain));
+assert.equal(sizePeer.voiceEffect.pitch, undefined);
+assert.ok(
+	sizePeer.voiceEffect.input.connections.has(sizePeer.voiceEffect.output),
+	'unavailable pitch worklet leaves a direct path'
+);
+assert.equal(sizePeer.peakGuard, undefined, 'unavailable processing preserves the raw path without peak shaping');
+audio.sourceFilterReady = true;
+audio.applyVoiceAudio('size-test', nosVoiceState, settings, lobby, me, nosSizedPlayer(1, 0.5), -1);
+assert.ok(sizePeer.peakGuard, 'late worklet readiness also connects peak protection');
+assert.ok(sizePeer.voiceEffect.output.connections.has(sizePeer.peakGuard.input));
 audio.removePeer('size-test');
 const starPeer = peer();
 const fixerPeer = peer();
@@ -1146,12 +1164,68 @@ assert.ok(fixerPeer.gain.connections.has(audio.masterGain));
 audio.removePeer('fixer-test');
 audio.peers.set('star-test', starPeer);
 const rainbowPlayer = { ...other, appearanceName: other.name, nosRole: { isRainbowStar: true } };
+const loadingStar = peer();
+loadingStar.gain.connect(audio.masterGain); // addPeer starts every peer on the direct path.
+audio.peers.set('star-loading', loadingStar);
+const readyImpulse = audio.convolverBuffer;
+const starFetch = globalThis.fetch;
+const starDecode = context.decodeAudioData;
+const assertDryStar = () => {
+	const gain = audio.applyVoiceAudio('star-loading', nosVoiceState, settings, lobby, me, rainbowPlayer, -1);
+	assert.ok(gain > 0, 'a Star remains audible before its reverb impulse is available');
+	assert.equal(loadingStar.reverbConnected, false);
+	assert.equal(loadingStar.reverb, undefined, 'do not route Star speech through an empty convolver');
+	assert.ok(loadingStar.gain.connections.has(audio.masterGain));
+};
+try {
+	audio.convolverBuffer = null;
+	assertDryStar();
+	globalThis.fetch = async () => {
+		throw Error('test: unavailable reverb impulse');
+	};
+	await audio.loadConvolverBuffer();
+	assertDryStar();
+	globalThis.fetch = async () => ({ arrayBuffer: async () => new ArrayBuffer(0) });
+	context.decodeAudioData = async () => readyImpulse;
+	await audio.loadConvolverBuffer();
+	audio.applyVoiceAudio('star-loading', nosVoiceState, settings, lobby, me, rainbowPlayer, -1);
+	assert.equal(loadingStar.reverbConnected, true, 'the next voice update enables Star reverb when its impulse arrives');
+	assert.equal(loadingStar.reverb.buffer, readyImpulse);
+	assert.ok(loadingStar.reverbMix.output.connections.has(loadingStar.peakGuard.input));
+	assert.ok(loadingStar.peakGuard.output.connections.has(audio.masterGain));
+} finally {
+	globalThis.fetch = starFetch;
+	context.decodeAudioData = starDecode;
+	audio.convolverBuffer = readyImpulse;
+	audio.removePeer('star-loading');
+}
 audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me, rainbowPlayer, -1);
-assert.equal(starPeer.starEchoConnected, true);
-assert.equal(starPeer.starEcho.delay.delayTime.value, 0.075);
-assert.equal(starPeer.starEcho.wet.gain.value, 0.08);
-assert.ok(starPeer.gain.connections.has(starPeer.starEcho.input));
-assert.ok(starPeer.starEcho.output.connections.has(audio.masterGain));
+assert.equal(starPeer.reverbConnected, true);
+assert.equal(starPeer.roleReverbConnected, true);
+assert.equal(starPeer.starEcho, undefined, 'Star uses one shared convolver, without a second echo path');
+const starReverb = starPeer.reverb;
+const starMix = starPeer.reverbMix;
+assert.equal(starReverb.buffer, audio.convolverBuffer);
+assert.deepEqual([starMix.dry.gain.value, starMix.wet.gain.value], [0, 1]);
+assert.ok(starPeer.gain.connections.has(starReverb));
+assert.ok(starPeer.gain.connections.has(starMix.dry));
+assert.ok(starReverb.connections.has(starMix.wet));
+assert.ok(starMix.output.connections.has(starPeer.peakGuard.input));
+assert.ok(starPeer.peakGuard.output.connections.has(audio.masterGain));
+for (const strength of [25, 50, 100]) {
+	audio.applyVoiceAudio(
+		'star-test',
+		nosVoiceState,
+		{ ...settings, nosRainbowStarEchoStrength: strength },
+		lobby,
+		me,
+		rainbowPlayer,
+		-1
+	);
+	assert.equal(starPeer.reverb, starReverb, 'Star strength changes reuse the shared convolver');
+	assert.deepEqual([starMix.dry.gain.value, starMix.wet.gain.value], [1 - strength / 100, strength / 100]);
+	assert.equal(starPeer.gain.connections.size, 2, 'one dry/wet pair, without duplicated output');
+}
 audio.applyVoiceAudio(
 	'star-test',
 	{ ...nosVoiceState, gameState: GameState.DISCUSSION },
@@ -1161,8 +1235,7 @@ audio.applyVoiceAudio(
 	rainbowPlayer,
 	-1
 );
-assert.equal(starPeer.starEchoConnected, true);
-const starEcho = starPeer.starEcho;
+assert.equal(starPeer.reverbConnected, true);
 for (const isRainbowStar of [false, undefined, null]) {
 	audio.applyVoiceAudio(
 		'star-test',
@@ -1173,10 +1246,54 @@ for (const isRainbowStar of [false, undefined, null]) {
 		{ ...rainbowPlayer, nosRole: { isRainbowStar } },
 		-1
 	);
-	assert.equal(starPeer.starEchoConnected, false);
-	assert.equal(starEcho.output.connections.size, 0);
+	assert.equal(starPeer.reverbConnected, false);
+	assert.equal(starMix.output.connections.size, 0);
 	assert.ok(starPeer.gain.connections.has(audio.masterGain));
 }
+for (const [personal, host] of [
+	[{ ...settings, nosRainbowStarEchoStrength: 0 }, lobby],
+	[settings, { ...lobby, nosRainbowStarEcho: false }],
+]) {
+	audio.applyVoiceAudio('star-test', nosVoiceState, personal, host, me, rainbowPlayer, -1);
+	assert.equal(starPeer.reverbConnected, false, 'zero strength and host toggle disable Star reverb');
+}
+for (const [personal, host, speaker] of [
+	[settings, lobby, { ...rainbowPlayer, disconnected: true }],
+	[settings, lobby, { ...rainbowPlayer, nosPlayer: { isJammed: true } }],
+	[{ ...settings, nosRainbowStarEchoStrength: 0 }, lobby, { ...rainbowPlayer, disconnected: true }],
+	[settings, { ...lobby, nosRainbowStarEcho: false }, { ...rainbowPlayer, disconnected: true }],
+	[settings, lobby, { ...rainbowPlayer, disconnected: true, nosRole: { isRainbowStar: false } }],
+]) {
+	audio.applyVoiceAudio('star-test', nosVoiceState, settings, lobby, me, rainbowPlayer, -1);
+	const silentGain = audio.applyVoiceAudio('star-test', nosVoiceState, personal, host, me, speaker, -1);
+	assert.equal(silentGain, 0);
+	assert.equal(starPeer.reverbConnected, false, 'silent/disabled Star must not retain a tail through reverb:null');
+	assert.equal(starPeer.roleReverbConnected, false);
+	assert.equal(starMix.output.connections.size, 0);
+}
+audio.applyVoiceAudio(
+	'star-test',
+	nosVoiceState,
+	{ ...settings, nosRainbowStarEchoStrength: 0 },
+	{ ...lobby, haunting: true },
+	{ ...me, isImpostor: true },
+	{ ...rainbowPlayer, isDead: true },
+	-1
+);
+assert.equal(starPeer.reverbConnected, true, 'disabling Star does not disable ordinary ghost reverb');
+assert.equal(starPeer.reverb, starReverb, 'ghost and Star use the same convolver');
+assert.deepEqual([starMix.dry.gain.value, starMix.wet.gain.value], [0, 1]);
+audio.applyVoiceAudio(
+	'star-test',
+	nosVoiceState,
+	settings,
+	{ ...lobby, haunting: true },
+	{ ...me, isImpostor: true },
+	{ ...rainbowPlayer, isDead: true, disconnected: true },
+	-1
+);
+assert.equal(starPeer.reverbConnected, true, 'ordinary ghost reverb still retains its existing silent graph');
+assert.equal(starPeer.roleReverbConnected, false);
 audio.applyVoiceAudio(
 	'star-test',
 	nosVoiceState,
@@ -1186,11 +1303,95 @@ audio.applyVoiceAudio(
 	{ ...rainbowPlayer, nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } },
 	-1
 );
-assert.equal(starPeer.starEchoConnected, true);
+assert.equal(starPeer.reverbConnected, true);
 assert.equal(starPeer.voiceEffectConnected, true);
-assert.ok(starPeer.voiceEffect.output.connections.has(starEcho.input));
+assert.ok(starPeer.voiceEffect.output.connections.has(starReverb));
+assert.ok(starPeer.voiceEffect.output.connections.has(starMix.dry));
+audio.sourceFilterReady = true;
+const combinedPlayer = { ...rainbowPlayer, nosPlayer: { hat: { name: 'noshat_catudon_Citrus_Lemon' } } };
+const combinedSettings = {
+	...settings,
+	voiceEffectTunings: {
+		nosCitrus: { pitch: -20, reverb: 30, echo: 40 },
+		nosRainbowStar: { pitch: 50, reverb: 60, echo: 20 },
+	},
+};
+audio.applyVoiceAudio('star-test', nosVoiceState, combinedSettings, lobby, me, combinedPlayer, -1);
+const sharedProcessing = starPeer.voiceEffect,
+	sharedEcho = sharedProcessing.echo;
+assert.equal(
+	sharedProcessing.pitch.node.parameters.get('pitch').value,
+	2 ** 0.3,
+	'simultaneous Star/main role sums signed pitch'
+);
+assert.equal(sharedEcho.wet.gain.value, 0.048, 'one shared echo uses the stronger active amount');
+assert.equal(starPeer.reverb, starReverb);
+assert.deepEqual([starMix.dry.gain.value, starMix.wet.gain.value], [0.4, 0.6]);
+assert.deepEqual([...sharedProcessing.output.connections], [starReverb, starMix.dry]);
+for (const gain of [0, 0.35, 0, 1]) {
+	audio.setPeerGain('star-test', gain);
+	assert.equal(starPeer.gain.gain.value, gain);
+	assert.equal(
+		sharedProcessing.output.gain.value,
+		gain > 0 ? 1 : 0,
+		'individual mute also gates already-buffered echo'
+	);
+	assert.equal(starMix.output.gain.value, gain > 0 ? 1 : 0, 'individual mute also gates an already-buffered IR');
+	assert.equal(starPeer.voiceEffect, sharedProcessing, 'mute does not rebuild the selected graph');
+}
+audio.applyVoiceAudio(
+	'star-test',
+	nosVoiceState,
+	combinedSettings,
+	{ ...lobby, nosRainbowStarEcho: false },
+	me,
+	combinedPlayer,
+	-1
+);
+assert.equal(starPeer.voiceEffect, sharedProcessing);
+assert.equal(sharedProcessing.echo, sharedEcho);
+assert.equal(sharedProcessing.pitch.node.parameters.get('pitch').value, 2 ** -0.2);
+assert.deepEqual(
+	[starMix.dry.gain.value, starMix.wet.gain.value],
+	[0.7, 0.3],
+	'host Star toggle removes only its own tuning'
+);
+const neutralSettings = {
+	...combinedSettings,
+	voiceEffectTunings: {
+		nosCitrus: { pitch: 0, reverb: 0, echo: 0 },
+		nosRainbowStar: { pitch: 0, reverb: 0, echo: 0 },
+	},
+};
+audio.applyVoiceAudio('star-test', nosVoiceState, neutralSettings, lobby, me, combinedPlayer, -1);
+assert.equal(starPeer.voiceEffect, undefined);
+assert.equal(starPeer.reverbConnected, false);
+assert.equal(sharedEcho.delay.connections.size, 0);
+assert.ok(starPeer.gain.connections.has(audio.masterGain));
+
+const pushedPeer = peer();
+audio.peers.set('push-test', pushedPeer);
+const pushed = { ...other, appearanceName: other.name, isDead: true, snrPushedFalling: true };
+const pushSettings = {
+	...settings,
+	snrPushReverbStrength: 0,
+	voiceEffectTunings: { snrPush: { pitch: 50, reverb: 25, echo: 35 } },
+};
+audio.applyVoiceAudio('push-test', state, pushSettings, lobby, me, pushed, -1);
+assert.equal(
+	pushedPeer.voiceEffect.pitch.node.parameters.get('pitch').value,
+	2 ** 0.5,
+	'fall event accepts explicit pitch even when legacy strength is zero'
+);
+assert.equal(pushedPeer.voiceEffect.echo.wet.gain.value, 0.042);
+assert.equal(pushedPeer.reverbMix.wet.gain.value, 0.25);
+audio.applyVoiceAudio('push-test', state, pushSettings, { ...lobby, snrPushReverb: false }, me, pushed, -1);
+assert.equal(pushedPeer.voiceEffect, undefined, 'SNR host toggle disables all three fall-event axes');
+assert.equal(pushedPeer.reverbConnected, false);
+audio.removePeer('push-test');
+
 audio.removePeer('star-test');
-assert.ok(Object.values(starEcho).every((node) => node.connections.size === 0));
+assert.ok([starReverb, ...Object.values(starMix)].every((node) => node.connections.size === 0));
 console.log(
 	'ok audio graph: effects release, source/filter mode switches, unavailable-worklet fallback and independent peer cleanup'
 );

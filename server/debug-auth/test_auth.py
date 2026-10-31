@@ -306,7 +306,7 @@ class InquiryTests(unittest.TestCase):
             return io.BytesIO(b'{"id":"42"}')
 
         with mock.patch.object(inquiry, 'urlopen', side_effect=fake_open):
-            for product in inquiry.PRODUCTS:
+            for product in ('tanuki', 'net'):  # Only these routes are configured in this fixture.
                 result = self.client.post('/v1/inquiries', json={
                     'product': product, 'tag': 'bug', 'subject': 'Broken', 'body': 'Details',
                     'public_issue_consent': False})

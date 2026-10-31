@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { TFunction } from 'i18next';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import { AmongUsState } from '../../../common/AmongUsState';
 import { hasTanukiAddon } from '../../../common/tanukiAddon';
 import { ISettings } from '../../../common/ISettings';
-import TestVoiceEffectButton, { VoiceEffectPreviewKind } from '../TestVoiceEffectButton';
+import { getVoiceEffectTuning, type VoiceEffectId, type VoiceEffectTuning } from '../../../common/VoiceEffectTuning';
+import TestVoiceEffectButton from '../TestVoiceEffectButton';
+import { getRokuroVoice } from '../../../common/RokuroVoice';
 import { SettingsSection, SliderRow } from '../SettingsControls';
 
 interface Props {
@@ -15,111 +18,147 @@ interface Props {
 	gameState: AmongUsState;
 }
 
-type StrengthKey = VoiceEffectPreviewKind;
-type EffectRow = { key: StrengthKey; label: string };
+type EffectRow = { id: VoiceEffectId; label: string };
 
 const VoiceEffectsSection: React.FC<Props> = ({ t, settings, setSettings, gameState }) => {
-	const [selectedPreview, setSelectedPreview] = useState<StrengthKey>('voiceEffectStrength');
+	const [selectedEffect, setSelectedEffect] = useState<VoiceEffectId>('disguise');
 	const showSnr = gameState?.mod === 'SUPER_NEW_ROLES';
 	const showNos = gameState?.mod === 'NoS';
 	const uchuAddonDetected = showNos && gameState.nosAddonIds?.includes('UchuAddon') === true;
 	const tanukiAddonDetected = hasTanukiAddon(gameState);
-	const common: EffectRow[] = [{ key: 'voiceEffectStrength', label: t('settings.voice_effects.disguise_strength') }];
+	const common: EffectRow[] = [{ id: 'disguise', label: t('settings.voice_effects.disguise_strength') }];
 	const snr: EffectRow[] = showSnr
 		? [
-				{ key: 'snrJumboVoiceEffectStrength', label: t('settings.voice_effects.snr_jumbo_strength') },
-				{ key: 'snrPushReverbStrength', label: t('settings.voice_effects.snr_push_reverb_strength') },
+				{ id: 'snrJumbo', label: t('settings.voice_effects.snr_jumbo_strength') },
+				{ id: 'snrPush', label: t('settings.voice_effects.snr_push_reverb_strength') },
 			]
 		: [];
 	const nos: EffectRow[] = showNos
 		? [
-				{ key: 'nosSizeVoiceEffectStrength', label: t('settings.voice_effects.nos_size_strength') },
-				{ key: 'nosRokurokubiVoiceEffectStrength', label: t('settings.voice_effects.nos_rokurokubi_strength') },
-				{ key: 'nosBerserkerVoiceEffectStrength', label: t('settings.voice_effects.nos_berserker_strength') },
+				{ id: 'nosSize', label: t('settings.voice_effects.nos_size_strength') },
+				{ id: 'nosRokurokubi', label: t('settings.voice_effects.nos_rokurokubi_strength') },
+				{ id: 'nosBerserker', label: t('settings.voice_effects.nos_berserker_strength') },
 				...(uchuAddonDetected
 					? [
-							{ key: 'nosCitrusVoiceEffectStrength' as const, label: t('settings.voice_effects.nos_citrus_strength') },
-							{
-								key: 'nosRainbowStarEchoStrength' as const,
-								label: t('settings.voice_effects.nos_rainbow_star_strength'),
-							},
+							{ id: 'nosCitrus' as const, label: t('settings.voice_effects.nos_citrus_strength') },
+							{ id: 'nosRainbowStar' as const, label: t('settings.voice_effects.nos_rainbow_star_strength') },
 						]
 					: []),
 				...(tanukiAddonDetected
 					? [
-							{
-								key: 'nosVoiceJammingEffectStrength' as const,
-								label: t('settings.lobbysettings.nos_voice_jamming_effect'),
-							},
-							{ key: 'nosMegaphoneEffectStrength' as const, label: t('settings.lobbysettings.nos_megaphone_effect') },
-							{ key: 'nosBibiriEchoStrength' as const, label: t('settings.lobbysettings.nos_bibiri_echo') },
+							{ id: 'nosVoiceJamming' as const, label: t('settings.lobbysettings.nos_voice_jamming_effect') },
+							{ id: 'nosMegaphone' as const, label: t('settings.lobbysettings.nos_megaphone_effect') },
+							{ id: 'nosBibiri' as const, label: t('settings.lobbysettings.nos_bibiri_echo') },
 						]
 					: []),
 			]
 		: [];
 	const available = [...common, ...snr, ...nos];
-	const preview = available.find((row) => row.key === selectedPreview)?.key ?? 'voiceEffectStrength';
-	const slider = ({ key, label }: EffectRow) => (
-		<SliderRow
-			key={key}
-			label={label}
-			value={settings[key] ?? 100}
-			min={0}
-			max={100}
-			step={5}
-			format={(value) => `${value}%`}
-			onChange={(value, persist) => setSettings(key, value, persist)}
-		/>
-	);
-
+	const effectId = available.find(({ id }) => id === selectedEffect)?.id ?? 'disguise';
+	const tuning = getVoiceEffectTuning(settings, effectId);
+	const rokuro = getRokuroVoice(settings.rokuroVoice);
+	const updateTuning = (axis: keyof VoiceEffectTuning, value: number, persist: boolean) =>
+		setSettings(
+			'voiceEffectTunings',
+			{ ...settings.voiceEffectTunings, [effectId]: { ...tuning, [axis]: value } },
+			persist
+		);
+	const groups = [
+		{ label: t('settings.voice_effects.common'), rows: common },
+		{ label: t('settings.lobbysettings.snr_voice_effects'), rows: snr },
+		{ label: t('settings.lobbysettings.nos_voice_effects'), rows: nos },
+	];
 	return (
-		<>
-			<SettingsSection title={t('settings.voice_effects.title')}>{common.map(slider)}</SettingsSection>
-			{showSnr && (
-				<SettingsSection title={t('settings.lobbysettings.snr_voice_effects')}>{snr.map(slider)}</SettingsSection>
-			)}
-			{showNos && (
-				<SettingsSection title={t('settings.lobbysettings.nos_voice_effects')}>{nos.map(slider)}</SettingsSection>
-			)}
-			<SettingsSection title={t('settings.voice_effects.preview_title')}>
-				<Box
-					sx={{
-						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'center',
-						flexWrap: 'wrap',
-						gap: 1,
-						px: 2,
-						py: 2,
-					}}
+		<SettingsSection title={t('settings.voice_effects.title')}>
+			<Box sx={{ px: 2, py: 1.5 }}>
+				<TextField
+					select
+					fullWidth
+					size="small"
+					label={t('settings.voice_effects.preview_target')}
+					value={effectId}
+					onChange={(event) => setSelectedEffect(event.target.value as VoiceEffectId)}
+					slotProps={{ select: { native: true } }}
 				>
-					<TextField
-						select
-						size="small"
-						label={t('settings.voice_effects.preview_target')}
-						value={preview}
-						onChange={(event) => setSelectedPreview(event.target.value as StrengthKey)}
-						slotProps={{ select: { native: true } }}
-						sx={{ minWidth: 180, flex: '1 1 240px', maxWidth: 320 }}
-					>
-						{available.map((row) => (
-							<option key={row.key} value={row.key}>
-								{row.label}
-							</option>
+					{groups
+						.filter(({ rows }) => rows.length > 0)
+						.map(({ label, rows }) => (
+							<optgroup key={label} label={label}>
+								{rows.map(({ id, label: effectLabel }) => (
+									<option key={id} value={id}>
+										{effectLabel}
+									</option>
+								))}
+							</optgroup>
 						))}
-					</TextField>
-					<TestVoiceEffectButton
-						key={preview}
-						t={t}
-						microphone={settings.microphone}
-						speaker={settings.speaker}
-						effectKind={preview}
-						voiceEffectStrength={settings[preview] ?? 100}
+				</TextField>
+				<Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+					{t('settings.voice_effects.tuning_help')}
+				</Typography>
+			</Box>
+			<Box key={effectId}>
+				<SliderRow
+					label={t('settings.voice_effects.pitch')}
+					description={t('settings.voice_effects.pitch_help')}
+					value={tuning.pitch}
+					min={-100}
+					max={100}
+					step={5}
+					marks={[{ value: 0, label: '0' }]}
+					format={(value) => `${value > 0 ? '+' : ''}${value}`}
+					onChange={(value, persist) => updateTuning('pitch', value, persist)}
+				/>
+				{(['reverb', 'echo'] as const).map((axis) => (
+					<SliderRow
+						key={axis}
+						label={t(`settings.voice_effects.${axis}`)}
+						value={tuning[axis]}
+						min={0}
+						max={100}
+						step={5}
+						format={(value) => `${value}%`}
+						onChange={(value, persist) => updateTuning(axis, value, persist)}
 					/>
-				</Box>
-			</SettingsSection>
-		</>
+				))}
+			</Box>
+			<Box sx={{ display: 'flex', justifyContent: 'center', px: 2, py: 1.5 }}>
+				{effectId === 'nosRokurokubi' && (
+					<Box sx={{ width: '100%' }}>
+						<Typography sx={{ px: 2, py: 1 }}>
+							首が伸びている間は顔と身体の両方から声が聞こえます。身体はこもったエコー音声です。
+						</Typography>
+						{(
+							[
+								['headVolume', '顔の音量'],
+								['bodyVolume', '身体の音量'],
+								['bodyEcho', '身体のエコー'],
+							] as const
+						).map(([key, label]) => (
+							<SliderRow
+								key={key}
+								label={label}
+								value={rokuro[key]}
+								min={0}
+								max={100}
+								step={5}
+								format={(value) => `${value}%`}
+								onChange={(value, persist) => setSettings('rokuroVoice', { ...rokuro, [key]: value }, persist)}
+							/>
+						))}
+					</Box>
+				)}
+			</Box>
+			<Box sx={{ display: 'flex', justifyContent: 'center', px: 2, py: 1.5 }}>
+				<TestVoiceEffectButton
+					key={effectId}
+					t={t}
+					microphone={settings.microphone}
+					speaker={settings.speaker}
+					effectKind={effectId}
+					tuning={tuning}
+				/>
+			</Box>
+		</SettingsSection>
 	);
 };
-
 export default VoiceEffectsSection;

@@ -606,6 +606,10 @@ export default class GameReader {
 				closedDoors,
 				maxPlayers,
 				oldMeetingHud: this.oldMeetingHud,
+				snrMeeting:
+					this.loadedMod.id === 'SUPER_NEW_ROLES' && state === GameState.DISCUSSION
+						? this.snrRoles.readMeeting((address, size) => readBuffer(this.amongUs!.handle, address, size))
+						: undefined,
 				airshipMeetingByOutfit,
 				...(voiceDebugEnabled
 					? {

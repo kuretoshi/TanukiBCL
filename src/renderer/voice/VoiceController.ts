@@ -1791,6 +1791,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 			localIsAlive: !myPlayer?.isDead,
 			mod: state.mod,
 			oldMeetingHud: state.oldMeetingHud,
+			snrMeeting: state.snrMeeting,
 			assetSession,
 		};
 

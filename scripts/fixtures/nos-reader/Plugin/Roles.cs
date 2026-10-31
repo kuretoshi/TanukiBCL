@@ -66,7 +66,8 @@ namespace Nebula.Modules
 }
 namespace Nebula.Configuration
 {
-    public class TestValueBase { public bool currentValue; }
+    // NoS ConfigurationValueBase stores the current value in an auto-property.
+    public class TestValueBase { public bool currentValue { get; protected set; } }
     public class BoolConfigurationValue : TestValueBase
     {
         public BoolConfigurationValue(bool value) { currentValue = value; }

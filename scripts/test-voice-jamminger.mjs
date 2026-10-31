@@ -4,6 +4,8 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import process from 'node:process';
+import console from 'node:console';
 
 const directory = await mkdtemp(join(tmpdir(), 'tanuki-jamminger-'));
 const common = process.env.TANUKI_JAM_COMMON ?? 'src/common/VoiceJammingState.ts';
@@ -48,7 +50,27 @@ try {
 	const untouched = { gain: 0, muffle: false };
 	applyVoiceJamming(state, 1, untouched);
 	assert.equal(untouched.gain, 0, 'jamming never unmutes an otherwise inaudible voice');
-	assert.equal(selectVoiceEffect(state, {}, {}, {}, { id: 2 }, 0).sourceFilter.pitch, 1.5);
+	assert.deepEqual(selectVoiceEffect(state, {}, {}, {}, { id: 2 }, 0), {
+		id: 'nosVoiceJamming',
+		tuning: { pitch: -100, reverb: 0, echo: 0 },
+	});
+	assert.deepEqual(
+		selectVoiceEffect(
+			state,
+			{ voiceEffectTunings: { nosVoiceJamming: { pitch: 50, reverb: 30, echo: 20 } } },
+			{},
+			{},
+			{ id: 2 },
+			0
+		),
+		{ id: 'nosVoiceJamming', tuning: { pitch: 50, reverb: 30, echo: 20 } },
+		'active jamming uses the listener selected axes'
+	);
+	assert.equal(
+		selectVoiceEffect({ ...state, nosVoiceJamming: [{ ...entry, pitch: 1 }] }, {}, {}, {}, { id: 2 }, 0),
+		null,
+		'a mute-only jamming event does not add a voice effect'
+	);
 	assert.equal(selectVoiceEffect(state, {}, {}, {}, { id: 2, disconnected: true }, 0), null);
 	const path = join(directory, 'state.json');
 	const envelope = { protocol: 1, pid: 123, unixMs: 10000, players: [entry] };

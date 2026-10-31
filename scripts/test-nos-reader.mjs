@@ -22,7 +22,7 @@ if (process.argv.includes('--source-only')) {
 }
 const { default: memoryjs } = await import('memoryjs');
 
-const cache = resolve('.cache/nos-reader-tests');
+const cache = resolve(process.env.NOS_READER_TEST_CACHE ?? '.cache/nos-reader-tests');
 await mkdir(cache, { recursive: true });
 async function bundle(file) {
 	const output = resolve(cache, file.split('/').at(-1).replace('.ts', '.mjs'));
@@ -130,12 +130,19 @@ try {
 	const layout = response.metadata;
 	assert.ok(isNosLayout(layout, child.pid), JSON.stringify(response));
 	assert.ok(Number.isInteger(layout.snapshot.localIsPseudocide));
-	assert.equal(layout.schemaVersion, 20261009);
+	assert.equal(layout.schemaVersion, 20261029, 'NoS v3.6.1 TBCLFields version');
+	assert.equal(layout.snapshot.localIsPseudocide, architecture === 'x86' ? 24 : 40,
+		'NoS v3.6.1 native snapshot flag offset follows pointer alignment');
 	assert.equal(layout.playerData.skin.capacity, 128);
 	assert.equal(layout.playerData.size, 888);
 	const legacyPlayer = {
 		...layout.playerData,
 		size: 104,
+		nameLength: 24,
+		name: 26,
+		colorR: 92,
+		colorG: 96,
+		colorB: 100,
 		skin: null,
 		hat: null,
 		visor: null,
@@ -146,9 +153,21 @@ try {
 	delete legacySnapshot.localIsPseudocide;
 	const legacy = { ...layout, schemaVersion: 20260928, snapshot: legacySnapshot, playerData: legacyPlayer };
 	assert.ok(isNosLayout(legacy, child.pid));
-	assert.equal(readNosSnapshot(legacy, read).localIsPseudocide, undefined);
-	assert.equal(readNosSnapshot(legacy, read).players[0].name, 'テスト');
-	assert.equal(readNosSnapshot(legacy, read).players[0].skin, undefined);
+	// The real v3.6.1 layout places body fields before the name. Repack the
+	// legacy positive control instead of pretending its offsets are identical.
+	const pointerAt = (address) => architecture === 'x86'
+		? read(address, 4).readUInt32LE() : Number(read(address, 8).readBigUInt64LE());
+	const legacyPlayersAddress = pointerAt(pointerAt(layout.latestSlotAddress) + layout.snapshot.players);
+	const currentPlayer = read(legacyPlayersAddress, layout.playerData.size);
+	const legacyPayload = Buffer.alloc(104);
+	currentPlayer.copy(legacyPayload, 0, 0, 24);
+	for (const [field, size] of [['nameLength', 1], ['name', 64], ['colorR', 4], ['colorG', 4], ['colorB', 4]])
+		currentPlayer.copy(legacyPayload, legacyPlayer[field], layout.playerData[field], layout.playerData[field] + size);
+	const legacyRead = (address, size) => address === legacyPlayersAddress && size === 104
+		? legacyPayload : read(address, size);
+	assert.equal(readNosSnapshot(legacy, legacyRead).localIsPseudocide, undefined);
+	assert.equal(readNosSnapshot(legacy, legacyRead).players[0].name, 'テスト');
+	assert.equal(readNosSnapshot(legacy, legacyRead).players[0].skin, undefined);
 	assert.equal(readNosSnapshot(layout, read).players[0].skin.name, 'Test');
 	assert.equal(readNosSnapshot(layout, read).players[0].hat.name, '');
 	assert.equal(

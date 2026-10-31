@@ -338,9 +338,10 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 								sx={{
 									...(groupPlayersByLife && {
 										width: 'calc(100% - 32px)',
-										justifyContent: displayedPlayers.length >= 8 ? 'space-between' : 'center',
 									}),
-									gridTemplateColumns: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize + playerAvatarChrome}px)`,
+									gridTemplateColumns: groupPlayersByLife
+										? `repeat(${otherPlayersPerRow}, minmax(0, 1fr))`
+										: `repeat(${otherPlayersPerRow}, ${otherPlayerAvatarSize + playerAvatarChrome}px)`,
 									...(groupPlayersByLife && { gridTemplateRows: groupedRows }),
 									gridAutoRows: `${otherPlayerAvatarSize + playerAvatarChrome}px`,
 								}}
@@ -363,6 +364,8 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 										width: otherPlayerAvatarSize,
 										position: 'relative' as const,
 										...(groupPlayersByLife && {
+											justifySelf: 'center',
+											marginRight: `${playerAvatarChrome}px`,
 											gridColumn: (groupIndex % otherPlayersPerRow) + 1,
 											gridRow: Math.floor(groupIndex / otherPlayersPerRow) + (ghostGroup ? ghostHeaderRow + 1 : 2),
 										}),
