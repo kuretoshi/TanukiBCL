@@ -1,6 +1,6 @@
-export function serverDeepLinkFromFragment(fragment) {
-	if (typeof fragment !== 'string' || fragment.length > 4096 || !fragment.startsWith('#')) return null;
-	const params = new URLSearchParams(fragment.slice(1));
+export function serverDeepLinkFromParams(input) {
+	if (typeof input !== 'string' || input.length > 4096 || !['?', '#'].includes(input[0])) return null;
+	const params = new URLSearchParams(input.slice(1));
 	const keys = [...params.keys()];
 	if (
 		keys.length < 1 ||
@@ -34,12 +34,14 @@ export function serverDeepLinkFromFragment(fragment) {
 }
 
 if (typeof document !== 'undefined') {
-	const invite = serverDeepLinkFromFragment(window.location.hash);
+	const invite = serverDeepLinkFromParams(window.location.search || window.location.hash);
 	const message = document.getElementById('message');
 	const server = document.getElementById('server');
 	const open = document.getElementById('open');
+	const hint = document.getElementById('hint');
 	if (!invite) {
 		message.textContent = 'リンクが正しくありません。共有した人に新しいリンクを送ってもらってください。';
+		hint.hidden = true;
 	} else {
 		message.textContent = 'ベタクルで接続先を確認してください。';
 		server.textContent = invite.serverUrl;
