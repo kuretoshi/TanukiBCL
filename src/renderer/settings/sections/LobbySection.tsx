@@ -7,7 +7,7 @@ import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { AmongUsState } from '../../../common/AmongUsState';
-import { ILobbySettings } from '../../../common/ISettings';
+import { ILobbySettings, NosGluttonySwallowVoice } from '../../../common/ISettings';
 import { changeNosFixerMode } from '../../../common/NosFixerSettings';
 import languages from '../../language/languages';
 import { defaultLobbySettings } from '../../voice/types';
@@ -256,6 +256,20 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						checked={values.nosBuskerReviveHideVoice === true}
 						onChange={(checked) => update({ nosBuskerReviveHideVoice: checked })}
 					/>
+					{nosAddonIds?.includes('UchuAddon') && (
+						<SelectRow
+							label={t('settings.lobbysettings.nos_gluttony_swallow_voice')}
+							description={t('settings.lobbysettings.nos_gluttony_swallow_voice_description')}
+							disabled={disabled}
+							disabledReason={disabledReason}
+							value={values.nosGluttonySwallowVoice ?? 'mute'}
+							options={(['mute', 'quiet', 'normal'] as const).map((value) => ({
+								value,
+								label: t(`settings.lobbysettings.nos_gluttony_swallow_voice_${value}`),
+							}))}
+							onChange={(value) => update({ nosGluttonySwallowVoice: value as NosGluttonySwallowVoice })}
+						/>
+					)}
 					<SwitchRow
 						label={t('settings.lobbysettings.nos_voice_positions')}
 						disabled={voiceSettingDisabled}

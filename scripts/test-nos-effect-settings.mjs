@@ -160,6 +160,7 @@ for (const active of [false, true]) {
 		'nos_rokurokubi_voice_effect',
 		'nos_citrus_voice_effect',
 		'nos_rainbow_star_echo',
+		'nos_gluttony_swallow_voice',
 	])
 		assert.ok(lobby.includes(key), `${key} appears in the lobby settings`);
 	assert.ok(!lobby.includes('nos_voice_effects'));
@@ -183,6 +184,7 @@ for (const active of [false, true]) {
 	assert.ok(!renderEffects('TOH4E', [], active).includes('snr_voice_effects'));
 	for (const ids of [undefined, [], ['OtherAddon']]) {
 		const hidden = renderEffects('NoS', ids, active);
+		assert.ok(!render('NoS', ids, active).includes('nos_gluttony_swallow_voice'));
 		assert.ok(!hidden.includes('nos_citrus_strength'));
 		assert.ok(!hidden.includes('nos_rainbow_star_strength'));
 		for (const key of ['nos_voice_jamming_effect', 'nos_megaphone_effect', 'nos_bibiri_echo'])

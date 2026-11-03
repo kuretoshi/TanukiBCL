@@ -3,6 +3,7 @@ import type { VoiceEffectTunings } from './VoiceEffectTuning';
 import type { RokuroVoiceSettings } from './RokuroVoice';
 
 export type AppPlayerLayout = 'standard' | 'aliveAboveGhosts';
+export type NosGluttonySwallowVoice = 'normal' | 'quiet' | 'mute';
 
 export interface ISettings {
 	rokuroVoice?: Partial<RokuroVoiceSettings>;
@@ -81,6 +82,7 @@ export interface ILobbySettings {
 	nosNeutralKillerHaunting: boolean;
 	nosBuskerReviveHideVoice: boolean;
 	nosVoicePositions: boolean;
+	nosGluttonySwallowVoice: NosGluttonySwallowVoice;
 	nosSizeVoiceEffect: boolean;
 	nosSizeVoiceEffectStrength: number;
 	nosBerserkerVoiceEffect: boolean;

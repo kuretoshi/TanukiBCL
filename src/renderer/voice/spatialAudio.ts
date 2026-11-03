@@ -137,6 +137,24 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		reverb: null,
 		radioEcho: false,
 	};
+	// UchuAddon moves a swallowed player's NoS speaker position to this sentinel for
+	// every listener except Gluttony. TBCLFields publishes the event-adjusted position.
+	const swallowedByGluttony =
+		state.mod === 'NoS' &&
+		state.gameState === GameState.TASKS &&
+		state.nosAddonIds?.includes('UchuAddon') === true &&
+		!remotePlayer.isDead &&
+		speaker?.speakerPositionX === 1000 &&
+		speaker.speakerPositionY === 1000;
+	const swallowVoiceMode = swallowedByGluttony ? (activeLobbySettings.nosGluttonySwallowVoice ?? 'mute') : 'normal';
+	const applySwallowVoice = (audio: VoiceAudioResult): VoiceAudioResult => {
+		if (swallowVoiceMode !== 'quiet' || audio.gain <= 0) return audio;
+		return {
+			...audio,
+			gain: audio.gain * 0.1,
+			muffle: { type: 'lowpass', frequency: 450, q: Math.SQRT1_2 },
+		};
+	};
 
 	if (
 		other.disconnected ||
@@ -147,6 +165,7 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	) {
 		return result;
 	}
+	if (swallowVoiceMode === 'mute') return result;
 	if (
 		state.gameState === GameState.TASKS &&
 		me.isImpostor &&
@@ -169,14 +188,14 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 			activeLobbySettings.nosFixerJammingLowpass === true &&
 			activeLobbySettings.nosFixerJammingVoiceBlock === false &&
 			(me.nosPlayer?.isJammed === true || other.nosPlayer?.isJammed === true);
-		return {
+		return applySwallowVoice({
 			gain: commsBlocked ? 0 : megaphoneGain(megaphone.range, other.x - me.x, other.y - me.y),
 			panPosition: settings.enableSpatialAudio ? panPos : [0, 0],
 			panMaxDistance: megaphone.range,
 			muffle: jammedLowpass ? { type: 'lowpass', frequency: 1200, q: Math.SQRT1_2 } : false,
 			reverb: false,
 			radioEcho: false,
-		};
+		});
 	}
 	let endGain = 0;
 	let wallCheckEnabled = false;
@@ -407,5 +426,5 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 
 	result.panPosition = panPos;
 	result.gain = endGain;
-	return result;
+	return applySwallowVoice(result);
 }
