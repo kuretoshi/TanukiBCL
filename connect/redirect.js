@@ -48,6 +48,5 @@ if (typeof document !== 'undefined') {
 		server.hidden = false;
 		open.href = invite.deepLink;
 		open.hidden = false;
-		window.location.assign(invite.deepLink);
 	}
 }

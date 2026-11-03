@@ -5,10 +5,10 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
 	<meta property="og:title" content="タヌキのベタクル | カスタムサーバー接続">
-	<meta property="og:description" content="リンクを開くと、ベタクルで接続先の確認が表示されます。">
+	<meta property="og:description" content="リンクを開き、ボタンを押すと、ベタクルで接続先の確認が表示されます。">
 	<title>カスタムサーバー接続 | タヌキのベタクル</title>
 	<link rel="stylesheet" href="../style.css">
-	<script type="module" src="../redirect.js?v=2"></script>
+	<script type="module" src="../redirect.js?v=3"></script>
 </head>
 <body>
 	<main>
@@ -16,7 +16,7 @@
 		<p id="message">接続先を確認しています…</p>
 		<p id="server" class="server" hidden></p>
 		<a id="open" class="button" hidden>ベタクルで開く</a>
-		<p id="hint" class="hint">ベタクルが自動で開かない場合は、上のボタンを押してください。</p>
+		<p id="hint" class="hint">上のボタンを押すと、ベタクルに接続先の確認が表示されます。</p>
 	</main>
 </body>
 </html>
