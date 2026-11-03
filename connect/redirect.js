@@ -30,7 +30,12 @@ export function serverDeepLinkFromParams(input) {
 		return null;
 	const link = new URL(`${params.has('lite') ? 'tanukibcl-lite' : 'tanukibcl'}://server`);
 	link.searchParams.set('url', server.origin);
-	return { serverUrl: server.origin, deepLink: link.toString() };
+	const bridgePort = params.has('lite') ? 38385 : 38384;
+	return {
+		serverUrl: server.origin,
+		deepLink: link.toString(),
+		bridgeUrl: `http://127.0.0.1:${bridgePort}/invite`,
+	};
 }
 
 if (typeof document !== 'undefined') {
@@ -46,7 +51,31 @@ if (typeof document !== 'undefined') {
 		message.textContent = 'ベタクルで接続先を確認してください。';
 		server.textContent = invite.serverUrl;
 		server.hidden = false;
-		open.href = invite.deepLink;
+		if (open.tagName === 'BUTTON') {
+			open.addEventListener('click', async () => {
+				open.disabled = true;
+				message.textContent = 'ベタクルに接続しています…';
+				try {
+					const response = await fetch(invite.bridgeUrl, {
+						method: 'POST',
+						mode: 'cors',
+						targetAddressSpace: 'loopback',
+						referrerPolicy: 'no-referrer',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ url: invite.serverUrl }),
+						signal: AbortSignal.timeout(5000),
+					});
+					if (!response.ok) throw new Error(`Bridge returned ${response.status}`);
+					message.textContent = 'ベタクルで接続先を確認してください。';
+				} catch {
+					message.textContent = 'ベタクルに接続できませんでした。アプリを起動し、ブラウザーが求めるローカルネットワークへのアクセスを許可して、もう一度お試しください。';
+				} finally {
+					open.disabled = false;
+				}
+			});
+		} else {
+			open.href = invite.deepLink;
+		}
 		open.hidden = false;
 	}
 }

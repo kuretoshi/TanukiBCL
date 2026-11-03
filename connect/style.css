@@ -3,7 +3,8 @@ body { min-height: 100vh; margin: 0; display: grid; place-items: center; backgro
 main { width: min(32rem, calc(100% - 3rem)); padding: 2rem; border: 1px solid #54475a; border-radius: 1rem; background: #29242f; }
 h1 { margin-top: 0; color: #ce90d8; font-size: 1.5rem; }
 .server { overflow-wrap: anywhere; padding: 1rem; border-radius: .5rem; background: #18141d; font-weight: 700; }
-.button { display: inline-block; padding: .75rem 1.25rem; border-radius: .5rem; background: #ad5fbb; color: white; font-weight: 700; text-decoration: none; }
+.button { display: inline-block; padding: .75rem 1.25rem; border: 0; border-radius: .5rem; background: #ad5fbb; color: white; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
 .button:hover { background: #c174ce; }
+.button:disabled { opacity: .6; cursor: wait; }
 .hint { margin-bottom: 0; color: #bdb4c3; font-size: .9rem; }
 [hidden] { display: none !important; }
