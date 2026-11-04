@@ -221,6 +221,7 @@ internal static class Program
 
         var snapshotLayout = new SnapshotLayout
         {
+            AddonData = snapshot.GetFieldByName("AddonData")?.Offset,
             LocalMicPositionX = RequiredField(snapshot, "LocalMicPositionX").Offset,
             LocalMicPositionY = RequiredField(snapshot, "LocalMicPositionY").Offset,
             PlayersLength = RequiredField(snapshot, "PlayersLength").Offset,
@@ -235,6 +236,7 @@ internal static class Program
             Skin = ResolveCostumeLayout(playerData, "Skin"),
             Hat = ResolveCostumeLayout(playerData, "Hat"),
             Visor = ResolveCostumeLayout(playerData, "Visor"),
+            AddonData = playerData.GetFieldByName("AddonData")?.Offset,
             PlayerId = RequiredField(playerData, "PlayerId").Offset,
             IsKiller = RequiredField(playerData, "IsKiller").Offset,
             IsImpostor = RequiredField(playerData, "IsImpostor").Offset,
@@ -265,6 +267,7 @@ internal static class Program
 			(playerLayout.BodyRateY ?? 0) + sizeof(float),
             (playerLayout.BodyType ?? 0) + sizeof(int),
             (playerLayout.NeckLength ?? 0) + sizeof(float),
+            (playerLayout.AddonData ?? 0) + sizeof(int),
 			(playerLayout.IsJammed ?? 0) + sizeof(byte),
             playerLayout.Skin is { } skin ? skin.Offset + skin.Size : 0,
             playerLayout.Hat is { } hat ? hat.Offset + hat.Size : 0,
@@ -388,6 +391,7 @@ internal static class Program
             schemaVersion = metadata.SchemaVersion,
             snapshotAddress = Hex(snapshotAddress),
             playersAddress = Hex(playersAddress),
+            addonData = metadata.Snapshot.AddonData is int addonOffset ? ReadInt32(handle, checked(snapshotAddress + (ulong)addonOffset)) : (int?)null,
             localMicPosition = new { x = localX, y = localY },
             players,
 			radios
@@ -415,6 +419,7 @@ internal static class Program
             skin = ParseCostume(bytes, start, layout.Skin),
             hat = ParseCostume(bytes, start, layout.Hat),
             visor = ParseCostume(bytes, start, layout.Visor),
+            addonData = layout.AddonData is int addonOffset ? BitConverter.ToInt32(bytes, start + addonOffset) : (int?)null,
             playerId = U8(layout.PlayerId),
             isKiller = Bool(layout.IsKiller),
             isImpostor = Bool(layout.IsImpostor),
@@ -500,6 +505,10 @@ internal static class Program
 
     static void ValidateLayout(SnapshotLayout snapshot, PlayerDataLayout player, RadioDataLayout? radio, int pointerSize)
     {
+        if (snapshot.AddonData.HasValue != player.AddonData.HasValue ||
+            snapshot.AddonData is int sa && (sa < 0 || sa + 4 > 256) ||
+            player.AddonData is int pa && (pa < 0 || pa + 4 > player.Size))
+            throw new InvalidOperationException("Invalid AddonData field layout");
         int[] snapshotOffsets =
         [
             snapshot.LocalMicPositionX,
@@ -634,6 +643,7 @@ internal static class Program
 
     sealed class SnapshotLayout
     {
+        public int? AddonData { get; set; }
         public int LocalMicPositionX { get; set; }
         public int LocalMicPositionY { get; set; }
         public int PlayersLength { get; set; }
@@ -645,6 +655,7 @@ internal static class Program
 
     sealed class PlayerDataLayout
     {
+        public int? AddonData { get; set; }
         public int Size { get; set; }
         public CostumeLayout? Skin { get; set; }
         public CostumeLayout? Hat { get; set; }

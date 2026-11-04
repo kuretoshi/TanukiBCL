@@ -1,3 +1,4 @@
+import { nosAddonLink } from './nosAddonLink';
 import { version as clientVersion } from '../../package.json';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -76,6 +77,10 @@ export class NosVoiceRoleSender {
 			!player ||
 			player.isDead ||
 			player.disconnected
+		)
+			return;
+		if (
+			nosAddonLink.sendCommand(pid, 'sample', { playerId: player.id, rms, active, version: clientVersion, host: false })
 		)
 			return;
 		const now = Date.now();
@@ -182,6 +187,7 @@ export function registerNosVoiceRoleBridge(
 	const closeSpeech = registerHeroSpeechBridge(ipcMain, getContext, isMainRenderer);
 	let sender: NosVoiceRoleSender | undefined;
 	function reset(): void {
+		nosAddonLink.close();
 		sender?.close();
 		sender = undefined;
 		closeHostVoice();

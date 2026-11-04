@@ -938,7 +938,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		this.audio.setJammed(
 			state.mod === 'NoS' &&
 				((this.activeLobbySettings.nosFixerJammingVoiceBlock !== false && myPlayer?.nosPlayer?.isJammed === true) ||
-					(myPlayer != null && voiceJammingFor(state, myPlayer.id)?.muted === true))
+					(myPlayer != null && voiceJammingFor(state, myPlayer.id)?.muted === true) ||
+					((state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+						myPlayer != null &&
+						state.nosLimitSpeechMuted?.includes(myPlayer.id) === true))
 		);
 		const resolvedHostId = state.hostId > 0 ? state.hostId : this.host.serverHostId;
 		const session = `${state.lobbyCode}|${resolvedHostId}|${state.clientId}|${myPlayer?.id}`;

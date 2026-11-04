@@ -1,3 +1,4 @@
+import { nosAddonLink } from './nosAddonLink';
 import { app } from 'electron';
 import { normalizeMeetingState } from '../common/meetingState';
 import { readTanukiAddonState } from './tanukiAddonState';
@@ -191,6 +192,7 @@ export default class GameReader {
 			this.snrVoiceOrigins.clear();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
+			nosAddonLink.close();
 			this.nosRoles.reset();
 			this.nosPalette.reset();
 			this.snrCosmeticAppearances.clear();
@@ -209,6 +211,7 @@ export default class GameReader {
 			this.snrVoiceOrigins.clear();
 			this.tohRoles.reset();
 			this.nosSnapshot.reset();
+			nosAddonLink.close();
 			this.nosRoles.reset();
 			this.nosPalette.reset();
 			this.amongUs = null;
@@ -518,6 +521,7 @@ export default class GameReader {
 						)
 					: undefined;
 			if (this.loadedMod.id !== 'NoS' || state === GameState.MENU) this.nosSnapshot.reset();
+			nosAddonLink.close();
 			const nosLobbyColors =
 				this.loadedMod.id === 'NoS' && !this.is_linux && state === GameState.LOBBY
 					? this.nosPalette.update(this.pid, (address, size) => readBuffer(this.amongUs!.handle, address, size))
@@ -551,11 +555,22 @@ export default class GameReader {
 			const addonProcess = this.amongUs;
 			const addonMod = this.loadedMod.id;
 			const addonEnabled = hasTanukiAddon({ mod: this.loadedMod.id, nosAddonIds: this.nosAddonIds });
-			const addonState = await readTanukiAddonState(addonPid, {
-				mod: this.loadedMod.id,
-				nosAddonIds: this.nosAddonIds,
-				gameState: state,
-			});
+			nosAddonLink.update(
+				addonEnabled && (snrActive || state === GameState.LOBBY) ? addonPid : 0,
+				`${lobbyCode}:${this.snrRound}:${snrActive ? 'game' : 'lobby'}`,
+				nos?.addonData,
+				state === GameState.LOBBY ? 'lobby' : state === GameState.DISCUSSION ? 'meeting' : 'tasks',
+				localPlayer?.id
+			);
+			const addonState = await readTanukiAddonState(
+				addonPid,
+				{
+					mod: this.loadedMod.id,
+					nosAddonIds: this.nosAddonIds,
+					gameState: state,
+				},
+				nos
+			);
 			if (
 				this.pid !== addonPid ||
 				this.amongUs !== addonProcess ||
@@ -871,6 +886,7 @@ export default class GameReader {
 		this.snrVoiceOrigins.clear();
 		this.tohRoles.reset();
 		this.nosSnapshot.reset();
+		nosAddonLink.close();
 		this.nosRoles.reset();
 		this.nosPalette.reset();
 		this.nosAddonIds = [];

@@ -10,6 +10,7 @@ export {
 
 /** NoS TBCLFields data; deliberately separate from SNR RoleId/ModifierRoleId. */
 export interface NosPlayerData {
+	addonData?: number;
 	skin?: { name: string };
 	hat?: { name: string };
 	visor?: { name: string };
@@ -58,6 +59,7 @@ export function isNosRadioData(value: unknown): value is NosRadioData {
 }
 
 export interface NosSnapshot {
+	addonData?: number;
 	localMicPosition: { x: number; y: number };
 	/** NoS publishes this only for the local player's Busker fake death. */
 	localIsPseudocide?: boolean;

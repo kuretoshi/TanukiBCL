@@ -1,3 +1,4 @@
+import { nosAddonLink } from './nosAddonLink';
 import { version as clientVersion } from '../../package.json';
 import { createSocket, type Socket } from 'node:dgram';
 import { readFileSync, statSync } from 'node:fs';
@@ -95,6 +96,8 @@ export function sendHostVoice(
 		return false;
 	const player = state.players?.find((p) => p.id === playerId);
 	if (!player || player.disconnected || player.isDead) return false;
+	if (nosAddonLink.sendCommand(pid, 'sample', { playerId: player.id, rms, active, version: clientVersion, host: true }))
+		return true;
 	try {
 		const now = Date.now();
 		const d = hostDescriptor(pid, state, now);

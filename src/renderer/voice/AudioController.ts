@@ -911,6 +911,12 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			peer.rokuroVoice = undefined;
 			peer.rokuroDestinationChanged = true;
 		}
+		if (
+			state.mod === 'NoS' &&
+			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
+			state.nosLimitSpeechMuted?.includes(other.id)
+		)
+			result.gain = 0;
 		pan.maxDistance = result.panMaxDistance ?? this.maxDistance;
 
 		if (result.muffle && this.context) {

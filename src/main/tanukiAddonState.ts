@@ -1,3 +1,7 @@
+import { nosAddonLink } from './nosAddonLink';
+import { readTanukiAddonData } from '../common/TanukiAddonData';
+import type { NosSnapshot } from '../common/NosSnapshot';
+import { parseLimitSpeechState } from './limitSpeechState';
 import { join } from 'node:path';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { hasTanukiAddon } from '../common/tanukiAddon';
@@ -12,15 +16,33 @@ import { readRoleStateFile } from './roleStateFile';
 
 export async function readTanukiAddonState(
 	pid: number,
-	state: Pick<AmongUsState, 'mod' | 'nosAddonIds' | 'gameState'>
+	state: Pick<AmongUsState, 'mod' | 'nosAddonIds' | 'gameState'>,
+	snapshot?: NosSnapshot
 ): Promise<Partial<AmongUsState>> {
 	if (!hasTanukiAddon(state) || !process.env.LOCALAPPDATA) return {};
 	const phase = state.gameState;
 	const tasks = phase === GameState.TASKS;
 	const meeting = phase === GameState.DISCUSSION;
-	if (!tasks && !meeting) return {};
+	if (!tasks && !meeting) {
+		parseLimitSpeechState(undefined, pid, Date.now(), false);
+		return {};
+	}
+	const linked = nosAddonLink.current(pid)?.channels;
+	if (linked)
+		return {
+			nosBibiriEchoes: linked.echoes.filter((e) => Date.now() - e.unixMs <= 3000),
+			nosMegaphones: tasks ? linked.megaphones : undefined,
+			nosInterviews: linked.interviews,
+			nosVoiceJamming: meeting ? linked.jamming : undefined,
+			nosHeroTransforms: tasks ? linked.heroes : undefined,
+			nosDyingVoices: linked.dying,
+			nosPortableMegaphones: tasks ? linked.portable : undefined,
+			nosLimitSpeechMuted: parseLimitSpeechState(undefined, pid, Date.now(), true, linked.muted),
+		};
+	const scalar = tasks ? readTanukiAddonData(snapshot) : undefined;
 	const root = join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS');
 	const files = [
+		['nosLimitSpeechMuted', tasks || meeting, `limit-speech-${pid}.json`, 16384, parseLimitSpeechState],
 		['nosBibiriEchoes', tasks || meeting, 'bibiri-echo.json', 16384, parseBibiriEchoState],
 		['nosMegaphones', tasks, `megaphone-state-${pid}.json`, 16384, parseMegaphoneState],
 		['nosInterviews', tasks || meeting, `interviews-${pid}.json`, 65536, parseInterviewState],
@@ -52,7 +74,10 @@ export async function readTanukiAddonState(
 	}
 	if (!hasTanukiAddon(state) || state.gameState !== phase) return {};
 	const now = Date.now();
-	return Object.fromEntries(
-		files.map(([key, enabled, , , parse], index) => [key, enabled ? parse(texts[index], pid, now) : undefined])
-	);
+	return {
+		...Object.fromEntries(
+			files.map(([key, enabled, , , parse], index) => [key, enabled ? parse(texts[index], pid, now) : undefined])
+		),
+		...(scalar ? { nosHeroTransforms: scalar.heroes, nosPortableMegaphones: scalar.portable } : {}),
+	};
 }

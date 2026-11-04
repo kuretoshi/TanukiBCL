@@ -1,6 +1,7 @@
 import { NosPlayerData, NosRadioData, NosSnapshot } from '../common/NosSnapshot';
 
-type PlayerField = Exclude<keyof NosPlayerData, 'name' | 'skin' | 'hat' | 'visor'> | 'nameLength' | 'name';
+type PlayerField =
+	Exclude<keyof NosPlayerData, 'name' | 'skin' | 'hat' | 'visor' | 'addonData'> | 'nameLength' | 'name';
 export interface NosCostumeLayout {
 	offset: number;
 	nameLength: number;
@@ -14,6 +15,7 @@ export interface NosLayout {
 	schemaVersion: number;
 	latestSlotAddress: number;
 	snapshot: {
+		addonData?: number | null;
 		localMicPositionX: number;
 		localMicPositionY: number;
 		playersLength: number;
@@ -23,6 +25,7 @@ export interface NosLayout {
 		localIsPseudocide?: number | null;
 	};
 	playerData: Record<PlayerField | 'size', number> & {
+		addonData?: number | null;
 		skin?: NosCostumeLayout | null;
 		hat?: NosCostumeLayout | null;
 		visor?: NosCostumeLayout | null;
@@ -52,6 +55,9 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	)
 		return false;
 	const p = v.playerData;
+	if ((v.snapshot.addonData != null) !== (p.addonData != null)) return false;
+	if (p.addonData != null && (!validOffset(p.addonData, 4, p.size) || !validOffset(v.snapshot.addonData!, 4, 256)))
+		return false;
 	const costumes = [p.skin, p.hat, p.visor];
 	const costumeCount = costumes.filter((c) => c != null).length;
 	if (costumeCount !== 0 && costumeCount !== 3) return false;
@@ -179,6 +185,7 @@ export function readNosSnapshot(
 			return { name: payload.toString('utf16le', base + layout.name, base + layout.name + length * 2) };
 		};
 		players.push({
+			...(Number.isInteger(p.addonData) ? { addonData: payload.readInt32LE(start + p.addonData!) } : {}),
 			...(p.skin ? { skin: costume(p.skin), hat: costume(p.hat), visor: costume(p.visor) } : {}),
 			playerId,
 			name: payload.toString('utf16le', start + p.name, start + p.name + length * 2),
@@ -224,6 +231,7 @@ export function readNosSnapshot(
 	)
 		throw new Error('NoS snapshot changed during read');
 	return {
+		...(Number.isInteger(s.addonData) ? { addonData: header.readInt32LE(s.addonData!) } : {}),
 		publication: snapshot,
 		localMicPosition: {
 			x: finite(header.readFloatLE(s.localMicPositionX)),

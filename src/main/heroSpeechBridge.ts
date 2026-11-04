@@ -1,3 +1,4 @@
+import { nosAddonLink } from './nosAddonLink';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSocket, type Socket } from 'node:dgram';
@@ -7,6 +8,7 @@ import type { HeroSpeechPlayer } from '../common/HeroSpeech';
 import { hasTanukiAddon } from '../common/tanukiAddon';
 
 interface Descriptor {
+	unified?: boolean;
 	protocol: 2;
 	pid: number;
 	port: number;
@@ -87,6 +89,21 @@ export function registerHeroSpeechBridge(
 			close();
 			return;
 		}
+		const profile = nosAddonLink.current(pid);
+		if (profile) {
+			const players = profile.channels.speech.filter((p) => p.request === 0 || p.expires > Date.now());
+			return players.length
+				? {
+						protocol: 2,
+						pid,
+						port: nosAddonLink.endpoint(),
+						token: profile.session,
+						updated: profile.unixMs,
+						players,
+						unified: true,
+					}
+				: undefined;
+		}
 		try {
 			const path = join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS', `hero-speech-${pid}.json`);
 			if (statSync(path).size > 32768) return;
@@ -105,7 +122,12 @@ export function registerHeroSpeechBridge(
 		if (!isMainRenderer(event.sender.id) || !Array.isArray(ready) || ready.length > 24) return;
 		const d = descriptor();
 		if (!d || session !== d.token) return;
-		for (const id of ready) {
+		const allowed = ready.filter((id) => d.players.some((p) => p.playerId === id) && permitted(id));
+		if (d.unified) {
+			nosAddonLink.sendCommand(d.pid, 'ready', { players: allowed });
+			return;
+		}
+		for (const id of allowed) {
 			if (!d.players.some((p) => p.playerId === id) || !permitted(id)) continue;
 			send(`TBCLHS2|${d.token}|ready|${Date.now()}|${id}|1`, d.port);
 		}
@@ -121,6 +143,10 @@ export function registerHeroSpeechBridge(
 			(p) => p.playerId === player && p.request === request && p.kind === kind && p.request > 0
 		);
 		if (!d || session !== d.token || !armed || armed.expires <= Date.now() || !permitted(player)) return;
+		if (d.unified) {
+			nosAddonLink.sendCommand(d.pid, 'word', { playerId: armed.playerId, request: armed.request, speechKind: kind });
+			return;
+		}
 		send(
 			`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${kind === 'ng' ? 'ng' : 'henshin'}`,
 			d.port

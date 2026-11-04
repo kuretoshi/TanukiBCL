@@ -22,6 +22,7 @@ import { ISettings } from '../common/ISettings';
 import { getVariantStoreName } from '../common/appVariant';
 import { gameReader, onGameStateChanged } from './hook';
 import { registerNosVoiceRoleBridge } from './nosVoiceRoleBridge';
+import { nosAddonLink } from './nosAddonLink';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
 import { findSnrCosmeticFile, SnrCosmeticPart } from './snrCosmetics';
@@ -723,7 +724,10 @@ if (!gotTheLock) {
 			(senderId) => global.mainWindow?.webContents.id === senderId,
 			onGameStateChanged
 		);
-		app.once('will-quit', () => nosVoiceRoleSender?.close());
+		app.once('will-quit', () => {
+			nosVoiceRoleSender?.close();
+			nosAddonLink.close();
+		});
 		initSettingsIpc();
 		global.mainWindow = createMainWindow();
 		if (isDevelopment && (voiceDebugEnabled || isDebugLoggingEnabled())) global.debugWindow = createDebugWindow();
