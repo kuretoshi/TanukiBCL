@@ -35,6 +35,8 @@ while (Console.ReadLine() is string command) {
     }
     if (command.StartsWith("star-")) Nebula.Game.NebulaGameManager.SetStar(command);
     if (command.StartsWith("lang-")) Nebula.Modules.Language.Change(command);
+    if (command == "registry-empty") Nebula.Game.NebulaGameManager.instance.allModPlayers = new();
+    if (command == "registry-restore") Nebula.Game.NebulaGameManager.instance.allModPlayers = new() { [3] = new() };
     if (command == "color") DynamicPalette.Change();
     if (command == "gc") { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
     if (command == "team") TBCLFields.Publish(false);

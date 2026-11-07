@@ -6,7 +6,7 @@ import MinimizeIcon from '@mui/icons-material/Remove';
 import CloseIcon from '@mui/icons-material/Close';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import theme from '../lib/theme';
-import { ipcRenderer } from '../lib/electron-bridge';
+import { ipcRenderer, closeWindow } from '../lib/electron-bridge';
 import { remoteGameStore, startRemoteGameStore, stopRemoteGameStore } from '../state/remoteGameStore';
 import { IpcSettingsMessages } from '../../common/ipc-messages';
 import { GameState } from '../../common/AmongUsState';
@@ -125,6 +125,7 @@ function DebugWindow(): React.JSX.Element {
 			<ThemeProvider theme={theme}>
 				<Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
 					<Box
+						data-tauri-drag-region=""
 						sx={{
 							display: 'flex',
 							alignItems: 'center',
@@ -151,7 +152,7 @@ function DebugWindow(): React.JSX.Element {
 						<IconButton aria-label="最小化" sx={controlStyles} onClick={() => ipcRenderer.send('minimize', 'debug')}>
 							<MinimizeIcon sx={{ fontSize: 16 }} />
 						</IconButton>
-						<IconButton aria-label="閉じる" sx={controlStyles} onClick={() => window.close()}>
+						<IconButton aria-label="閉じる" sx={controlStyles} onClick={() => closeWindow()}>
 							<CloseIcon sx={{ fontSize: 16 }} />
 						</IconButton>
 					</Box>

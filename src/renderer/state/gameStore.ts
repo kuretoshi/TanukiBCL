@@ -26,6 +26,8 @@ let snapshot: GameStoreSnapshot = {
 
 let started = false;
 let hookFailed = false;
+let stateRevision = 0;
+let generation = 0;
 
 function update(partial: Partial<GameStoreSnapshot>): void {
 	let changed = false;
@@ -46,6 +48,7 @@ function onGameOpened(_: unknown, isOpen: boolean): void {
 		return;
 	}
 
+	stateRevision++;
 	update({
 		gameOpen: false,
 		gameState: {
@@ -64,6 +67,7 @@ function onGameOpened(_: unknown, isOpen: boolean): void {
 }
 
 function onGameStateChanged(_: unknown, newState: AmongUsState): void {
+	stateRevision++;
 	update({ gameState: newState });
 }
 
@@ -79,6 +83,8 @@ function onPlayerColorsChanged(_: unknown, colors: string[][]): void {
 export function startGameStore(): void {
 	if (started) return;
 	started = true;
+	hookFailed = false;
+	const currentGeneration = ++generation;
 
 	ipcRenderer.on(IpcRendererMessages.NOTIFY_GAME_OPENED, onGameOpened);
 	ipcRenderer.on(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, onGameStateChanged);
@@ -87,12 +93,15 @@ export function startGameStore(): void {
 
 	ipcRenderer
 		.invoke(IpcHandlerMessages.START_HOOK)
-		.then(() => {
-			if (hookFailed) return;
-			update({ gameState: ipcRenderer.sendSync(IpcSyncMessages.GET_INITIAL_STATE) as AmongUsState });
+		.then(async () => {
+			if (hookFailed || !started || generation !== currentGeneration) return;
+			const revision = stateRevision;
+			const state = (await ipcRenderer.invoke(IpcSyncMessages.GET_INITIAL_STATE)) as AmongUsState | null;
+			if (state && !hookFailed && started && generation === currentGeneration && stateRevision === revision)
+				update({ gameState: state });
 		})
 		.catch((error: Error) => {
-			if (hookFailed) return;
+			if (hookFailed || !started || generation !== currentGeneration) return;
 			hookFailed = true;
 			update({ error: error.message });
 		});
@@ -101,6 +110,7 @@ export function startGameStore(): void {
 export function stopGameStore(): void {
 	if (!started) return;
 	started = false;
+	generation++;
 	ipcRenderer.off(IpcRendererMessages.NOTIFY_GAME_OPENED, onGameOpened);
 	ipcRenderer.off(IpcRendererMessages.NOTIFY_GAME_STATE_CHANGED, onGameStateChanged);
 	ipcRenderer.off(IpcRendererMessages.ERROR, onError);

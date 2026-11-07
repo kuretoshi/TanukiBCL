@@ -1,0 +1,63 @@
+[package]
+name = "tanuki-bcl-tauri"
+version = "3.2.62-tauri-beta.9"
+description = "Tanuki BetterCrewLink Tauri beta"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "macros", "net"] }
+webrtc = "=0.21.1"
+rtc = "=0.21.1"
+cpal = "=0.18.2"
+opus = "=0.4.0"
+sonora = "=0.2.0"
+rustfft = "=6.4.1"
+flate2 = "=1.1.10"
+sha2 = "=0.10.9"
+semver = "1"
+getrandom = "=0.3.4"
+unicode-normalization = "=0.1.25"
+unity-bundle-assets = "=0.1.1"
+texture2ddecoder = "=0.1.2"
+async-trait = "0.1"
+bytes = "1"
+futures-util = { version = "0.3", features = ["sink"] }
+tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
+base64 = "0.22"
+open = "5"
+png = "0.18"
+percent-encoding = "2"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "native-tls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Diagnostics_Debug", "Win32_System_ProcessStatus", "Win32_System_Registry"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+node-compat = []
+
+[profile.release]
+incremental = false
+codegen-units = 1
+lto = "thin"
+strip = true
+
+[profile.dev]
+incremental = false
+debug = 0
+
+[profile.release.package.tbcl-rust-ui]
+opt-level = "s"
+strip = false
+
+[workspace]
+members = ["clr-reader", "rust-ui"]
+resolver = "2"

@@ -17,7 +17,7 @@ import React, { useCallback, useMemo, useState, useEffect, useContext } from 're
 import ChevronLeft from '@mui/icons-material/ArrowBack';
 import { GamePlatformInstance, PlatformRunType } from '../../common/GamePlatform';
 import path from 'path';
-import { platform, getPathForFile } from '../lib/electron-bridge';
+import { platform, getPathForFile, isTauri, selectExecutable } from '../lib/electron-bridge';
 import { SettingsContext } from '../state/contexts';
 
 const useStyles = () => {
@@ -153,7 +153,19 @@ export const CustomPlatformSettings: React.FC<CustomPlatformSettingProps> = func
 						color="primary"
 						disabled={true}
 					/>
-					<Button variant="contained" component="label">
+					<Button
+						variant="contained"
+						component="label"
+						onClick={
+							isTauri
+								? async (event) => {
+										event.preventDefault();
+										const selected = await selectExecutable();
+										if (selected) setPlatformRun(selected);
+									}
+								: undefined
+						}
+					>
 						{t('buttons.file_select')}
 						<input
 							accept={platform === 'win32' ? '.exe' : '*'}

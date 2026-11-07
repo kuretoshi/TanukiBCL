@@ -8,7 +8,7 @@ import MinimizeIcon from '@mui/icons-material/Remove';
 import CloseIcon from '@mui/icons-material/Close';
 import SettingsIcon from '@mui/icons-material/Settings';
 import theme from '../lib/theme';
-import { ipcRenderer } from '../lib/electron-bridge';
+import { ipcRenderer, closeWindow } from '../lib/electron-bridge';
 import { ISettings } from '../../common/ISettings';
 import { GameStateContext, SettingsContext } from '../state/contexts';
 import { remoteGameStore, startRemoteGameStore } from '../state/remoteGameStore';
@@ -49,7 +49,7 @@ const titleBarStyles = {
 
 const TitleBar: React.FC<{ title: string }> = function ({ title }) {
 	return (
-		<Box sx={titleBarStyles.root}>
+		<Box sx={titleBarStyles.root} data-tauri-drag-region="">
 			<Box sx={titleBarStyles.title}>
 				<SettingsIcon sx={{ fontSize: 14 }} />
 				{title}
@@ -57,7 +57,7 @@ const TitleBar: React.FC<{ title: string }> = function ({ title }) {
 			<IconButton sx={titleBarStyles.button} size="small" onClick={() => ipcRenderer.send('minimize', 'settings')}>
 				<MinimizeIcon htmlColor="#777" sx={{ fontSize: 16 }} />
 			</IconButton>
-			<IconButton sx={titleBarStyles.button} size="small" onClick={() => window.close()}>
+			<IconButton sx={titleBarStyles.button} size="small" onClick={() => closeWindow()}>
 				<CloseIcon htmlColor="#777" sx={{ fontSize: 16 }} />
 			</IconButton>
 		</Box>

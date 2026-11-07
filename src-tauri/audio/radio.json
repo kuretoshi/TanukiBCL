@@ -1,0 +1,8 @@
+{
+  "source": "static/sounds/radio_on.wav",
+  "sourceSha256": "a82a73a64346cb22d172019890fcd363c2176410114f8214399e7f0c53d25012",
+  "sampleRate": 48000,
+  "channels": 1,
+  "frames": 10101,
+  "sha256": "9da245c0cc54c5e2ad16bf1472b9e38c4ef148a6661bad5c466f35bb98438c99"
+}

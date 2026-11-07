@@ -135,7 +135,8 @@ try {
 	assert.equal(io.sync, 0);
 	const first = await readTanukiAddonState(123, state);
 	assert.equal(io.sync, 0, 'active state reads must never use synchronous fs APIs');
-	assert.equal(io.opens.length, 6);
+	assert.equal(io.opens.length, 7, 'includes the optional limit-speech state probe');
+	assert.ok(io.opens.includes('limit-speech-123.json'));
 	assert.equal(io.maxActive, 6, 'read independent role files concurrently');
 	assert.deepEqual(first.nosHeroTransforms, entries['hero-transforms-123.json']);
 	assert.deepEqual(first.nosMegaphones, entries['megaphone-state-123.json']);
@@ -143,7 +144,7 @@ try {
 	assert.equal(first.nosVoiceJamming, undefined);
 	reset();
 	const meeting = await readTanukiAddonState(123, { ...state, gameState: GameState.DISCUSSION });
-	assert.equal(io.opens.length, 4);
+	assert.equal(io.opens.length, 5, 'meeting state also probes optional limit-speech data');
 	assert.deepEqual(meeting.nosVoiceJamming, entries['voice-jamming-123.json']);
 	assert.equal(meeting.nosMegaphones, undefined);
 	assert.equal(meeting.nosHeroTransforms, undefined);

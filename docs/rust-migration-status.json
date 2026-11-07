@@ -1,0 +1,145 @@
+{
+  "baseVersion": "3.2.62",
+  "baseCommit": "0053e9c19b902ad3b453461fdb206569290b9cd2",
+  "deliveredVersion": "3.2.62-tauri-beta.9",
+  "objective": "Port every Windows application feature, including UI and remaining managed Mod readers/watchers, to Rust while preserving the Electron edition; compare memory again after full migration.",
+  "scope": "Application logic and UI source must be Rust. Generated WebAssembly interoperability glue and existing third-party native libraries are allowed. No application feature may require the React/TypeScript UI, a C# helper, or the Node compatibility backend. Electron source, settings and delivered artifacts are preserved.",
+  "complete": true,
+  "items": [
+    {
+      "feature": "Tauri lifecycle, settings, windows and IPC",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Vanilla x64 game reader and hotkeys",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Native devices, Opus, WebRTC and signaling",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Headless voice and tray lifecycle",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Echo cancellation, noise suppression and automatic gain",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Walls, closed doors and vision range",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Camera, haunting, impostor radio, filters, convolution, pitch and echo",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Spatial panning parity and microphone gate",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Native voice lobby settings and player controls",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Native voice overlay, OBS, mobile and public lobbies",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Full shared React UI using a native voice controller",
+      "status": "replaced-by-rust-wasm-in-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Native NoS snapshot and palette decoding",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Native SNR/TOH layouts, helper lifecycle and Mod reader integration",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Mod-specific routing, role recordings, cosmetics and addon transports",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Speech recognition and addon speech features",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Debug authentication, inquiry, history, BAN management and log saving",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Final matched Electron / .NET / Rust memory comparison",
+      "status": "passed-beta.8-two-runs-per-mode"
+    },
+    {
+      "feature": "Rust UI replacing the shared React/TypeScript application",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Rust CLR discovery, NoS roles, SNR animation watcher and TOH metadata",
+      "status": "packaged-beta.8",
+      "validationReport": "validation-rust-clr-3.2.62.json",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Rust updater and remaining platform/settings parity",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Rust-only runtime packaging without Node or C# application helpers",
+      "status": "packaged-beta.8",
+      "version": "beta.8"
+    },
+    {
+      "feature": "Electron UI layout restored in Rust with bounded cosmetics refresh",
+      "status": "packaged-beta.9",
+      "version": "beta.9",
+      "validationReport": "validation-ui-parity-beta9.json"
+    }
+  ],
+  "migrationImplemented": true,
+  "validationReport": "validation-rust-ui-3.2.62.json",
+  "memoryReport": "memory-comparison-rust-ui-3.2.62.json",
+  "verificationLimits": [
+    "TOH4E actual match blocked by game-side lobby creation error; generated decoder and runtime role-transfer tests passed.",
+    "Actual 32-bit game, every role, multi-person internet voice, Bluetooth, device removal, sleep/resume and long sessions remain unverified.",
+    "No real inquiry/BAN/admin submission, installer execution or release publishing was performed.",
+    ".NET memory is reference-only: playback buffer warnings and/or less decoded microphone audio than the matched 30-second window.",
+    "HTML selects, sliders and other controls have browser rendering differences; no pixel-identical claim.",
+    "Debug/history dialogs and every Mod state need additional visual verification.",
+    "Synthetic smoke is a bounded stability check, not a matched Electron/.NET benchmark. Existing final comparison remains beta8."
+  ],
+  "completionCriteria": [
+    "All existing application/UI features run from Rust implementations.",
+    "No C# Mod helper or persistent managed watcher is required.",
+    "Node/React compatibility remains outside the new Rust runtime and is not needed by any feature.",
+    "Feature parity and lifecycle checks pass before a new final memory comparison.",
+    "No completion claim while required application features remain unported."
+  ],
+  "implementedVersion": "3.2.62-tauri-beta.9",
+  "packageReport": "validation-rust-package-3.2.62.json",
+  "completedAt": "2026-11-07T01:33:44.648Z",
+  "uiParityReport": "validation-ui-parity-beta9.json",
+  "uiLayoutRestored": true
+}

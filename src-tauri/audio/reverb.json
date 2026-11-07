@@ -1,0 +1,10 @@
+{
+  "source": "static/sounds/reverb.ogx",
+  "sourceSha256": "a0ff83aafc1ecdeeafcf54e8445050451012957fd044ce8ad37e23ea6c2fd002",
+  "sampleRate": 48000,
+  "channels": 2,
+  "frames": 144893,
+  "normalization": "Web Audio ConvolverNode RMS normalization",
+  "scale": 0.018956328194077613,
+  "sha256": "35fe2bbdf6ee62c7eebdd06714e7a2e919b5d37f1310fcc6d08c9a0402e35989"
+}

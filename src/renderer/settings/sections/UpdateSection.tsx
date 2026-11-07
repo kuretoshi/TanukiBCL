@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, LinearProgress, Typography } from '@mui/material';
 import { AutoUpdaterState, IpcRendererMessages } from '../../../common/ipc-messages';
-import { ipcRenderer, shell } from '../../lib/electron-bridge';
+import { ipcRenderer, shell, isTauri } from '../../lib/electron-bridge';
 import { SettingsSection } from '../SettingsControls';
 
 export default function UpdateSection(): React.JSX.Element {
@@ -29,6 +29,16 @@ export default function UpdateSection(): React.JSX.Element {
 	}, []);
 	const busy = state.state === 'checking' || state.state === 'downloading';
 	const canStart = !!state.info && (state.state === 'available' || state.state === 'downloaded');
+	if (isTauri)
+		return (
+			<SettingsSection title="アップデート">
+				<Box sx={{ p: 2.5 }}>
+					<Alert severity="info">
+						Tauriベータ版は手動更新です。新しいTauri版のインストーラーを入手して更新してください。
+					</Alert>
+				</Box>
+			</SettingsSection>
+		);
 	return (
 		<SettingsSection title="アップデート">
 			<Box sx={{ p: 2.5 }}>

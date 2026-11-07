@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TanukiBCL Tauri Beta",
+  "version": "3.2.62-tauri-beta.9",
+  "identifier": "work.kuretoshi.tanukibcl.tauri.beta",
+  "build": {
+    "beforeDevCommand": "npm run tauri:prepare && npm run tauri:frontend:build && npm run tauri:frontend:dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run tauri:prepare && npm run tauri:frontend:build",
+    "frontendDist": "../out/tauri-rust-ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://static.localhost http://generate.localhost http://nos-cosmetic.localhost http://snr-cosmetic.localhost; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self' ipc: http: https: ws: wss:; worker-src 'self' blob:",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self' ipc: http: https: ws: wss:; worker-src 'self' blob:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "../resources/icon.ico"
+    ],
+    "resources": {
+      "../out/tauri-backend/rust-default-settings.json": "backend/rust-default-settings.json",
+      "../out/tauri-backend/rust-constants.json": "backend/rust-constants.json",
+      "../out/tauri-backend/rust-assets/": "backend/rust-assets/",
+      "../out/tauri-backend/rust-speech/": "backend/rust-speech/",
+      "../out/tauri-backend/out/rust-clr/": "backend/out/rust-clr/",
+      "../out/tauri-backend/LICENSE": "backend/LICENSE",
+      "../out/tauri-backend/release-base.json": "backend/release-base.json",
+      "../out/tauri-backend/THIRD-PARTY-RUST.txt": "backend/THIRD-PARTY-RUST.txt"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": [
+          "Japanese",
+          "English"
+        ],
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

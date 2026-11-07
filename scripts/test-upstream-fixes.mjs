@@ -1534,6 +1534,7 @@ const checkProcess = vm.runInNewContext(
 	{
 		modList,
 		getProcesses: () => runningProcesses,
+		nosAddonLink: { close() {} },
 		targetProcessName: 'Among Us.exe',
 		targetProcessId: 0,
 		targetProcessIndex: 0,
@@ -1581,7 +1582,7 @@ const reconnectReader = vm.runInNewContext(
 	ts.transpileModule(`({ ${reconnectMethods.join(',')} })`, {
 		compilerOptions: { target: ts.ScriptTarget.ES2020 },
 	}).outputText,
-	{ IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } }
+	{ IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' }, nosAddonLink: { close() {} } }
 );
 let snrResetCount = 0;
 reconnectReader.snrRoles = {

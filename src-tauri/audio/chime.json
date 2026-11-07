@@ -1,0 +1,8 @@
+{
+  "source": "static/sounds/chime.mp3",
+  "sourceSha256": "a29f181f8e76b9114e702cbfd28e37f5dc0e538952437a65e7444252b4ae9b59",
+  "sampleRate": 48000,
+  "channels": 1,
+  "frames": 192000,
+  "sha256": "4cfd091dd11e1d0a63168d810013a140e4ede47b5e5531e9209dfa810f43964f"
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ベタクル Rust音声試作</title>
+	</head>
+	<body>
+		<main>
+			<header>
+				<span class="badge">Rust音声 β7</span>
+				<h1>ベタクル <span>Rust Voice</span></h1>
+			</header>
+			<section class="card" aria-live="polite">
+				<p id="connection"><i></i><span>起動しています…</span></p>
+				<p id="game">ゲームを待っています</p>
+				<p id="peers">通話相手 0人</p>
+			</section>
+			<p id="error" role="alert" hidden></p>
+			<div class="actions">
+				<button id="mute" type="button">マイク ON</button>
+				<button id="deafen" type="button">スピーカー ON</button>
+			</div>
+			<section id="players" class="card players" aria-label="通話相手ごとの音量" hidden></section>
+			<button id="background" class="primary" type="button">画面を閉じて通話を続ける</button>
+			<p class="hint">×・最小化でも通話は続きます。トレイのアイコンから画面を開けます。</p>
+			<details>
+				<summary>音声設定</summary>
+				<form id="settings">
+					<label
+						>マイク<select id="microphone">
+							<option value="">Windowsの既定</option>
+						</select></label
+					>
+					<label
+						>スピーカー<select id="speaker">
+							<option value="">Windowsの既定</option>
+						</select></label
+					>
+					<label
+						>音量 <output id="volume-label">100%</output><input id="volume" type="range" min="0" max="200" value="100"
+					/></label>
+					<label>通話サーバー<input id="server" type="url" required autocomplete="off" spellcheck="false" /></label>
+					<label
+						>マイク操作<select id="ptt">
+							<option value="0">音声で通話</option>
+							<option value="1">Vキーを押している間だけ通話</option>
+							<option value="2">Vキーを押している間だけミュート</option>
+						</select></label
+					>
+					<label class="check"><input id="spatial" type="checkbox" checked />左右の位置と距離を反映する</label>
+					<label class="check"><input id="echo" type="checkbox" checked />エコー除去</label>
+					<label class="check"><input id="noise" type="checkbox" checked />ノイズ抑制</label>
+					<label class="check"><input id="gain" type="checkbox" checked />マイク音量を自動調整する</label>
+					<label class="check"
+						><input id="manual-gain" type="checkbox" />マイク音量を手動調整する（自動調整OFF時）</label
+					>
+					<label
+						>マイク音量 <output id="microphone-gain-label">100%</output
+						><input id="microphone-gain" type="range" min="0" max="400" value="100"
+					/></label>
+					<label class="check"
+						><input id="sensitivity-enabled" type="checkbox" />小さい入力をミュートする（自動調整OFF時）</label
+					>
+					<label
+						>発話検出のしきい値 <output id="sensitivity-label">15%</output
+						><input id="sensitivity" type="range" min="0" max="100" value="15"
+					/></label>
+					<button type="submit">設定を保存して再接続</button>
+				</form>
+			</details>
+			<button id="open-settings" type="button">ロビー設定・その他の設定</button>
+			<p class="scope">
+				Vanilla x64向けの試作です。Mod・音声エフェクトは未対応です。エコー除去の効果は機器や部屋によって変わります。
+			</p>
+			<button id="quit" class="quiet" type="button">通話を終了して閉じる</button>
+		</main>
+		<script type="module" src="./native-voice.ts"></script>
+	</body>
+</html>

@@ -1,5 +1,6 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
+import schema from '../../common/clientPeerConfigSchema.json';
 
 const ajv = new Ajv({
 	allErrors: true,
@@ -7,35 +8,4 @@ const ajv = new Ajv({
 });
 addFormats(ajv);
 
-export const validateClientPeerConfig = ajv.compile({
-	type: 'object',
-	properties: {
-		forceRelayOnly: {
-			type: 'boolean',
-		},
-		iceServers: {
-			type: 'array',
-			items: {
-				type: 'object',
-				properties: {
-					urls: {
-						type: ['string', 'array'],
-						format: 'uri',
-						items: {
-							type: 'string',
-							format: 'uri',
-						},
-					},
-					username: {
-						type: 'string',
-					},
-					credential: {
-						type: 'string',
-					},
-				},
-				required: ['urls'],
-			},
-		},
-	},
-	required: ['forceRelayOnly', 'iceServers'],
-});
+export const validateClientPeerConfig = ajv.compile(schema);

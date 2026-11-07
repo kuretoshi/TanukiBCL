@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
 import { captureMicrophone } from '../lib/captureMicrophone';
+import { ipcRenderer, isNativeVoice } from '../lib/electron-bridge';
 
 interface TestMicProps {
 	microphone: string;
@@ -46,6 +47,29 @@ const TestMicrophoneButton: React.FC<TestMicProps> = function ({ microphone, aut
 
 	useEffect(() => {
 		setError(false);
+		if (isNativeVoice) {
+			let cancelled = false;
+			let timer: ReturnType<typeof setTimeout>;
+			const sample = async () => {
+				try {
+					const value = (await ipcRenderer.invoke('native:voice:status')) as {
+						status: { inputLevel: number; audioReady: boolean };
+					};
+					if (!cancelled) {
+						setRms(Math.min(0.5, Math.sqrt(value.status.inputLevel)));
+						setError(!value.status.audioReady);
+					}
+				} catch {
+					if (!cancelled) setError(true);
+				}
+				if (!cancelled) timer = setTimeout(() => void sample(), 100);
+			};
+			void sample();
+			return () => {
+				cancelled = true;
+				clearTimeout(timer);
+			};
+		}
 
 		const ctx = new AudioContext();
 		const processor = ctx.createScriptProcessor(2048, 1, 1);
