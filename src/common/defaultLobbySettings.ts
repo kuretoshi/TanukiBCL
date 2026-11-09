@@ -16,7 +16,7 @@ export const defaultLobbySettings: ILobbySettings = {
 	sidekickTalkInVents: false,
 	nosNeutralKillerHaunting: false,
 	nosBuskerReviveHideVoice: false,
-	nosVoicePositions: false,
+	nosVoicePositions: true,
 	nosGluttonySwallowVoice: 'mute',
 	nosSizeVoiceEffect: true,
 	nosSizeVoiceEffectStrength: 100,

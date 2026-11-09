@@ -45,6 +45,7 @@
 		"check:nesting": "node scripts/check-nesting.mjs",
 		"test:nos-radio-mask": "node scripts/test-nos-radio-mask.mjs",
 		"test:nos-gluttony-voice": "node scripts/test-nos-gluttony-voice.mjs",
+		"test:nos-always-positions": "node scripts/test-nos-always-positions.mjs",
 		"test:nos-roles": "node scripts/test-nos-roles.mjs",
 		"test:nos-berserker": "node scripts/test-nos-berserker.mjs",
 		"test:nos-citrus": "node scripts/test-nos-citrus.mjs",

@@ -76,19 +76,9 @@ function cameraPanPosition(state: AmongUsState, other: Player): [number, number]
 	return undefined;
 }
 
-function followsRokuroPosition(state: AmongUsState, player: Player): boolean {
-	return (
-		state.mod === 'NoS' &&
-		state.gameState === GameState.TASKS &&
-		!player.isDead &&
-		!player.disconnected &&
-		(player.nosRole?.roleName === 'rokurokubi' || player.nosPlayer?.bodyType === 3)
-	);
-}
-
 export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const { state, settings, activeLobbySettings, impostorRadioClientId } = input;
-	const useNosPositions = state.mod === 'NoS' && activeLobbySettings.nosVoicePositions === true;
+	const useNosPositions = state.mod === 'NoS';
 	const localPlayer = withImpostorClassification(state.mod, input.me);
 	const remotePlayer = withImpostorClassification(state.mod, input.other);
 	const falling = (player: Player) =>
@@ -104,19 +94,16 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	const remoteVoicePlayer = falling(remotePlayer)
 		? { ...remotePlayer, ...remotePlayer.snrPushOrigin, isDead: false }
 		: remotePlayer;
-	// NoS publishes the Rokurokubi camera/head endpoints and restores them on retraction.
+	// NoS publishes the authoritative listener/speaker endpoints for every role.
 	const micPosition = state.nosLocalMicPosition;
 	const speaker = remoteVoicePlayer.nosPlayer;
 	const me =
-		(useNosPositions || followsRokuroPosition(state, localVoicePlayer)) &&
-		micPosition &&
-		Number.isFinite(micPosition.x) &&
-		Number.isFinite(micPosition.y)
+		useNosPositions && micPosition && Number.isFinite(micPosition.x) && Number.isFinite(micPosition.y)
 			? { ...localVoicePlayer, ...micPosition }
 			: localVoicePlayer;
 	const other =
 		!input.rokuroBodyOrigin &&
-		(useNosPositions || followsRokuroPosition(state, remoteVoicePlayer)) &&
+		useNosPositions &&
 		speaker &&
 		Number.isFinite(speaker.speakerPositionX) &&
 		Number.isFinite(speaker.speakerPositionY)
@@ -137,15 +124,13 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 		reverb: null,
 		radioEcho: false,
 	};
-	// UchuAddon moves a swallowed player's NoS speaker position to this sentinel for
-	// every listener except Gluttony. TBCLFields publishes the event-adjusted position.
+	// UchuAddon v1.4.0 publishes 100 for a swallowed player's AddonData.
 	const swallowedByGluttony =
 		state.mod === 'NoS' &&
 		state.gameState === GameState.TASKS &&
 		state.nosAddonIds?.includes('UchuAddon') === true &&
 		!remotePlayer.isDead &&
-		speaker?.speakerPositionX === 1000 &&
-		speaker.speakerPositionY === 1000;
+		speaker?.addonData === 100;
 	const swallowVoiceMode = swallowedByGluttony ? (activeLobbySettings.nosGluttonySwallowVoice ?? 'mute') : 'normal';
 	const applySwallowVoice = (audio: VoiceAudioResult): VoiceAudioResult => {
 		if (swallowVoiceMode !== 'quiet' || audio.gain <= 0) return audio;
@@ -165,7 +150,9 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	) {
 		return result;
 	}
-	if (swallowVoiceMode === 'mute') return result;
+	// NoS keeps the victim audible to its swallower and hides it from other listeners.
+	// Preserve that range even for radio/megaphone; never blanket-mute the swallower.
+	if (swallowVoiceMode === 'mute' && distance([other.x - me.x, other.y - me.y]) > maxDistance) return result;
 	if (
 		state.gameState === GameState.TASKS &&
 		me.isImpostor &&

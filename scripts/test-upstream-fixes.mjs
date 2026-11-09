@@ -732,14 +732,14 @@ assert.deepEqual(
 	spatial({ state: nosState, other: nosOther, activeLobbySettings: nosPositionSettings }).panPosition,
 	[1.5, 0]
 );
-assert.equal(spatial({ state: nosState, other: nosOther }).gain, 0, 'NoS position override is off by default');
+assert.equal(spatial({ state: nosState, other: nosOther }).gain, 1, 'NoS positions apply without an option');
 assert.equal(
 	spatial({
 		state: nosState,
 		other: nosOther,
 		activeLobbySettings: { ...nosPositionSettings, nosVoicePositions: false },
 	}).gain,
-	0
+	1
 );
 assert.equal(
 	spatial({ state: { ...nosState, mod: 'SUPER_NEW_ROLES' }, other: nosOther, activeLobbySettings: nosPositionSettings })
@@ -1539,6 +1539,7 @@ const checkProcess = vm.runInNewContext(
 		targetProcessIndex: 0,
 		console: { log() {} },
 		IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' },
+		nosAddonLink: { close() {} },
 	}
 ).checkProcessOpen;
 const switchingReader = {
@@ -1581,7 +1582,7 @@ const reconnectReader = vm.runInNewContext(
 	ts.transpileModule(`({ ${reconnectMethods.join(',')} })`, {
 		compilerOptions: { target: ts.ScriptTarget.ES2020 },
 	}).outputText,
-	{ IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' } }
+	{ IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' }, nosAddonLink: { close() {} } }
 );
 let snrResetCount = 0;
 reconnectReader.snrRoles = {

@@ -325,7 +325,7 @@ export const settingsStore = new Store<ISettings>({
 				sidekickHearOutsideVents: { type: 'boolean', default: false },
 				sidekickTalkInVents: { type: 'boolean', default: false },
 				nosNeutralKillerHaunting: { type: 'boolean', default: false },
-				nosVoicePositions: { type: 'boolean', default: false },
+				nosVoicePositions: { type: 'boolean', default: true },
 				nosGluttonySwallowVoice: {
 					type: 'string',
 					enum: ['normal', 'quiet', 'mute'],
@@ -422,7 +422,7 @@ export const settingsStore = new Store<ISettings>({
 				sidekickHearOutsideVents: false,
 				sidekickTalkInVents: false,
 				nosNeutralKillerHaunting: false,
-				nosVoicePositions: false,
+				nosVoicePositions: true,
 				nosGluttonySwallowVoice: 'mute',
 				tohNeutralKillerHaunting: false,
 				impostorRadioOnlyMode: false,

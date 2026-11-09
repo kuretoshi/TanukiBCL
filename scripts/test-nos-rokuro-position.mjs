@@ -58,7 +58,7 @@ const run = (overrides = {}) =>
 		me: listener,
 		other: speaker,
 		settings: { enableSpatialAudio: true, ghostVolumeAsImpostor: 40 },
-		activeLobbySettings: defaultLobbySettings,
+		activeLobbySettings: { ...defaultLobbySettings, nosVoicePositions: false },
 		maxDistance: 5,
 		impostorRadioClientId: -1,
 		...overrides,
@@ -155,13 +155,13 @@ equal(
 
 equal(
 	run({ state: neckGame, other: nearHead }).gain,
-	0,
-	'ordinary local players retain body positions when the general option is off'
+	1,
+	'ordinary local players use published coordinates even with an old OFF setting'
 );
 equal(
-	run({ other: { ...extendedSpeaker, nosRole: undefined } }).gain,
-	0,
-	'ordinary remote players retain body positions when the general option is off'
+	run({ other: { ...extendedSpeaker, nosRole: undefined } }).panPosition,
+	[2, 1],
+	'ordinary remote players use published coordinates even with an old OFF setting'
 );
 equal(
 	run({ state: neckGame, other: nearHead, activeLobbySettings: { ...defaultLobbySettings, nosVoicePositions: true } })
@@ -208,17 +208,17 @@ for (const value of [
 	);
 }
 equal(
-	run({ state: neckGame, me: { ...extendedListener, isDead: true } }).panPosition,
-	[1, 0],
-	'a dead Rokuro does not retain the living neck listener override'
+	run({ state: neckGame, me: { ...extendedListener, isDead: true } }).gain,
+	0,
+	'dead listeners also follow the current NoS publication'
 );
 equal(
 	run({
 		other: { ...speaker, nosRole: role, isDead: true, nosPlayer: { speakerPositionX: 40, speakerPositionY: 0 } },
 		me: { ...listener, isDead: true },
-	}).panPosition,
-	[1, 0],
-	'a dead remote Rokuro returns to ordinary ghost positioning'
+	}).gain,
+	0,
+	'dead speakers also follow the current NoS publication'
 );
 equal(run({ other: { ...extendedSpeaker, disconnected: true } }).gain, 0, 'disconnect still blocks speech');
 equal(run({ other: { ...extendedSpeaker, isDummy: true } }).gain, 0, 'dummy voice remains blocked');
