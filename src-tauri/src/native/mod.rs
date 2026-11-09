@@ -278,7 +278,7 @@ impl Backend {
             }
             "tauri:ping" => {
                 return Ok(
-                    json!({"runtime":"rust","electron":false,"version":env!("CARGO_PKG_VERSION"),"pid":std::process::id(),"baseVersion":"3.2.62","nodeStarted":false,"scope":"windows-game-and-voice"}),
+                    json!({"runtime":"rust","electron":false,"version":env!("CARGO_PKG_VERSION"),"pid":std::process::id(),"baseVersion":crate::compat_version(),"nodeStarted":false,"scope":"windows-game-and-voice"}),
                 )
             }
             "settings:get" => return Ok(self.settings.lock().unwrap().current()),

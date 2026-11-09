@@ -100,7 +100,7 @@ export const app = Object.assign(lifecycle, {
 		throw new Error(`Unsupported app path: ${name}`);
 	},
 	getAppPath: () => import.meta.dirname,
-	getVersion: () => process.env.TANUKI_TAURI_VERSION || '3.2.62-tauri-beta.1',
+	getVersion: () => process.env.TANUKI_TAURI_VERSION || '3.2.63-tauri-beta.1',
 	getLocale: () => Intl.DateTimeFormat().resolvedOptions().locale,
 	getName: () => 'TanukiBCL Tauri Beta',
 	isPackaged: true,

@@ -847,5 +847,6 @@ fn effects(s: &State) -> String {
 }
 pub fn obs_url(s: &State) -> String {
     let encode = crate::state::encode;
-    format!("https://kuretoshi.github.io/BetterCrewlink-obs_fix/?version=3.2.62&compact={}&position={}&meeting={}&secret={}&server={}",if s.settings["compactOverlay"]==true{1}else{0},encode(s.settings["overlayPosition"].as_str().unwrap_or("right")),if s.settings["meetingOverlay"]==true{1}else{0},encode(s.settings["obsSecret"].as_str().unwrap_or("")),encode(s.settings["serverURL"].as_str().unwrap_or("")))
+    let version = s.version.split('-').next().unwrap_or_default();
+    format!("https://kuretoshi.github.io/BetterCrewlink-obs_fix/?version={}&compact={}&position={}&meeting={}&secret={}&server={}",encode(version),if s.settings["compactOverlay"]==true{1}else{0},encode(s.settings["overlayPosition"].as_str().unwrap_or("right")),if s.settings["meetingOverlay"]==true{1}else{0},encode(s.settings["obsSecret"].as_str().unwrap_or("")),encode(s.settings["serverURL"].as_str().unwrap_or("")))
 }

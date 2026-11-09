@@ -18,6 +18,10 @@ use std::sync::{
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 
+fn compat_version() -> &'static str {
+    env!("CARGO_PKG_VERSION").split('-').next().unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
 struct OverlayEnabled(Arc<AtomicBool>);
 struct DiagnosticsRunning(Arc<AtomicBool>);
 

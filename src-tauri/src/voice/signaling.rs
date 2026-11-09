@@ -356,7 +356,7 @@ impl Engine {
                         {let status=self.status.lock().unwrap();voice["connected"]=json!(status.connected);voice["error"]=json!(status.error);}
                         voice["talking"]=json!(talking);voice["activeLobbySettings"]=rules.clone();voice["hostId"]=json!(host_id(&state,server_host));
                         versions.retain(|id,_|peers.contains_key(id));
-                        voice["versionWarning"]=json!(if versions.values().any(|v|v!="3.2.62"){"参加者のベタクルのバージョンが異なります。同じバージョンにそろえてください。"}else{""});
+                        voice["versionWarning"]=json!(if versions.values().any(|v|v!=crate::compat_version()){"参加者のベタクルのバージョンが異なります。同じバージョンにそろえてください。"}else{""});
                         {let mut status=self.status.lock().unwrap();status.voice_snapshot=voice.clone();status.effective_game=state.clone();}
                         if let Some(app)=&self.app{
                             let backend=app.state::<Arc<crate::Backend>>().inner().clone();
@@ -364,7 +364,7 @@ impl Engine {
                             let enabled=flag(&shared,"enableOverlay");if overlay_enabled!=Some(enabled){overlay_enabled=Some(enabled);let _=backend.request("main","enableOverlay",vec![json!(enabled)],"invoke").await;}
                             ui.publish(app,&state,&voice,&shared,&rules,host_id(&state,server_host),&context);
                         }
-                        let info=&context["gameInfo"];if info.is_object()&&info["broadcastVersion"].as_i64().is_some_and(|v|v>=0)&&*info!=sent_game_info{let mut wire=info.clone();wire["appVersion"]=json!("3.2.62");emit(&mut socket,json!(["gameinfo",wire])).await?;sent_game_info=info.clone();}
+                        let info=&context["gameInfo"];if info.is_object()&&info["broadcastVersion"].as_i64().is_some_and(|v|v>=0)&&*info!=sent_game_info{let mut wire=info.clone();wire["appVersion"]=json!(crate::compat_version());emit(&mut socket,json!(["gameinfo",wire])).await?;sent_game_info=info.clone();}
                         if let Some(listing)=super::bridge::public_lobby(&state,&rules){if listing!=public_frame{emit(&mut socket,json!(["lobby",state["lobbyCode"],listing])).await?;public_frame=listing;}}
                         if flag(&shared,"mobileHost")&&!identity.is_null(){
                             let target=format!("{}_mobile",state["lobbyCode"].as_str().unwrap_or(""));

@@ -471,7 +471,7 @@ impl Book {
             return output;
         }
         let lobby = &state["lobbyCode"];
-        self.emit("version".into(),None,json!({"type":"app-version","lobbyCode":lobby,"version":"3.2.62","platform":"desktop","tauriNativeVoice":true}),&mut output);
+        self.emit("version".into(),None,json!({"type":"app-version","lobbyCode":lobby,"version":crate::compat_version(),"platform":"desktop","tauriNativeVoice":true}),&mut output);
         if state["mod"] == "NoS" && matches!(state["gameState"].as_i64(), Some(1 | 2)) {
             if !state["nosRadios"].is_null() {
                 self.emit("nos-radio".into(),None,json!({"type":"nos-radio-data","lobbyCode":lobby,"playerId":me["id"],"radios":state["nosRadios"]}),&mut output);
@@ -554,6 +554,14 @@ mod tests {
     use super::*;
     fn state(mod_name: &str) -> Value {
         json!({"mod":mod_name,"gameState":1,"lobbyCode":"RUSTVOICE","clientId":1,"hostId":2,"players":[{"id":0,"clientId":1,"isLocal":true,"isImpostor":true},{"id":1,"clientId":2},{"id":2,"clientId":3}]})
+    }
+    #[test]
+    fn outgoing_version_matches_release_compatibility() {
+        let mut book = Book::default();
+        let outputs = book.outgoing(&state("NONE"), 1, &json!({}));
+        let version = outputs.iter().find(|o| o.value["type"] == "app-version").expect("version announcement");
+        let base: Value = serde_json::from_str(include_str!("../../release-base.json")).unwrap();
+        assert_eq!(version.value["version"], base["baseVersion"]);
     }
     #[test]
     fn only_the_room_host_can_assign_a_targeted_toh_role() {
