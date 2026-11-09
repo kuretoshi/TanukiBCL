@@ -81,6 +81,7 @@ export interface ILobbySettings {
 	sidekickTalkInVents: boolean;
 	nosNeutralKillerHaunting: boolean;
 	nosBuskerReviveHideVoice: boolean;
+	/** Legacy wire setting; published NoS voice positions are always used. */
 	nosVoicePositions: boolean;
 	nosGluttonySwallowVoice: NosGluttonySwallowVoice;
 	nosSizeVoiceEffect: boolean;

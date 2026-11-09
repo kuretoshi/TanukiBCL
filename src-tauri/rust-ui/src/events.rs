@@ -89,7 +89,7 @@ pub async fn set_setting(app: App, key: String, mut value: Value) -> Result<(), 
         let mut effective_key = key.clone();
         let mut effective_value = value.clone();
         if key == "myLobbySettings.impostorRadioOnlyMode" {
-            let forced = json!({"impostorRadioEnabled":true,"meetingGhostOnly":true,"deadOnly":false,"wallsBlockAudio":false,"visionHearing":false,"voiceEffectEnabled":false,"hearImpostorsInVents":false,"impostersHearImpostersInvent":false,"commsSabotage":false,"hearThroughCameras":false,"snrJumboVoice":false,"snrPushReverb":true,"jackalHearOutsideVents":false,"jackalTalkInVents":false,"jackalRadioEnabled":false,"sidekickHearOutsideVents":false,"sidekickTalkInVents":false,"nosVoicePositions":false});
+            let forced = json!({"impostorRadioEnabled":true,"meetingGhostOnly":true,"deadOnly":false,"wallsBlockAudio":false,"visionHearing":false,"voiceEffectEnabled":false,"hearImpostorsInVents":false,"impostersHearImpostersInvent":false,"commsSabotage":false,"hearThroughCameras":false,"snrJumboVoice":false,"snrPushReverb":true,"jackalHearOutsideVents":false,"jackalTalkInVents":false,"jackalRadioEnabled":false,"sidekickHearOutsideVents":false,"sidekickTalkInVents":false,"nosVoicePositions":true});
             let mut lobby = state.settings["myLobbySettings"].clone();
             if value == true {
                 let mut backup = json!({});
@@ -113,6 +113,7 @@ pub async fn set_setting(app: App, key: String, mut value: Value) -> Result<(), 
                 }
                 let _ = storage.remove_item("tanukibcl.impostorRadioOnlyBackup");
             }
+            lobby["nosVoicePositions"] = json!(true);
             lobby["impostorRadioOnlyMode"] = value.clone();
             effective_key = "myLobbySettings".into();
             effective_value = lobby;

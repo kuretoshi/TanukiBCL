@@ -526,7 +526,6 @@ fn lobby(s: &State) -> String {
             "myLobbySettings.jackalRadioEnabled",
             "myLobbySettings.nosNeutralKillerHaunting",
             "myLobbySettings.nosBuskerReviveHideVoice",
-            "myLobbySettings.nosVoicePositions",
             "myLobbySettings.nosFixerJammingVoiceBlock",
             "myLobbySettings.nosFixerJammingLowpass",
         ]);

@@ -271,13 +271,6 @@ const LobbySettingRows: React.FC<RowsProps> = function ({
 						/>
 					)}
 					<SwitchRow
-						label={t('settings.lobbysettings.nos_voice_positions')}
-						disabled={voiceSettingDisabled}
-						disabledReason={voiceSettingDisabledReason}
-						checked={values.nosVoicePositions === true}
-						onChange={(checked) => update({ nosVoicePositions: checked })}
-					/>
-					<SwitchRow
 						label={t('settings.lobbysettings.nos_fixer_jamming_voice_block')}
 						disabled={disabled}
 						disabledReason={disabledReason}

@@ -72,7 +72,6 @@ const RADIO_ONLY_FORCED_SETTINGS: Partial<ILobbySettings> = {
 	jackalRadioEnabled: false,
 	sidekickHearOutsideVents: false,
 	sidekickTalkInVents: false,
-	nosVoicePositions: false,
 };
 const RADIO_ONLY_BACKUP_KEYS = Object.keys(RADIO_ONLY_FORCED_SETTINGS).filter(
 	(key) => key !== 'impostorRadioOnlyMode'

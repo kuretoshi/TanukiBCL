@@ -33,6 +33,36 @@ pub struct Route {
     pub stereo: [[f32; 2]; 2],
     pub effects: Effects,
 }
+
+#[cfg(test)]
+mod gluttony_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn sample(addon: i32, x: f64) -> Value {
+        json!({"mod":"NoS","gameState":1,"map":1,"currentCamera":7,"closedDoors":[],
+            "nosAddonIds":["UchuAddon"],"nosLocalMicPosition":{"x":0.0,"y":0.0},
+            "players":[{"id":0,"clientId":1,"isLocal":true,"x":0.0,"y":0.0},
+                {"id":1,"clientId":2,"x":1.0,"y":0.0,"nativeNosRadioHearable0":true,
+                    "nosPlayer":{"speakerPositionX":x,"speakerPositionY":0.0,"addonData":addon}}]})
+    }
+
+    #[test]
+    fn nos_gluttony_recipient_and_radio() {
+        for positions in [false, true] {
+            let rules = json!({"maxDistance":5.32,"nosVoicePositions":positions,
+                "nosGluttonySwallowVoice":"mute","impostorRadioEnabled":true});
+            for radios in [vec![], vec![2]] {
+                let own = route(&sample(100, 1.0), 2, &rules, &Preferences::default(), &json!({}), &radios);
+                assert!(own.gains.iter().any(|g| *g > 0.0), "swallower must hear its own victim");
+                let hidden = route(&sample(100, 20.0), 2, &rules, &Preferences::default(), &json!({}), &radios);
+                assert_eq!(hidden.gains, [0.0; 2], "bystander must not hear a hidden victim");
+            }
+            let unrelated = route(&sample(0, 1000.0), 2, &rules, &Preferences::default(), &json!({}), &[2]);
+            assert!(unrelated.gains.iter().any(|g| *g > 0.0), "coordinates never classify swallowing");
+        }
+    }
+}
 pub fn can_use_radio(state: &Value, player: &Value, rules: &Value) -> bool {
     matches!(state["gameState"].as_i64(), Some(1 | 2))
         && !flag(player, "isDead")
@@ -155,7 +185,7 @@ pub(super) fn route_at(
             p["isDead"] = serde_json::json!(false);
         }
     }
-    let use_positions = state["mod"] == "NoS" && flag(rules, "nosVoicePositions");
+    let use_positions = state["mod"] == "NoS";
     if use_positions || roles::follows_head(state, &me) {
         let position = &state["nosLocalMicPosition"];
         if position["x"]
@@ -226,14 +256,14 @@ pub(super) fn route_at(
             .as_array()
             .is_some_and(|ids| ids.iter().any(|id| id == "UchuAddon"))
         && !flag(original_other, "isDead")
-        && other["nosPlayer"]["speakerPositionX"] == 1000
-        && other["nosPlayer"]["speakerPositionY"] == 1000;
+        && other["nosPlayer"]["addonData"].as_i64() == Some(100);
     let swallow_mode = if swallowed {
         rules["nosGluttonySwallowVoice"].as_str().unwrap_or("mute")
     } else {
         "normal"
     };
-    if swallow_mode == "mute" {
+    // NoS supplies a listener-specific endpoint; preserve it before radio bypasses.
+    if swallow_mode == "mute" && (to[0] - from[0]).hypot(to[1] - from[1]) > max {
         return silent;
     }
     if phase == 1

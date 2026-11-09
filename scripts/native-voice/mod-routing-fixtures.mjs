@@ -222,6 +222,7 @@ export function modRoutingFixtures() {
 					const s = state('NoS', phase);
 					s.nosAddonIds = ['UchuAddon', 'tanuki.bcl.roles'];
 					for (const p of s.players) nosRole(p, 'crew');
+					s.players[1].nosPlayer.addonData = 100;
 					s.players[1].nosPlayer.speakerPositionX = 1000;
 					s.players[1].nosPlayer.speakerPositionY = 1000;
 					s.players[1].nosPlayer.isJammed = jammed;
@@ -231,6 +232,20 @@ export function modRoutingFixtures() {
 						nosFixerJammingVoiceBlock: false,
 						nosFixerJammingLowpass: true,
 					});
+				}
+	// Listener-specific NoS endpoints remain authoritative, including radio bypasses.
+	for (const addonData of [0, 100, 101, 228])
+		for (const position of [false, true])
+			for (const endpoint of [1, 20, 1000])
+				for (const radios of [[], [2]]) {
+					const s = state('NoS');
+					s.nosAddonIds = ['UchuAddon'];
+					for (const p of s.players) nosRole(p, 'crew');
+					s.players[0].nosPlayer.micPositionX = 0;
+					s.players[0].nosPlayer.micPositionY = 0;
+					s.players[1].nosPlayer = { ...s.players[1].nosPlayer, addonData, speakerPositionX: endpoint, speakerPositionY: 0 };
+					s.players[1].nativeNosRadioHearable0 = true;
+					add(cases, s, { maxDistance: 5.32, impostorRadioEnabled: true, nosGluttonySwallowVoice: 'mute', nosVoicePositions: position }, radios);
 				}
 	for (const range of [0.5, 2, 8])
 		for (const x of [0, 1, 5, 12])

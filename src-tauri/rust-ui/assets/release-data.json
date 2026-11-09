@@ -67,7 +67,7 @@
       "sidekickHearOutsideVents": false,
       "sidekickTalkInVents": false,
       "nosNeutralKillerHaunting": false,
-      "nosVoicePositions": false,
+      "nosVoicePositions": true,
       "nosGluttonySwallowVoice": "mute",
       "tohNeutralKillerHaunting": false,
       "impostorRadioOnlyMode": false,
@@ -7907,6 +7907,122 @@
       "source": "GeneralSection.tsx"
     },
     {
+      "key": "enableOverlay",
+      "category": "overlay",
+      "label": "settings.overlay.enabled",
+      "kind": "SwitchRow",
+      "source": "OverlaySection.tsx"
+    },
+    {
+      "key": "compactOverlay",
+      "category": "overlay",
+      "label": "settings.overlay.compact",
+      "kind": "SwitchRow",
+      "source": "OverlaySection.tsx"
+    },
+    {
+      "key": "meetingOverlay",
+      "category": "overlay",
+      "label": "settings.overlay.meeting",
+      "kind": "SwitchRow",
+      "source": "OverlaySection.tsx"
+    },
+    {
+      "key": "overlayPosition",
+      "category": "overlay",
+      "label": "settings.overlay.pos",
+      "kind": "SelectRow",
+      "source": "OverlaySection.tsx"
+    },
+    {
+      "key": "hideCode",
+      "category": "streaming",
+      "label": "settings.streaming.hidecode",
+      "kind": "SwitchRow",
+      "source": "StreamingSection.tsx"
+    },
+    {
+      "key": "obsOverlay",
+      "category": "streaming",
+      "label": "settings.streaming.obs_overlay",
+      "kind": "SwitchRow",
+      "source": "StreamingSection.tsx"
+    },
+    {
+      "key": "serverURL",
+      "category": "advanced",
+      "label": "settings.advanced.voice_server",
+      "kind": "SelectRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "natFix",
+      "category": "advanced",
+      "label": "settings.advanced.nat_fix",
+      "kind": "SwitchRow",
+      "description": "settings.advanced.nat_fix_warning",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "serverURLs",
+      "category": "advanced",
+      "label": "settings.advanced.voice_server",
+      "kind": "SettingRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "mobileHost",
+      "category": "advanced",
+      "label": "settings.beta.mobilehost",
+      "kind": "SwitchRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "hardware_acceleration",
+      "category": "advanced",
+      "label": "settings.beta.hardware_acceleration",
+      "kind": "SwitchRow",
+      "description": "settings.beta.hardware_acceleration_warning",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "echoCancellation",
+      "category": "advanced",
+      "label": "settings.beta.echocancellation",
+      "kind": "SwitchRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "autoGainControl",
+      "category": "advanced",
+      "label": "settings.beta.autoGainControl",
+      "kind": "SwitchRow",
+      "description": "settings.beta.autoGainControl_warning",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "enableSpatialAudio",
+      "category": "advanced",
+      "label": "settings.beta.spatial_audio",
+      "kind": "SwitchRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "noiseSuppression",
+      "category": "advanced",
+      "label": "settings.beta.noiseSuppression",
+      "kind": "SwitchRow",
+      "source": "AdvancedSection.tsx"
+    },
+    {
+      "key": "oldSampleDebug",
+      "category": "advanced",
+      "label": "settings.beta.oldsampledebug",
+      "kind": "SwitchRow",
+      "description": "settings.beta.oldsampledebug_warning",
+      "source": "AdvancedSection.tsx"
+    },
+    {
       "key": "myLobbySettings.wallsBlockAudio",
       "category": "lobby",
       "label": "settings.lobbysettings.wallsblockaudio",
@@ -8088,13 +8204,6 @@
       "source": "LobbySection.tsx"
     },
     {
-      "key": "myLobbySettings.nosVoicePositions",
-      "category": "lobby",
-      "label": "settings.lobbysettings.nos_voice_positions",
-      "kind": "SwitchRow",
-      "source": "LobbySection.tsx"
-    },
-    {
       "key": "myLobbySettings.nosFixerJammingVoiceBlock",
       "category": "lobby",
       "label": "settings.lobbysettings.nos_fixer_jamming_voice_block",
@@ -8123,122 +8232,6 @@
       "label": "settings.lobbysettings.public_lobby.language",
       "kind": "SelectRow",
       "source": "LobbySection.tsx"
-    },
-    {
-      "key": "enableOverlay",
-      "category": "overlay",
-      "label": "settings.overlay.enabled",
-      "kind": "SwitchRow",
-      "source": "OverlaySection.tsx"
-    },
-    {
-      "key": "compactOverlay",
-      "category": "overlay",
-      "label": "settings.overlay.compact",
-      "kind": "SwitchRow",
-      "source": "OverlaySection.tsx"
-    },
-    {
-      "key": "meetingOverlay",
-      "category": "overlay",
-      "label": "settings.overlay.meeting",
-      "kind": "SwitchRow",
-      "source": "OverlaySection.tsx"
-    },
-    {
-      "key": "overlayPosition",
-      "category": "overlay",
-      "label": "settings.overlay.pos",
-      "kind": "SelectRow",
-      "source": "OverlaySection.tsx"
-    },
-    {
-      "key": "hideCode",
-      "category": "streaming",
-      "label": "settings.streaming.hidecode",
-      "kind": "SwitchRow",
-      "source": "StreamingSection.tsx"
-    },
-    {
-      "key": "obsOverlay",
-      "category": "streaming",
-      "label": "settings.streaming.obs_overlay",
-      "kind": "SwitchRow",
-      "source": "StreamingSection.tsx"
-    },
-    {
-      "key": "serverURL",
-      "category": "advanced",
-      "label": "settings.advanced.voice_server",
-      "kind": "SelectRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "natFix",
-      "category": "advanced",
-      "label": "settings.advanced.nat_fix",
-      "kind": "SwitchRow",
-      "description": "settings.advanced.nat_fix_warning",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "serverURLs",
-      "category": "advanced",
-      "label": "settings.advanced.voice_server",
-      "kind": "SettingRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "mobileHost",
-      "category": "advanced",
-      "label": "settings.beta.mobilehost",
-      "kind": "SwitchRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "hardware_acceleration",
-      "category": "advanced",
-      "label": "settings.beta.hardware_acceleration",
-      "kind": "SwitchRow",
-      "description": "settings.beta.hardware_acceleration_warning",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "echoCancellation",
-      "category": "advanced",
-      "label": "settings.beta.echocancellation",
-      "kind": "SwitchRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "autoGainControl",
-      "category": "advanced",
-      "label": "settings.beta.autoGainControl",
-      "kind": "SwitchRow",
-      "description": "settings.beta.autoGainControl_warning",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "enableSpatialAudio",
-      "category": "advanced",
-      "label": "settings.beta.spatial_audio",
-      "kind": "SwitchRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "noiseSuppression",
-      "category": "advanced",
-      "label": "settings.beta.noiseSuppression",
-      "kind": "SwitchRow",
-      "source": "AdvancedSection.tsx"
-    },
-    {
-      "key": "oldSampleDebug",
-      "category": "advanced",
-      "label": "settings.beta.oldsampledebug",
-      "kind": "SwitchRow",
-      "description": "settings.beta.oldsampledebug_warning",
-      "source": "AdvancedSection.tsx"
     }
   ]
 }
