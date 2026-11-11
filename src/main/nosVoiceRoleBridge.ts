@@ -8,6 +8,7 @@ import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { IpcMessages } from '../common/ipc-messages';
 import { closeHostVoice, sendHostVoice } from './nosHostVoiceRelay';
+import { registerParrotBridge } from './parrotBridge';
 import { registerHeroSpeechBridge } from './heroSpeechBridge';
 import { hasTanukiAddon } from '../common/tanukiAddon';
 
@@ -197,6 +198,7 @@ export function registerNosVoiceRoleBridge(
 		if (!hasTanukiAddon(state)) reset();
 		else if (!state?.isHost) closeHostVoice();
 	});
+	registerParrotBridge(ipcMain, getContext, isMainRenderer);
 	ipcMain.on('NOS_HOST_VOICE_SAMPLE', (event, player: unknown, rms: unknown, active: unknown) => {
 		if (!isMainRenderer(event.sender.id)) return;
 		const context = getContext();

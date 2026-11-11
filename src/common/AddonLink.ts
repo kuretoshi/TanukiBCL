@@ -1,3 +1,5 @@
+import { validParrot, type ParrotState } from './ParrotState';
+import { validWallEar, type WallEarState } from './WallEarState';
 import type { HeroTransformState } from './HeroTransformState';
 import { validHeroTransform } from './HeroTransformState';
 import type { InterviewState } from './InterviewState';
@@ -9,6 +11,8 @@ import type { DyingVoiceState } from './DyingVoiceState';
 import type { HeroSpeechPlayer } from './HeroSpeech';
 
 export interface AddonChannels {
+	parrots?: ParrotState[];
+	ears?: WallEarState[];
 	heroes: HeroTransformState[];
 	portable: { playerId: number; extraRange: number }[];
 	megaphones: MegaphoneState[];
@@ -49,14 +53,15 @@ function unique<T>(v: unknown, valid: (entry: T) => boolean, key: (entry: T) => 
 function speechValid(p: HeroSpeechPlayer, now: number): boolean {
 	return (
 		id(p.playerId) &&
-		['hero', 'ng'].includes(p.kind) &&
+		['hero', 'ng', 'stone'].includes(p.kind) &&
 		Number.isInteger(p.request) &&
 		range(p.request, 0, 2147483647) &&
 		time(p.expires, now + 16000) &&
 		Array.isArray(p.words) &&
 		p.words.length <= 3 &&
 		p.words.every((w) => typeof w === 'string' && w.length >= 2 && w.length <= 32) &&
-		(p.kind !== 'ng' || (p.request > 0 && p.words.length > 0))
+		(p.kind !== 'ng' || (p.request > 0 && p.words.length > 0)) &&
+		(p.kind !== 'stone' || (p.words.length === 0 && Number.isInteger(p.maxCharacters) && range(p.maxCharacters, 1, 12)))
 	);
 }
 export function validAddonChannels(v: unknown, now: number): v is AddonChannels {
@@ -64,6 +69,14 @@ export function validAddonChannels(v: unknown, now: number): v is AddonChannels 
 	const c = v as AddonChannels;
 	const key = (p: { playerId: number }) => p.playerId;
 	return (
+		(c.parrots === undefined ||
+			unique<ParrotState>(
+				c.parrots,
+				(p) => validParrot(p, now),
+				(p) => `${p.ownerId}|${p.birdId}`,
+				120
+			)) &&
+		(c.ears === undefined || unique<WallEarState>(c.ears, validWallEar, key)) &&
 		unique<HeroTransformState>(c.heroes, validHeroTransform, key) &&
 		unique<AddonChannels['portable'][number]>(c.portable, (p) => id(p.playerId) && range(p.extraRange, 0, 30), key) &&
 		unique<MegaphoneState>(
@@ -103,7 +116,7 @@ export function validAddonChannels(v: unknown, now: number): v is AddonChannels 
 			c.speech,
 			(p) => speechValid(p, now),
 			(p) => `${p.playerId}|${p.kind}`,
-			48
+			72
 		)
 	);
 }

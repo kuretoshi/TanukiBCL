@@ -9,12 +9,14 @@ import {
 import { GameState, type AmongUsState } from '../../common/AmongUsState';
 import { hasTanukiAddon } from '../../common/tanukiAddon';
 import { ipcRenderer } from '../lib/electron-bridge';
+import { recognisedStoneWord } from '../../common/VoiceStoneSpeech';
 
-type Message = { result?: { text?: string; partial?: string } };
+type Message = { result?: { text?: string; partial?: string; result?: unknown } };
 interface Recognizer {
 	on(event: string, callback: (message: Message) => void): void;
 	acceptWaveform(buffer: AudioBuffer): void;
 	remove(): void;
+	setWords?(enabled: boolean): void;
 }
 interface Model {
 	KaldiRecognizer: new (rate: number) => Recognizer;
@@ -190,7 +192,7 @@ export class HeroSpeech {
 	}
 	private signature(jobs: HeroSpeechPlayer[]): string {
 		return jobs
-			.map((p) => `${this.jobKey(p)}|${p.words.join('|')}`)
+			.map((p) => `${this.jobKey(p)}|${p.words.join('|')}|${p.maxCharacters ?? ''}`)
 			.sort()
 			.join(';');
 	}
@@ -201,6 +203,7 @@ export class HeroSpeech {
 		if (!found || !this.model || !this.state) return;
 		const [key, input] = found;
 		const recognizer = new this.model.KaldiRecognizer(this.context.sampleRate);
+		if (jobs.some((job) => job.kind === 'stone')) recognizer.setWords?.(true);
 		const processor = this.context.createScriptProcessor(2048, 1, 1);
 		const silent = this.context.createGain();
 		silent.gain.value = 0;
@@ -217,7 +220,7 @@ export class HeroSpeech {
 			partialAt: 0,
 		};
 		this.captures.set(player, capture);
-		recognizer.on('result', (message) => this.accept(capture, message.result?.text, true));
+		recognizer.on('result', (message) => this.accept(capture, message.result?.text, true, message.result?.result));
 		recognizer.on('partialresult', (message) => this.accept(capture, message.result?.partial, false));
 		processor.onaudioprocess = (event) => {
 			if (!input.allowed()) {
@@ -239,12 +242,20 @@ export class HeroSpeech {
 			this.permitted(capture.key, capture.input)
 		);
 	}
-	private accept(capture: Capture, text: unknown, final: boolean): void {
+	private accept(capture: Capture, text: unknown, final: boolean, tokens?: unknown): void {
 		if (!this.current(capture) || !capture.input.allowed()) return;
-		for (const job of capture.jobs) this.acceptJob(capture, job, text, final);
+		for (const job of capture.jobs) this.acceptJob(capture, job, text, final, tokens);
 	}
-	private acceptJob(capture: Capture, job: HeroSpeechPlayer, text: unknown, final: boolean): void {
+	private acceptJob(capture: Capture, job: HeroSpeechPlayer, text: unknown, final: boolean, tokens?: unknown): void {
 		if (job.expires <= Date.now() || this.handled.has(this.jobKey(job))) return;
+		if (job.kind === 'stone') {
+			const word = recognisedStoneWord(tokens, final, job.maxCharacters);
+			if (word) {
+				this.handled.add(this.jobKey(job));
+				ipcRenderer.send('NOS_HERO_SPEECH_WORD', capture.session, job.playerId, job.request, job.kind, word);
+			}
+			return;
+		}
 		const matched =
 			job.kind === 'ng' ? heardForbiddenWord(text, job.words, final) : heardTransformation(text, job.words, final);
 		if (!matched) {

@@ -187,7 +187,7 @@ try {
 		const automation = [],
 			snapshots = [];
 		let nodeId = 0;
-		const context = { currentTime: 0, createGain: node, createDelay: node };
+		const context = { currentTime: 0, createGain: node, createDelay: node, createWaveShaper: node };
 		function node() {
 			const id = nodeId++;
 			const param = () => ({

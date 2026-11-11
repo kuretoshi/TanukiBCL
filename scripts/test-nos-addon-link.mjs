@@ -50,6 +50,7 @@ function channels(now = Date.now()) {
 		speech: [
 			{ playerId: 1, kind: 'hero', request: 7, expires: now + 5000, words: ['変身'] },
 			{ playerId: 1, kind: 'ng', request: 8, expires: now + 5000, words: ['タスク'] },
+			{ playerId: 7, kind: 'stone', request: 9, expires: now + 5000, words: [], maxCharacters: 8 },
 		],
 	};
 }
@@ -89,7 +90,27 @@ try {
 	assert.equal(wire.addonLinkPort(0x54420000), undefined);
 	const a = await server(),
 		b = await server();
-	a.state(c);
+	a.state({
+		...c,
+		ears: [{ playerId: 1, x: 0, y: 0, range: 4 }],
+		parrots: [
+			{
+				ownerId: 1,
+				birdId: 9,
+				x: 0,
+				y: 0,
+				range: 4,
+				seconds: 3,
+				recordId: 0,
+				sourceId: 2,
+				started: 0,
+				clips: [],
+				playId: 0,
+				playClip: 0,
+				playStarted: 0,
+			},
+		],
+	});
 	b.state({ ...c, heroes: [{ playerId: 1, kind: 'evil' }] });
 	const first = new NosAddonLink(),
 		second = new NosAddonLink();
@@ -102,16 +123,20 @@ try {
 		tick
 	);
 	assert.equal(first.current(a.pid).channels.heroes[0].kind, 'super');
+	assert.equal(first.current(a.pid).channels.ears[0].range, 4, 'ear state crosses actual addon TCP link');
+	assert.equal(first.current(a.pid).channels.parrots[0].birdId, 9, 'parrot state crosses actual addon TCP');
+	assert.equal(first.current(a.pid).channels.parrots[0].seconds, 3, 'configured recording duration crosses addon TCP');
 	assert.equal(second.current(b.pid).channels.heroes[0].kind, 'evil');
 	assert.equal(first.current(b.pid), undefined);
 	assert(!first.sendCommand(b.pid, 'ready', { players: [1] }));
 	assert(first.sendCommand(a.pid, 'sample', { playerId: 1, rms: 0.5, active: true, host: false, version: 'test' }));
 	assert(first.sendCommand(a.pid, 'ready', { players: [1] }));
-	assert(first.sendCommand(a.pid, 'word', { playerId: 1, request: 7, speechKind: 'hero' }));
-	await until(() => a.messages.filter((m) => m.command).length >= 3, tick);
+	assert(first.sendCommand(a.pid, 'word', { playerId: 7, request: 9, speechKind: 'stone', word: '猫' }));
+	assert(first.sendCommand(a.pid, 'parrot', { ownerId: 1, birdId: 9, sourceId: 2 }));
+	await until(() => a.messages.filter((m) => m.command).length >= 4, tick);
 	assert.deepEqual(
 		a.messages.filter((m) => m.command).map((m) => m.command.kind),
-		['sample', 'ready', 'word']
+		['sample', 'ready', 'word', 'parrot']
 	);
 	assert.equal(b.messages.filter((m) => m.command).length, 0);
 	const empty = Object.fromEntries(Object.keys(c).map((key) => [key, []]));

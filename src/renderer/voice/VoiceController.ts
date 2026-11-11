@@ -62,6 +62,7 @@ radioOnAudio.volume = 0.02;
 
 const OVERLAY_VOICE_KEYS: (keyof VoiceSnapshot)[] = [
 	'otherTalking',
+	'cloneTalking',
 	'otherDead',
 	'socketClients',
 	'playerSocketIds',
@@ -87,6 +88,7 @@ const EMPTY_SNAPSHOT: VoiceSnapshot = {
 	muted: false,
 	deafened: false,
 	otherTalking: {},
+	cloneTalking: {},
 	otherDead: {},
 	socketClients: {},
 	playerSocketIds: {},
@@ -632,7 +634,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				this.activeNosRadioKind = undefined;
 				this.audio.setLocalRadioPending(false);
 				this.nosRadioKinds = {};
-				this.patch({ otherTalking: {}, impostorRadioClientId: -1, impostorRadioClientIds: [], nosRadiosByPlayer: {} });
+				this.patch({
+					otherTalking: {},
+					cloneTalking: {},
+					impostorRadioClientId: -1,
+					impostorRadioClientIds: [],
+					nosRadiosByPlayer: {},
+				});
 				this.prev.nosRadioSession = '';
 				this.prev.nosRadioSentSignature = '';
 				this.prev.nosRadioSentAt = 0;
@@ -1655,7 +1663,10 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 	}
 
 	private updatePeerAudio(state: AmongUsState, myPlayer: Player | undefined): void {
-		if (!state.players || !myPlayer) return;
+		if (!state.players || !myPlayer) {
+			this.patch({ cloneTalking: {} });
+			return;
+		}
 
 		const settings = SettingsStore.store;
 		const activeLobbySettings = this.activeLobbySettings;
@@ -1716,10 +1727,19 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 		}
 
 		this.audio.silencePeersExcept(handledPeerIds);
+		this.updateCloneTalking(state);
 
 		if (talkingChanged) {
 			this.patch({ otherTalking });
 		}
+	}
+
+	private updateCloneTalking(state: AmongUsState): void {
+		const cloneTalking: ClientBoolMap = {};
+		for (const player of state.players) {
+			if (!player.disconnected && this.audio.isCloneTalking(player.id)) cloneTalking[player.clientId] = true;
+		}
+		if (JSON.stringify(cloneTalking) !== JSON.stringify(this.snapshot.cloneTalking ?? {})) this.patch({ cloneTalking });
 	}
 
 	private publishMobileAndObs(state: AmongUsState, myPlayer: Player | undefined): void {
@@ -1762,7 +1782,7 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 				players: state.players.map((player, index) => ({
 					id: player.id,
 					clientId: player.clientId,
-					inVent: player.inVent,
+					inVent: player.inVent && !this.snapshot.cloneTalking?.[player.clientId],
 					isDead: player.isDead,
 					name: player.name,
 					hatId: appearances[index].hatId,
@@ -1788,9 +1808,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 						false,
 				})),
 			},
-			otherTalking,
+			otherTalking: Object.fromEntries(
+				state.players.map((p) => [p.clientId, !!otherTalking[p.clientId] || !!this.snapshot.cloneTalking?.[p.clientId]])
+			),
+			cloneTalking: this.snapshot.cloneTalking,
 			otherDead,
-			localTalking: talking,
+			localTalking: talking || !!this.snapshot.cloneTalking?.[myPlayer?.clientId ?? -1],
 			localIsAlive: !myPlayer?.isDead,
 			mod: state.mod,
 			oldMeetingHud: state.oldMeetingHud,
@@ -1817,11 +1840,12 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 
 		ipcRenderer.send(IpcMessages.SEND_TO_OVERLAY, IpcOverlayMessages.NOTIFY_VOICE_STATE_CHANGED, {
 			otherTalking,
+			cloneTalking: this.snapshot.cloneTalking,
 			playerSocketIds,
 			otherDead,
 			socketClients,
 			audioConnected,
-			localTalking: talking,
+			localTalking: talking || !!this.snapshot.cloneTalking?.[myPlayer?.clientId ?? -1],
 			localIsAlive: !myPlayer?.isDead,
 			impostorRadioClientId: visibleRadioClientIds[0] ?? -1,
 			impostorRadioClientIds: visibleRadioClientIds,

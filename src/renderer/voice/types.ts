@@ -79,6 +79,7 @@ export interface VoiceSnapshot {
 	muted: boolean;
 	deafened: boolean;
 	otherTalking: ClientBoolMap;
+	cloneTalking?: ClientBoolMap;
 	otherDead: ClientBoolMap;
 	socketClients: SocketClientMap;
 	playerSocketIds: numberStringMap;

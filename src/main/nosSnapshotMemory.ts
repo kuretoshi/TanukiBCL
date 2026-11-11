@@ -118,6 +118,17 @@ export function isNosLayout(value: unknown, pid: number): value is NosLayout {
 	);
 }
 
+function supportedNosSchema(v: NosLayout): boolean {
+	if ([20260918, 20260928, 20261005, 20261009].includes(v.schemaVersion)) return true;
+	return (
+		Number.isInteger(v.schemaVersion) &&
+		v.schemaVersion > 20261009 &&
+		v.schemaVersion <= 20991231 &&
+		Number.isInteger(v.snapshot?.addonData) &&
+		Number.isInteger(v.playerData?.addonData)
+	);
+}
+
 export function readNosSnapshot(
 	layout: NosLayout,
 	read: (address: number, size: number) => Buffer

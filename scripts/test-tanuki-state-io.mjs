@@ -70,6 +70,8 @@ Date.now = () => now;
 process.env.LOCALAPPDATA = 'C:\\tanuki-state-test';
 const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: GameState.TASKS };
 const entries = {
+	'ears-123.json': [{ playerId: 1, x: 0, y: 0, range: 4 }],
+	'limit-speech-123.json': [2],
 	'bibiri-echo.json': [{ playerId: 1, unixMs: 10000 }],
 	'megaphone-state-123.json': [{ playerId: 1, energy: 0.5, range: 10 }],
 	'interviews-123.json': [{ playerId: 1, started: 9900, seconds: 3, stopped: 0, visible: [1], playStarted: 0 }],
@@ -135,15 +137,17 @@ try {
 	assert.equal(io.sync, 0);
 	const first = await readTanukiAddonState(123, state);
 	assert.equal(io.sync, 0, 'active state reads must never use synchronous fs APIs');
-	assert.equal(io.opens.length, 6);
-	assert.equal(io.maxActive, 6, 'read independent role files concurrently');
+	assert.equal(io.opens.length, 8);
+	assert.equal(io.maxActive, 8, 'read independent role files concurrently');
+	assert.equal(first.nosWallEars[0].range, 4);
+	assert.deepEqual(first.nosLimitSpeechMuted, [2]);
 	assert.deepEqual(first.nosHeroTransforms, entries['hero-transforms-123.json']);
 	assert.deepEqual(first.nosMegaphones, entries['megaphone-state-123.json']);
 	assert.deepEqual(first.nosInterviews, entries['interviews-123.json']);
 	assert.equal(first.nosVoiceJamming, undefined);
 	reset();
 	const meeting = await readTanukiAddonState(123, { ...state, gameState: GameState.DISCUSSION });
-	assert.equal(io.opens.length, 4);
+	assert.equal(io.opens.length, 5);
 	assert.deepEqual(meeting.nosVoiceJamming, entries['voice-jamming-123.json']);
 	assert.equal(meeting.nosMegaphones, undefined);
 	assert.equal(meeting.nosHeroTransforms, undefined);
@@ -169,7 +173,8 @@ try {
 	assert.equal(expired.nosBibiriEchoes.length, 1);
 	reset(456);
 	const wrongPid = await readTanukiAddonState(123, state);
-	assert.ok(Object.values(wrongPid).every((value) => value === undefined || value.length === 0));
+	assert.ok(Object.entries(wrongPid).every(([key, value]) => key === 'nosLimitSpeechMuted' || value === undefined || value.length === 0));
+	assert.deepEqual(wrongPid.nosLimitSpeechMuted, [2], 'invalid heartbeat cannot unmute exhausted players');
 	reset();
 	io.files.get('hero-transforms-123.json').size = 8193;
 	io.files.get('interviews-123.json').text = '{';

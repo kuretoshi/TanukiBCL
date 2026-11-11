@@ -32,6 +32,7 @@ export interface ObsVoiceState {
 	assetSession?: string;
 	overlayState: OverlayState;
 	otherTalking: ClientBoolMap;
+	cloneTalking?: ClientBoolMap;
 	otherDead: ClientBoolMap;
 	localTalking: boolean;
 	localIsAlive: boolean;

@@ -17,6 +17,14 @@ async function load(entry, name, mocked = false) {
 const originalInterval=globalThis.setInterval, originalClear=globalThis.clearInterval, originalNow=Date.now;
 try {
  const common=await load('src/common/HeroSpeech.ts','policy');
+ const stoneSpeech=await load('src/common/VoiceStoneSpeech.ts','stone-policy');
+ const stoneTokens=[{word:'えっと',conf:.9},{word:'猫',conf:.95},{word:'です',conf:1}];
+ assert.equal(stoneSpeech.recognisedStoneWord(stoneTokens,true,8),'猫','only one word, never the sentence');
+ assert.equal(stoneSpeech.recognisedStoneWord(stoneTokens,false,8),undefined,'partial recognition cannot petrify');
+ assert.equal(stoneSpeech.recognisedStoneWord(undefined,true,8),undefined,'no fallback to full transcript');
+ assert.equal(stoneSpeech.recognisedStoneWord([{word:'猫',conf:.1},{word:'犬',conf:'bad'}],true,8),undefined);
+ assert(stoneSpeech.validStoneWord('インポスター',6)); assert(!stoneSpeech.validStoneWord('インポスター',5));
+ assert(!stoneSpeech.validStoneWord('猫 犬',8)); assert(!stoneSpeech.validStoneWord('<猫>',8));
  for(const host of [false,true]) for(const platform of [undefined,'desktop','web','mobile']) {
   assert.equal(common.shouldRecogniseSpeech(true,host,platform),true);
   assert.equal(common.shouldRecogniseSpeech(false,host,platform),host && ['web','mobile'].includes(platform));
@@ -41,6 +49,9 @@ try {
  assert(!validHeroSpeechDescriptor({...envelope,players:[job(1),job(1)]},99,10000),'duplicate jobs rejected');
  assert(!validHeroSpeechDescriptor(envelope,98,10000),'other game PID rejected');
  assert(!validHeroSpeechDescriptor(envelope,99,12000),'stale descriptor rejected');
+ const stoneJob={...job(1,'stone',20),maxCharacters:8};
+ assert(validHeroSpeechDescriptor({...envelope,players:[job(1),job(1,'ng'),stoneJob]},99,10000),'three jobs can coexist');
+ assert(!validHeroSpeechDescriptor({...envelope,players:[{...stoneJob,maxCharacters:13}]},99,10000));
  const sent=[], recognizers=[];
  let snapshot;
  globalThis.speechTestIpc={invoke:async()=>snapshot, send:(...args)=>sent.push(args)};
@@ -49,6 +60,7 @@ try {
  const fakeModel={terminate(){},KaldiRecognizer:class {
   events={}; removed=false;
   constructor(){recognizers.push(this)} on(name,handler){this.events[name]=handler} remove(){this.removed=true} acceptWaveform(){}
+  setWords(value){this.wordTiming=value}
  }};
  globalThis.window={Vosk:{createModel:async()=>fakeModel}};
  globalThis.document={createElement:()=>({}),head:{appendChild:element=>element.onload()}};
@@ -80,6 +92,19 @@ try {
  assert.equal(heroReports(),beforeCustom,'old keyword and another hero keyword cannot activate custom jobs');
  customLocal.events.result({result:{text:'じょうちゃく'}}); customWeb.events.result({result:{text:'闇落ち'}});
  assert.equal(heroReports(),beforeCustom+2,'local PC and host-recognised Web jobs use their own configured word');
+ snapshot={...snapshot,players:[stoneJob,{...stoneJob,playerId:3},{...stoneJob,playerId:2}]};
+ await speech.poll();
+ assert.deepEqual([...speech.captures.keys()].sort(),[1,3],'stone recognition keeps distributed routing');
+ const stoneLocal=speech.captures.get(1).recognizer;
+ assert.equal(stoneLocal.wordTiming,true,'word timing enabled');
+ const stoneReports=()=>sent.filter(a=>a[0]==='NOS_HERO_SPEECH_WORD' && a[4]==='stone');
+ stoneLocal.events.partialresult({result:{partial:'猫'}});
+ stoneLocal.events.result({result:{text:'猫です'}});
+ assert.equal(stoneReports().length,0,'partial and full-transcript-only results ignored');
+ stoneLocal.events.result({result:{text:'えっと 猫 です',result:stoneTokens}});
+ stoneLocal.events.result({result:{text:'犬',result:[{word:'犬',conf:1}]}});
+ assert.equal(stoneReports().length,1,'one stone per request'); assert.equal(stoneReports()[0][5],'猫');
+ snapshot={...snapshot,players:[{...job(3,'hero',9),words:['闇落ち','やみおち']}]};
  speech.setContext({...state,isHost:false}); await speech.poll();
  assert.equal(speech.captures.size,0,'nonhost cannot keep remote captures');
  snapshot={...snapshot,players:[job(1,'hero',2),job(3)]}; await speech.poll();

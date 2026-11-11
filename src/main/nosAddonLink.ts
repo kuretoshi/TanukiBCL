@@ -65,7 +65,7 @@ export class NosAddonLink {
 	endpoint(): number {
 		return this.port;
 	}
-	sendCommand(pid: number, kind: 'sample' | 'ready' | 'word', fields: Record<string, unknown>): boolean {
+	sendCommand(pid: number, kind: 'sample' | 'ready' | 'word' | 'parrot', fields: Record<string, unknown>): boolean {
 		return !!this.current(pid) && this.send(kind, fields);
 	}
 	private discover(now: number): number | undefined {

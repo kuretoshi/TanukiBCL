@@ -1,9 +1,10 @@
 export interface HeroSpeechPlayer {
 	playerId: number;
-	kind: 'hero' | 'ng';
+	kind: 'hero' | 'ng' | 'stone';
 	request: number;
 	expires: number;
 	words: string[];
+	maxCharacters?: number;
 }
 export type SpeechPlatform = 'desktop' | 'web' | 'mobile';
 export function shouldRecogniseSpeech(local: boolean, host: boolean, platform?: SpeechPlatform): boolean {

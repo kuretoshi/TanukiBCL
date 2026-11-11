@@ -2,6 +2,7 @@ import { nosAddonLink } from './nosAddonLink';
 import { readTanukiAddonData } from '../common/TanukiAddonData';
 import type { NosSnapshot } from '../common/NosSnapshot';
 import { parseLimitSpeechState } from './limitSpeechState';
+import { parseWallEarState } from './wallEarState';
 import { join } from 'node:path';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import { hasTanukiAddon } from '../common/tanukiAddon';
@@ -30,6 +31,8 @@ export async function readTanukiAddonState(
 	const linked = nosAddonLink.current(pid)?.channels;
 	if (linked)
 		return {
+			nosParrots: linked.parrots ?? [],
+			nosWallEars: tasks ? linked.ears ?? [] : undefined,
 			nosBibiriEchoes: linked.echoes.filter((e) => Date.now() - e.unixMs <= 3000),
 			nosMegaphones: tasks ? linked.megaphones : undefined,
 			nosInterviews: linked.interviews,
@@ -42,6 +45,7 @@ export async function readTanukiAddonState(
 	const scalar = tasks ? readTanukiAddonData(snapshot) : undefined;
 	const root = join(process.env.LOCALAPPDATA, 'TanukiBCL', 'NoS');
 	const files = [
+		['nosWallEars', tasks, `ears-${pid}.json`, 8192, parseWallEarState],
 		['nosLimitSpeechMuted', tasks || meeting, `limit-speech-${pid}.json`, 16384, parseLimitSpeechState],
 		['nosBibiriEchoes', tasks || meeting, 'bibiri-echo.json', 16384, parseBibiriEchoState],
 		['nosMegaphones', tasks, `megaphone-state-${pid}.json`, 16384, parseMegaphoneState],

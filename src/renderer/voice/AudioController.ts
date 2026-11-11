@@ -20,6 +20,7 @@ import { ExtendedAudioElement, PeerAudioNodes, RadioEchoNodes } from './types';
 import { createTunedVoiceEffect } from './tunedVoiceEffect';
 import { createBibiriEcho, updateBibiriEcho, disconnectBibiriEcho, stopBibiriEcho } from './bibiriEcho';
 import { createMegaphoneRecording } from './megaphoneRecording';
+import { createParrotRecording } from './parrotRecording';
 import { createInterviewerRecording } from './interviewerRecording';
 import { HeroSpeech } from './heroSpeech';
 import { createDyingVoiceRecording, inDyingVoiceRange } from './dyingVoiceRecording';
@@ -51,6 +52,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	private sourceFilterReady = false;
 	private startToken = 0;
 	private inputToken = 0;
+	private parrotCommsBlocked = false;
+	private parrots?: ReturnType<typeof createParrotRecording>;
 	private interviewer?: ReturnType<typeof createInterviewerRecording>;
 	private heroSpeech?: HeroSpeech;
 	private speechPlatforms = new Map<string, unknown>();
@@ -316,6 +319,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		this.audioListener?.destroy();
 		this.audioListener = undefined;
 
+		this.parrots?.removeInput('local');
 		this.interviewer?.removeInput('local');
 		this.heroSpeech?.removeInput('local');
 		this.interviewMic?.source.disconnect();
@@ -518,7 +522,10 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	toggleDeafen(): void {
 		this.deafenedState = !this.deafenedState;
-		if (this.deafenedState) this.interviewer?.silence();
+		if (this.deafenedState) {
+			this.interviewer?.silence();
+			this.parrots?.silence();
+		}
 		if (this.deafenedState) this.localMegaphoneRecording?.cancel();
 		if (this.deafenedState)
 			for (const peer of this.peers.values()) {
@@ -605,6 +612,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 	removePeer(peerId: string): void {
 		this.speechPlatforms.delete(peerId);
+		this.parrots?.removeInput(peerId);
 		this.interviewer?.removeInput(peerId);
 		this.heroSpeech?.removeInput(peerId);
 		this.interviewMuted.delete(peerId);
@@ -656,6 +664,9 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (!this.context || !this.masterGain) return;
 		this.tanukiAddonActive = true;
 		this.interviewer ??= createInterviewerRecording(this.context, this.masterGain);
+		this.parrots ??= createParrotRecording(this.context, this.masterGain, (owner, bird, source) =>
+			ipcRenderer.send('NOS_PARROT_CAPTURE', owner, bird, source)
+		);
 		if (!this.heroSpeech) {
 			this.heroSpeech = new HeroSpeech(this.context);
 			this.heroSpeech.setContext(state);
@@ -666,6 +677,8 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private teardownTanukiAddon(): void {
+		this.parrots?.disconnect();
+		this.parrots = undefined;
 		this.tanukiAddonActive = false;
 		this.stopTanukiInput();
 		this.heroSpeech?.dispose();
@@ -704,6 +717,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	silenceAllPeers(): void {
+		this.parrots?.clear();
 		this.interviewer?.clear();
 		this.localMegaphoneRecording?.cancel();
 		for (const peer of this.peers.values()) peer.megaphoneRecording?.cancel();
@@ -727,6 +741,10 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		}
 	}
 
+	isCloneTalking(id: number): boolean {
+		return this.parrots?.isCloneTalking(id) ?? false;
+	}
+
 	private updateInterviewer(state: AmongUsState): void {
 		const local = state.players.find((player) => player.isLocal);
 		if (local && this.stream && this.context) {
@@ -734,6 +752,21 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 				this.interviewMic?.source.disconnect();
 				this.interviewMic = { stream: this.stream, source: this.context.createMediaStreamSource(this.stream) };
 			}
+			if (state.nosParrots?.length)
+				this.parrots?.setInput(
+					'local',
+					this.interviewMic.source,
+					local.id,
+					() =>
+						!this.parrotCommsBlocked &&
+						!this.mutedState &&
+						!this.deafenedState &&
+						!this.jammedState &&
+						!this.remoteVoiceInput &&
+						!this.radioPending &&
+						!this.localRadioPending &&
+						!!this.stream?.getAudioTracks()[0]?.enabled
+				);
 			this.interviewer?.setInput(
 				'local',
 				this.interviewMic.source,
@@ -746,6 +779,13 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 					!!this.stream?.getAudioTracks()[0]?.enabled
 			);
 		}
+		this.parrots?.update(
+			state.nosParrots ?? [],
+			state,
+			local,
+			this.deafenedState || this.parrotCommsBlocked ? 0 : SettingsStore.store.masterVolume / 100,
+			Date.now()
+		);
 		this.interviewer?.update(
 			state.nosInterviews ?? [],
 			state.mod === 'NoS' && (state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION),
@@ -841,11 +881,24 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		nosJackalRadioHearable = false,
 		nosImpostorRadioHearable = false
 	): number | null {
+		this.parrotCommsBlocked = activeLobbySettings.commsSabotage && state.comsSabotaged && !me.isImpostor;
+		if (this.parrotCommsBlocked) this.parrots?.silence();
 		const peer = this.peers.get(peerId);
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
 		if (hasTanukiAddon(state)) {
-			this.heroSpeech?.setInput(peerId, peer.source, other.id, () => !other.disconnected && !other.isDead);
+			this.heroSpeech?.setInput(peerId, peer.source, other.id, () => !this.parrotCommsBlocked && !other.disconnected && !other.isDead);
+		if (state.nosParrots?.length)
+			this.parrots?.setInput(
+				peerId,
+				peer.source,
+				other.id,
+				() =>
+					!this.deafenedState &&
+					!other.disconnected &&
+					!this.interviewMuted.has(peerId) &&
+					!(impostorRadioClientIds ?? [impostorRadioClientId]).includes(other.clientId)
+			);
 			this.interviewer?.setInput(
 				peerId,
 				peer.source,
@@ -1015,6 +1068,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			: result.gain;
 	}
 	setMegaphonePlaybackVolume(peerId: string, volume: number): void {
+		this.parrots?.setVolume(peerId, volume);
 		if (volume > 0) this.interviewMuted.delete(peerId);
 		else this.interviewMuted.add(peerId);
 		this.peers.get(peerId)?.dyingVoiceRecording?.setVolume(volume);

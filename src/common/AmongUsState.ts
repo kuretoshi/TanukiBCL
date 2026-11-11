@@ -7,6 +7,8 @@ import type { NosRole } from './NosRole';
 import type { MegaphoneState } from './MegaphoneState';
 
 export interface AmongUsState {
+	nosParrots?: import('./ParrotState').ParrotState[];
+	nosWallEars?: import('./WallEarState').WallEarState[];
 	nosLimitSpeechMuted?: number[];
 	nosHeroTransforms?: import('./HeroTransformState').HeroTransformState[];
 	nosVoiceJamming?: import('./VoiceJammingState').VoiceJammingState[];
@@ -182,6 +184,7 @@ export interface numberStringMap {
 
 export interface VoiceState {
 	otherTalking: ClientBoolMap;
+	cloneTalking?: ClientBoolMap;
 	playerSocketIds: numberStringMap;
 	otherDead: ClientBoolMap;
 	socketClients: SocketClientMap;

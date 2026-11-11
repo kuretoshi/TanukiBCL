@@ -11,7 +11,7 @@ async function bundle(entry) {
 	return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].contents).toString('base64')}`);
 }
 const { MobileCosmetics } = await bundle('src/renderer/voice/MobileCosmetics.ts');
-const { NosCosmeticAssets } = await bundle('../BetterCrewlink-mobile/src/app/lib/nosCosmeticAssets.ts');
+const { NosCosmeticAssets } = await bundle(join(process.env.BCL_MOBILE_REPO ?? '../BetterCrewlink-mobile', 'src/app/lib/nosCosmeticAssets.ts'));
 const colors = [0xff0000ff, 0x00ff00ff, 0x0000ffff];
 const images = await Promise.all(
 	colors.map((color) => new Jimp({ width: 300, height: 375, color }).getBuffer('image/png'))

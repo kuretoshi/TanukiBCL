@@ -274,9 +274,11 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 
 	players?.forEach((player) => {
 		const vadHidden = player.shiftedColor !== -1 && gameState.gameState !== GameState.DISCUSSION;
+		const cloneTalking = !!voiceState.cloneTalking?.[player.clientId];
 		const voiceActivity =
-			(!vadHidden || player.isLocal) &&
-			(voiceState.otherTalking[player.clientId] || (player.isLocal && voiceState.localTalking));
+			cloneTalking ||
+			((!vadHidden || player.isLocal) &&
+				(voiceState.otherTalking[player.clientId] || (player.isLocal && voiceState.localTalking)));
 		if (!voiceActivity && compactOverlay) {
 			return;
 		}
@@ -285,7 +287,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 		if (!connected && !player.isLocal) {
 			return;
 		}
-		const talking = voiceActivity && !player.inVent;
+		const talking = cloneTalking || (voiceActivity && !player.inVent);
 		// const audio = voiceState.audioConnected[peer];
 		avatars.push(
 			<div key={player.id} className="player_wrapper">
@@ -306,7 +308,7 @@ const AvatarOverlay: React.FC<AvatarOverlayProps> = ({
 						deafened={voiceState.deafened && player.isLocal}
 						connectionState={'connected'}
 						talking={talking}
-						borderColor={player.isLocal && vadHidden ? 'gray' : '#2ecc71'}
+						borderColor={player.isLocal && vadHidden && !cloneTalking ? 'gray' : '#2ecc71'}
 						isUsingRadio={
 							voiceState.impostorRadioClientIds?.includes(player.clientId) ??
 							voiceState.impostorRadioClientId == player.clientId

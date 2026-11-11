@@ -6,6 +6,7 @@ import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import type { HeroSpeechPlayer } from '../common/HeroSpeech';
 import { hasTanukiAddon } from '../common/tanukiAddon';
+import { validStoneWord } from '../common/VoiceStoneSpeech';
 
 interface Descriptor {
 	unified?: boolean;
@@ -32,7 +33,7 @@ export function validHeroSpeechDescriptor(value: unknown, pid: number, now: numb
 		!/^[a-f0-9]{32}$/.test(d.token) ||
 		!Array.isArray(d.players) ||
 		d.players.length < 1 ||
-		d.players.length > 48
+		d.players.length > 72
 	)
 		return false;
 	const ids = new Set<string>();
@@ -42,7 +43,7 @@ export function validHeroSpeechDescriptor(value: unknown, pid: number, now: numb
 			!Number.isInteger(p.playerId) ||
 			p.playerId < 0 ||
 			p.playerId > 255 ||
-			!['hero', 'ng'].includes(p.kind) ||
+			!['hero', 'ng', 'stone'].includes(p.kind) ||
 			ids.has(`${p.playerId}|${p.kind}`) ||
 			!Number.isInteger(p.request) ||
 			p.request < 0 ||
@@ -51,6 +52,8 @@ export function validHeroSpeechDescriptor(value: unknown, pid: number, now: numb
 			p.words.length > 3 ||
 			!p.words.every((w) => typeof w === 'string' && w.length >= 2 && w.length <= 32) ||
 			(p.kind === 'ng' && (p.request === 0 || p.words.length === 0)) ||
+			(p.kind === 'stone' &&
+				(p.words.length !== 0 || !Number.isInteger(p.maxCharacters) || p.maxCharacters < 1 || p.maxCharacters > 12)) ||
 			!Number.isSafeInteger(p.expires) ||
 			(p.request > 0 && (p.expires < now - 100 || p.expires > now + 16000))
 		)
@@ -136,21 +139,36 @@ export function registerHeroSpeechBridge(
 		const state = getContext().state;
 		return !!state && (state.isHost || state.players.some((p) => p.isLocal && p.id === id));
 	}
-	ipc.on('NOS_HERO_SPEECH_WORD', (event, session: unknown, player: unknown, request: unknown, kind: unknown) => {
-		if (!isMainRenderer(event.sender.id)) return;
-		const d = descriptor();
-		const armed = d?.players.find(
-			(p) => p.playerId === player && p.request === request && p.kind === kind && p.request > 0
-		);
-		if (!d || session !== d.token || !armed || armed.expires <= Date.now() || !permitted(player)) return;
-		if (d.unified) {
-			nosAddonLink.sendCommand(d.pid, 'word', { playerId: armed.playerId, request: armed.request, speechKind: kind });
-			return;
+	ipc.on(
+		'NOS_HERO_SPEECH_WORD',
+		(event, session: unknown, player: unknown, request: unknown, kind: unknown, word: unknown) => {
+			if (!isMainRenderer(event.sender.id)) return;
+			const d = descriptor();
+			const armed = d?.players.find(
+				(p) => p.playerId === player && p.request === request && p.kind === kind && p.request > 0
+			);
+			if (!d || session !== d.token || !armed || armed.expires <= Date.now() || !permitted(player)) return;
+			if (kind === 'stone' && !validStoneWord(word, armed.maxCharacters)) return;
+			if (d.unified) {
+				nosAddonLink.sendCommand(d.pid, 'word', {
+					playerId: armed.playerId,
+					request: armed.request,
+					speechKind: kind,
+					...(kind === 'stone' ? { word } : {}),
+				});
+				return;
+			}
+			const payload =
+				kind === 'stone'
+					? `stone|${Buffer.from(word as string, 'utf8').toString('base64')}`
+					: kind === 'ng'
+						? 'ng'
+						: 'henshin';
+			send(
+				`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${payload}`,
+				d.port
+			);
 		}
-		send(
-			`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${kind === 'ng' ? 'ng' : 'henshin'}`,
-			d.port
-		);
-	});
+	);
 	return close;
 }
