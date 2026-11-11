@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Local BetterCrewLink windows and file pickers",
+  "windows": ["main", "settings", "lobbies", "debug", "overlay", "player-history"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-close", "dialog:allow-open", "dialog:allow-save"]
+}

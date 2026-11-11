@@ -732,14 +732,14 @@ assert.deepEqual(
 	spatial({ state: nosState, other: nosOther, activeLobbySettings: nosPositionSettings }).panPosition,
 	[1.5, 0]
 );
-assert.equal(spatial({ state: nosState, other: nosOther }).gain, 1, 'NoS positions apply without an option');
+assert.equal(spatial({ state: nosState, other: nosOther }).gain, 0, 'NoS position override is off by default');
 assert.equal(
 	spatial({
 		state: nosState,
 		other: nosOther,
 		activeLobbySettings: { ...nosPositionSettings, nosVoicePositions: false },
 	}).gain,
-	1
+	0
 );
 assert.equal(
 	spatial({ state: { ...nosState, mod: 'SUPER_NEW_ROLES' }, other: nosOther, activeLobbySettings: nosPositionSettings })
@@ -1534,12 +1534,12 @@ const checkProcess = vm.runInNewContext(
 	{
 		modList,
 		getProcesses: () => runningProcesses,
+		nosAddonLink: { close() {} },
 		targetProcessName: 'Among Us.exe',
 		targetProcessId: 0,
 		targetProcessIndex: 0,
 		console: { log() {} },
 		IpcRendererMessages: { NOTIFY_GAME_OPENED: 'opened' },
-		nosAddonLink: { close() {} },
 	}
 ).checkProcessOpen;
 const switchingReader = {

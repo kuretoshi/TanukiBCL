@@ -5,6 +5,7 @@ import Button from '@mui/material/Button';
 import { ExtendedAudioElement } from '../voice/types';
 import { createVoiceEffectPreview, VoiceEffectPreview } from './voiceEffectPreview';
 import type { VoiceEffectId, VoiceEffectTuning } from '../../common/VoiceEffectTuning';
+import { ipcRenderer, isNativeVoice } from '../lib/electron-bridge';
 
 interface TestVoiceEffectButtonProps {
 	t: (key: string) => string;
@@ -30,6 +31,7 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	const stopRequestedRef = useRef(false);
 
 	const stopTest = () => {
+		if (isNativeVoice) void ipcRenderer.invoke('native:voice:effect-preview', null);
 		stopRequestedRef.current = true;
 		cleanupRef.current?.();
 		cleanupRef.current = undefined;
@@ -41,6 +43,8 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 	useEffect(() => stopTest, []);
 
 	useEffect(() => {
+		if (isNativeVoice && playingRef.current)
+			void ipcRenderer.invoke('native:voice:effect-preview', { effectKind, tuning });
 		if (effectNodesRef.current) {
 			effectNodesRef.current.update(tuning);
 		}
@@ -55,6 +59,20 @@ const TestVoiceEffectButton: React.FC<TestVoiceEffectButtonProps> = ({
 		stopRequestedRef.current = false;
 		playingRef.current = true;
 		setPlaying(true);
+		if (isNativeVoice) {
+			try {
+				await ipcRenderer.invoke('native:voice:effect-preview', { effectKind, tuning: tuningRef.current });
+				const timer = setTimeout(stopTest, 30000);
+				cleanupRef.current = () => {
+					clearTimeout(timer);
+					void ipcRenderer.invoke('native:voice:effect-preview', null);
+				};
+			} catch (error) {
+				console.warn('Native voice effect preview failed', error);
+				stopTest();
+			}
+			return;
+		}
 		let pendingStream: MediaStream | undefined;
 		let pendingContext: AudioContext | undefined;
 

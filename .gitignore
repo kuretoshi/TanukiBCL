@@ -60,3 +60,7 @@ __pycache__/
 /scripts/fixtures/toh-reader/**/obj/
 /src/renderer/public/speech/vosk.js
 /src/renderer/public/speech/model-ja.tar.gz
+
+# Tauri build outputs
+/src-tauri/target/
+/src-tauri/gen/

@@ -28,7 +28,7 @@ for (const lite of [false, true]) for (const mod of ['SUPER_NEW_ROLES', 'NoS', '
   for (const label of labels) assert.equal(markup.includes(label), mod === 'SUPER_NEW_ROLES' || (mod === 'NoS' && label === translations.settings.lobbysettings.nos_neutral_killer_haunting), label);
   assert.equal(markup.includes(sharedGhostLabel), mod === 'TOH4E');
   assert.equal(markup.includes(translations.settings.lobbysettings.toh_section), mod === 'TOH4E');
-  assert.equal(markup.includes(translations.settings.lobbysettings.nos_voice_positions), false);
+  assert.equal(markup.includes(translations.settings.lobbysettings.nos_voice_positions), mod === 'NoS');
   // Lite displays the host's enabled values read-only, normal has editable switches.
   assert.equal(/<input[^>]+disabled=""[^>]+type="checkbox"/.test(markup), lite);
 }

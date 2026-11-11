@@ -23,7 +23,7 @@ import { ILobbySettings } from '../../common/ISettings';
 import { GameState } from '../../common/AmongUsState';
 import { IpcHandlerMessages } from '../../common/ipc-messages';
 import { GameStateContext, SettingsContext } from '../state/contexts';
-import { ipcRenderer } from '../lib/electron-bridge';
+import { ipcRenderer, isNativeVoice } from '../lib/electron-bridge';
 import SettingsStore from './SettingsStore';
 import { useConfirmDialog } from './SettingsControls';
 import GeneralSection from './sections/GeneralSection';
@@ -168,6 +168,29 @@ const SettingsPanel: React.FC<SettingsPanelProps> = function ({ t, activeLobbySe
 	}, [category, flushMyLobbyDraft]);
 
 	useEffect(() => {
+		if (isNativeVoice) {
+			void ipcRenderer
+				.invoke('native:voice:devices')
+				.then((value) => {
+					const devices = value as { inputs: { id: string; name: string }[]; outputs: { id: string; name: string }[] };
+					setDevices(
+						(['inputs', 'outputs'] as const).flatMap((key) => [
+							{
+								id: 'default',
+								kind: key === 'inputs' ? ('audioinput' as const) : ('audiooutput' as const),
+								label: t('buttons.default'),
+							},
+							...devices[key].map((device) => ({
+								id: device.id,
+								kind: key === 'inputs' ? ('audioinput' as const) : ('audiooutput' as const),
+								label: device.name,
+							})),
+						])
+					);
+				})
+				.catch(() => setDevices([]));
+			return;
+		}
 		navigator.mediaDevices.enumerateDevices().then((mediaDevices) =>
 			setDevices(
 				mediaDevices.map((device) => {

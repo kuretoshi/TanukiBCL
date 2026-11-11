@@ -79,6 +79,8 @@ ipcMain.on(IpcSyncMessages.GET_INITIAL_STATE, (event) => {
 	event.returnValue = gameReader.lastState;
 });
 
+ipcMain.handle(IpcSyncMessages.GET_INITIAL_STATE, () => (readingGame ? gameReader.lastState : null));
+
 ipcMain.handle(IpcMessages.REQUEST_MOD, () => {
 	return gameReader?.loadedMod.id ?? 'NONE';
 });

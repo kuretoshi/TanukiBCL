@@ -1,0 +1,82 @@
+{
+  "version": "3.2.64-tauri-beta.1",
+  "baseTag": "v3.2.64",
+  "baseCommit": "a309dbff11846f4069bf6e101180dcc475415edf",
+  "verifiedAt": "2026-11-11T01:13:29.984Z",
+  "passed": true,
+  "executableSha256": "3a5dac609f59fc6c986e0663f81f65387c491ac08b1fe538566b085a85ceb036",
+  "installerSha256": "b264f84bec0cffb149d635cff7edf1914b8db847ba18a20733f94431bd4244ae",
+  "installerBytes": 59440905,
+  "rustUnitTests": {
+    "passed": 115,
+    "native": 97,
+    "clr": 2,
+    "ui": 16
+  },
+  "releaseBase": {
+    "pinnedCoreFiles": 135
+  },
+  "nativeRouting": {
+    "cases": 17246,
+    "source": "v3.2.64 spatialAudio.ts / ColliderMap.ts / path-intersection 4.1.0",
+    "report": ".tools/native-voice-routing/run-1794359410205/result.json"
+  },
+  "nativeModReaders": {
+    "cases": 220,
+    "snapshots": 108,
+    "architectures": [
+      4,
+      8
+    ],
+    "report": ".tools/native-mod-readers/run-1794359409366/result.json"
+  },
+  "nativeEffects": {
+    "cases": 4,
+    "report": ".tools/native-voice-effects/run-1794359410042/result.json"
+  },
+  "nativeRolePlayback": {
+    "scenarios": [
+      "nos-release64-clone",
+      "nos-release64-parrot",
+      "nos-release64-wall-ear"
+    ],
+    "report": ".tools/native-voice-features/run-1794359410205/result.json"
+  },
+  "interoperability": {
+    "peer": "webview2",
+    "sentPackets": 1055,
+    "receivedPackets": 1063,
+    "report": ".tools/native-voice-test/interop-1794359410203/result.json"
+  },
+  "nativeSpeechModel": {
+    "passed": true,
+    "nativeModelLoaded": true
+  },
+  "uiSmoke": {
+    "syntheticPlayers": 13,
+    "seconds": 90,
+    "samples": 36,
+    "maximumObservedNativeTreePrivateCommitMiB": 14.49,
+    "webViewMemoryAttributed": false,
+    "matchedMemoryBenchmark": false
+  },
+  "preservation": {
+    "electronFiles": 328,
+    "olderTauriArtifacts": 4,
+    "identifier": "work.kuretoshi.tanukibcl.tauri.beta"
+  },
+  "additionalChecks": [
+    "Release64 desktop/mobile parrot and clone PCM tests",
+    "Wall-ear spatial/privacy, transport and legacy-file freshness",
+    "Voice-stone word bounds, sender/session/request guards and UTF-8 transport",
+    "Actual NoS addon TCP/UDP servers",
+    "Distributed speech, current NoS positions, Gluttony and Rokuro regressions",
+    "Desktop-to-web cosmetics transport"
+  ],
+  "limitations": [
+    "Synthetic PCM and injected game-state tests; physical microphones, multiple people in real matches, internet TURN and long sessions remain unverified.",
+    "A broad comparison against separate sibling mobile sources differs on existing megaphone effect tuning; the role-specific checks pass. This update targets the published Electron desktop behavior.",
+    "The UI smoke samples the owned native process tree. Shared WebView2 browser processes are not fully attributed, so these samples are not total application memory. Earlier Electron/.NET memory comparisons concern older betas; no new matched memory comparison was performed.",
+    "Every Mod state and all secondary/debug dialogs still need additional visual verification. Installer contents were audited without executing the installer."
+  ]
+}

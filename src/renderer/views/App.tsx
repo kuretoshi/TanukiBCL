@@ -2,7 +2,7 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import VoiceView from './VoiceView';
 import { isLiteRuntime } from '../../common/appVariant';
 import Menu from './Menu';
-import { ipcRenderer } from '../lib/electron-bridge';
+import { ipcRenderer, isTauri } from '../lib/electron-bridge';
 import SettingsStore, { setSetting, initSettings } from '../settings/SettingsStore';
 import { GameStateContext, SettingsContext, PlayerColorContext } from '../state/contexts';
 import { gameStore, startGameStore } from '../state/gameStore';
@@ -29,6 +29,7 @@ let appVersion = '';
 if (typeof window !== 'undefined' && window.location) {
 	const query = new URLSearchParams(window.location.search.substring(1));
 	appVersion = ' v' + query.get('version') || '';
+	if (isTauri) appVersion = appVersion.replace('-tauri-beta.', '-β');
 }
 
 const useStyles = () => ({
@@ -63,8 +64,23 @@ const RawTitleBar: React.FC = function () {
 	const classes = useStyles();
 	return (
 		<Box sx={classes.root}>
-			<Box component="span" sx={classes.title} style={{ marginLeft: 10 }}>
-				{isLiteRuntime() ? 'タヌキのベタクルLite' : 'タヌキのベタクル'}
+			<Box
+				component="span"
+				data-tauri-drag-region=""
+				sx={classes.title}
+				style={
+					isTauri
+						? { marginLeft: 48, width: 'calc(100% - 72px)', fontSize: 11, whiteSpace: 'nowrap' }
+						: { marginLeft: 10 }
+				}
+			>
+				{isTauri
+					? new URLSearchParams(window.location.search).get('backend') === 'rust'
+						? 'ベタクル Tauri Rust β'
+						: 'ベタクル Tauri β'
+					: isLiteRuntime()
+						? 'タヌキのベタクルLite'
+						: 'タヌキのベタクル'}
 				{appVersion}
 			</Box>
 			<IconButton

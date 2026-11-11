@@ -3,7 +3,7 @@ import Button from '@mui/material/Button';
 import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { TFunction } from 'i18next';
 import { ISettings } from '../../../common/ISettings';
-import { ipcRenderer } from '../../lib/electron-bridge';
+import { ipcRenderer, isTauri } from '../../lib/electron-bridge';
 import ServerURLInput from '../ServerURLInput';
 import { ConfirmApi, SelectRow, SettingRow, SettingsSection, SwitchRow } from '../SettingsControls';
 
@@ -137,6 +137,7 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 				/>
 				<SwitchRow
 					label={t('settings.beta.hardware_acceleration')}
+					disabled={isTauri}
 					description={t('settings.beta.hardware_acceleration_warning')}
 					checked={settings.hardware_acceleration}
 					onChange={(checked) =>

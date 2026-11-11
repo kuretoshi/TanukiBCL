@@ -13,7 +13,7 @@ import '../../language/i18n';
 import theme from '../../lib/theme';
 import LobbyBrowser from './LobbyBrowser';
 import { withTranslation, WithTranslation } from 'react-i18next';
-import { ipcRenderer } from '../../lib/electron-bridge';
+import { ipcRenderer, closeWindow } from '../../lib/electron-bridge';
 
 const useStyles = () => ({
 	root: {
@@ -50,7 +50,7 @@ const useStyles = () => ({
 const TitleBar = function () {
 	const classes = useStyles();
 	return (
-		<Box sx={classes.root}>
+		<Box sx={classes.root} data-tauri-drag-region="">
 			<Box component="span" sx={classes.title} style={{ marginLeft: 10 }}>
 				LobbyBrowser
 			</Box>
@@ -71,7 +71,7 @@ const TitleBar = function () {
 				style={{ right: 0 }}
 				size="small"
 				onClick={() => {
-					window.close();
+					closeWindow();
 				}}
 			>
 				<CloseIcon htmlColor="#777" />
