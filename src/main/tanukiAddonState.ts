@@ -32,7 +32,7 @@ export async function readTanukiAddonState(
 	if (linked)
 		return {
 			nosParrots: linked.parrots ?? [],
-			nosWallEars: tasks ? linked.ears ?? [] : undefined,
+			nosWallEars: tasks ? (linked.ears ?? []) : undefined,
 			nosBibiriEchoes: linked.echoes.filter((e) => Date.now() - e.unixMs <= 3000),
 			nosMegaphones: tasks ? linked.megaphones : undefined,
 			nosInterviews: linked.interviews,

@@ -887,18 +887,23 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		const destination = this.masterGain;
 		if (!peer || !destination) return null;
 		if (hasTanukiAddon(state)) {
-			this.heroSpeech?.setInput(peerId, peer.source, other.id, () => !this.parrotCommsBlocked && !other.disconnected && !other.isDead);
-		if (state.nosParrots?.length)
-			this.parrots?.setInput(
+			this.heroSpeech?.setInput(
 				peerId,
 				peer.source,
 				other.id,
-				() =>
-					!this.deafenedState &&
-					!other.disconnected &&
-					!this.interviewMuted.has(peerId) &&
-					!(impostorRadioClientIds ?? [impostorRadioClientId]).includes(other.clientId)
+				() => !this.parrotCommsBlocked && !other.disconnected && !other.isDead
 			);
+			if (state.nosParrots?.length)
+				this.parrots?.setInput(
+					peerId,
+					peer.source,
+					other.id,
+					() =>
+						!this.deafenedState &&
+						!other.disconnected &&
+						!this.interviewMuted.has(peerId) &&
+						!(impostorRadioClientIds ?? [impostorRadioClientId]).includes(other.clientId)
+				);
 			this.interviewer?.setInput(
 				peerId,
 				peer.source,

@@ -99,8 +99,9 @@ export function calculateVoiceAudio(input: VoiceAudioInput): VoiceAudioResult {
 	// NoS publishes the authoritative listener/speaker endpoints for every role.
 	const micPosition = state.nosLocalMicPosition;
 	const speaker = remoteVoicePlayer.nosPlayer;
-	const me = ear ? { ...localVoicePlayer, x: ear.x, y: ear.y } :
-		useNosPositions && micPosition && Number.isFinite(micPosition.x) && Number.isFinite(micPosition.y)
+	const me = ear
+		? { ...localVoicePlayer, x: ear.x, y: ear.y }
+		: useNosPositions && micPosition && Number.isFinite(micPosition.x) && Number.isFinite(micPosition.y)
 			? { ...localVoicePlayer, ...micPosition }
 			: localVoicePlayer;
 	const other =
