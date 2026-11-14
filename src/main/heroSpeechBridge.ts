@@ -164,10 +164,7 @@ export function registerHeroSpeechBridge(
 					: kind === 'ng'
 						? 'ng'
 						: 'henshin';
-			send(
-				`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${payload}`,
-				d.port
-			);
+			send(`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${payload}`, d.port);
 		}
 	);
 	return close;

@@ -263,7 +263,9 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 							{myPlayer && lobbyDetected && (
 								<Box sx={classes.avatarWrapper}>
 									<Avatar
-										hideWhenAppearanceChanged={gameState.gameState === GameState.TASKS && !voice.cloneTalking?.[myPlayer.clientId]}
+										hideWhenAppearanceChanged={
+											gameState.gameState === GameState.TASKS && !voice.cloneTalking?.[myPlayer.clientId]
+										}
 										deafened={voice.deafened}
 										muted={voice.muted}
 										player={myPlayer}
@@ -374,12 +376,17 @@ const VoiceView: React.FC<VoiceProps> = function ({ t, error: initialError }: Vo
 									return (
 										<Box key={player.id} sx={playerBoxSx}>
 											<Avatar
-												hideWhenAppearanceChanged={gameState.gameState === GameState.TASKS && !voice.cloneTalking?.[player.clientId]}
+												hideWhenAppearanceChanged={
+													gameState.gameState === GameState.TASKS && !voice.cloneTalking?.[player.clientId]
+												}
 												connectionState={
 													!connected ? 'disconnected' : voice.audioConnected[peer] ? 'connected' : 'novoice'
 												}
 												player={player}
-												talking={!!voice.cloneTalking?.[player.clientId] || (!player.inVent && !theirVadHidden && voice.otherTalking[player.clientId])}
+												talking={
+													!!voice.cloneTalking?.[player.clientId] ||
+													(!player.inVent && !theirVadHidden && voice.otherTalking[player.clientId])
+												}
 												borderColor="#2ecc71"
 												isAlive={!voice.otherDead[player.clientId]}
 												isUsingRadio={

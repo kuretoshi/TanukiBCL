@@ -22,7 +22,7 @@ export interface overlayPlayer {
 	isLocal: boolean;
 	bugged: boolean;
 	connected: boolean;
-	realColor?: string[];
+	realColor: string[];
 	nosColor?: string;
 	shiftedColor?: number;
 }

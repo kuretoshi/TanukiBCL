@@ -10,7 +10,9 @@ export function readWallEarState(
 	try {
 		if (statSync(file).size > 8192) return [];
 		return parseWallEarState(readFileSync(file, 'utf8'), pid, now);
-	} catch { return []; }
+	} catch {
+		return [];
+	}
 }
 export function parseWallEarState(text: string | undefined, pid: number, now = Date.now()): WallEarState[] {
 	try {

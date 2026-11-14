@@ -128,9 +128,14 @@ pub fn obs_state(state: &Value, voice: &Value, colors: &Value) -> Value {
         let id = p["clientId"].as_i64().unwrap_or(-1).to_string();
         let connected = voice["playerSocketIds"][&id].as_str().is_some_and(|socket|voice["socketClients"][socket]["clientId"]==p["clientId"]);
         let mut player=json!({"id":p["id"],"clientId":p["clientId"],"inVent":flag(p,"inVent"),"isDead":flag(p,"isDead"),"name":p["name"].as_str().unwrap_or(""),"hatId":outfit(p,"hatId","appearanceHatId"),"petId":p["petId"],"skinId":outfit(p,"skinId","appearanceSkinId"),"visorId":outfit(p,"visorId","appearanceVisorId"),"disconnected":flag(p,"disconnected"),"isLocal":flag(p,"isLocal"),"bugged":flag(p,"bugged"),"colorId":p["colorId"],"shiftedColor":p["shiftedColor"],"usingRadio":voice["impostorRadioClientIds"].as_array().is_some_and(|ids|ids.contains(&p["clientId"])),"connected":connected});
-        if let Some(color)=p["colorId"].as_u64().and_then(|id|colors.as_array().and_then(|cs|cs.get(id as usize))) { player["realColor"]=color.clone(); }
+        // NoS snapshots can disappear between rounds; OBS still needs both fallback colors.
+        player["realColor"] = p["colorId"].as_u64()
+            .and_then(|id| colors.as_array().and_then(|cs| cs.get(id as usize)))
+            .filter(|color| !color.is_null())
+            .cloned()
+            .unwrap_or_else(|| json!(["#C51111", "#7A0838"]));
         let mod_id=state["mod"].as_str().unwrap_or("");for kind in ["hat","skin","visor"]{player[format!("{kind}Id")]=json!(super::cosmetics::appearance(p,mod_id,kind));}let(skin,mask)=super::cosmetics::sources(p,mod_id);if let Some(skin)=skin{player["skinSource"]=json!(skin);}if let Some(mask)=mask{player["bodyMaskSource"]=json!(mask);}
-        if mod_id=="NoS"{if let Some(o)=player.as_object_mut(){for key in ["colorId","shiftedColor","realColor"]{o.remove(key);}}let color=p["nosLobbyColor"].as_str().map(str::to_string).or_else(||{let values=[p["nosPlayer"]["colorR"].as_f64()?,p["nosPlayer"]["colorG"].as_f64()?,p["nosPlayer"]["colorB"].as_f64()?];values.iter().all(|v|v.is_finite()).then(||format!("#{:02x}{:02x}{:02x}",(values[0].clamp(0.,1.)*255.).round() as u8,(values[1].clamp(0.,1.)*255.).round() as u8,(values[2].clamp(0.,1.)*255.).round() as u8))});if let Some(color)=color{player["nosColor"]=json!(color);}}
+        if mod_id=="NoS"{if let Some(o)=player.as_object_mut(){for key in ["colorId","shiftedColor"]{o.remove(key);}}let color=p["nosLobbyColor"].as_str().map(str::to_string).or_else(||{let values=[p["nosPlayer"]["colorR"].as_f64()?,p["nosPlayer"]["colorG"].as_f64()?,p["nosPlayer"]["colorB"].as_f64()?];values.iter().all(|v|v.is_finite()).then(||format!("#{:02x}{:02x}{:02x}",(values[0].clamp(0.,1.)*255.).round() as u8,(values[1].clamp(0.,1.)*255.).round() as u8,(values[2].clamp(0.,1.)*255.).round() as u8))});if let Some(color)=color{player["nosColor"]=json!(color);}}
         if voice["cloneTalking"][&id] == true { player["inVent"] = json!(false); }
         player
     }).collect();
@@ -241,6 +246,36 @@ impl Ui {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn obs_keeps_fallback_colors_across_nos_rounds() {
+        let colors = json!([["#123456", "#102030"]]);
+        let mut state = json!({"mod":"NoS","gameState":1,"players":[{"id":0,"clientId":1,"isLocal":true,"colorId":0,"nosPlayer":{"colorR":0.2,"colorG":0.8,"colorB":0.4}}]});
+        for (phase, snapshot, lobby_color, expected) in [
+            (1, json!({"colorR":0.2,"colorG":0.8,"colorB":0.4}), Value::Null, json!("#33cc66")),
+            (0, Value::Null, Value::Null, Value::Null),
+            (0, Value::Null, json!("#50ef39"), json!("#50ef39")),
+            (1, json!({"colorR":0.3,"colorG":0.4,"colorB":0.5}), Value::Null, json!("#4d6680")),
+        ] {
+            state["gameState"] = json!(phase);
+            state["players"][0]["nosPlayer"] = snapshot;
+            state["players"][0]["nosLobbyColor"] = lobby_color;
+            let frame = obs_state(&state, &json!({}), &colors);
+            let player = &frame["overlayState"]["players"][0];
+            assert_eq!(player["realColor"], colors[0], "OBS must render while NoS colors reset");
+            assert_eq!(player["nosColor"], expected);
+            assert!(player.get("colorId").is_none() && player.get("shiftedColor").is_none());
+        }
+    }
+    #[test]
+    fn obs_keeps_fallback_colors_with_unknown_ids_or_missing_palette() {
+        for mod_id in ["NoS", "NONE", "SUPER_NEW_ROLES", "TOH4E"] {
+            for color_id in [json!(-1), json!(999), Value::Null] {
+                let state = json!({"mod":mod_id,"gameState":0,"players":[{"id":0,"clientId":1,"isLocal":true,"colorId":color_id}]});
+                let frame = obs_state(&state, &json!({}), &json!([]));
+                assert_eq!(frame["overlayState"]["players"][0]["realColor"], json!(["#C51111", "#7A0838"]));
+            }
+        }
+    }
     #[test]
     fn crew_and_ghosts_cannot_see_radio_icons_and_inaudible_vad_is_hidden() {
         let state = json!({"mod":"NONE","gameState":1,"players":[{"clientId":1,"isLocal":true,"x":0,"y":0},{"clientId":2,"isImpostor":true,"x":20,"y":0}]});
