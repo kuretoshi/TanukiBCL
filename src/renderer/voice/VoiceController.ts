@@ -11,6 +11,7 @@ import { isLiteRuntime } from '../../common/appVariant';
 import { voiceHearingDistance } from './spatialAudio';
 import { IpcMessages, IpcOverlayMessages, IpcRendererMessages } from '../../common/ipc-messages';
 import { ObsVoiceState } from '../../common/ObsOverlay';
+import { DEFAULT_PLAYERCOLORS } from '../../common/playerColors';
 import {
 	canHearNosImpostorRadio,
 	canHearNosJackalRadio,
@@ -1794,12 +1795,13 @@ export class VoiceController extends TypedEmitter<VoiceControllerEvents> {
 					disconnected: player.disconnected,
 					isLocal: player.isLocal,
 					bugged: player.bugged,
+					// NoS snapshots can disappear between rounds; OBS still needs both fallback colors.
+					realColor: playerColors[player.colorId] ?? DEFAULT_PLAYERCOLORS[0],
 					...(state.mod === 'NoS'
 						? { nosColor: player.nosLobbyColor ?? nosColorHex(player.nosPlayer) }
 						: {
 								colorId: player.colorId,
 								shiftedColor: player.shiftedColor,
-								realColor: playerColors[player.colorId],
 							}),
 					usingRadio: visibleRadioClientIds.includes(player.clientId),
 					connected:
