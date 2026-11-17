@@ -1,4 +1,5 @@
 import { validParrot, type ParrotState } from './ParrotState';
+import { validBitCharacter, type BitCharacterState } from './BitCharacterState';
 import { validWallEar, type WallEarState } from './WallEarState';
 import type { HeroTransformState } from './HeroTransformState';
 import { validHeroTransform } from './HeroTransformState';
@@ -11,6 +12,7 @@ import type { DyingVoiceState } from './DyingVoiceState';
 import type { HeroSpeechPlayer } from './HeroSpeech';
 
 export interface AddonChannels {
+	bits?: BitCharacterState[];
 	parrots?: ParrotState[];
 	ears?: WallEarState[];
 	heroes: HeroTransformState[];
@@ -69,6 +71,7 @@ export function validAddonChannels(v: unknown, now: number): v is AddonChannels 
 	const c = v as AddonChannels;
 	const key = (p: { playerId: number }) => p.playerId;
 	return (
+		(c.bits === undefined || unique<BitCharacterState>(c.bits, validBitCharacter, key)) &&
 		(c.parrots === undefined ||
 			unique<ParrotState>(
 				c.parrots,

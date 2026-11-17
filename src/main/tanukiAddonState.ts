@@ -31,6 +31,7 @@ export async function readTanukiAddonState(
 	const linked = nosAddonLink.current(pid)?.channels;
 	if (linked)
 		return {
+			nosBitCharacters: linked.bits ?? [],
 			nosParrots: linked.parrots ?? [],
 			nosWallEars: tasks ? (linked.ears ?? []) : undefined,
 			nosBibiriEchoes: linked.echoes.filter((e) => Date.now() - e.unixMs <= 3000),

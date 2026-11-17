@@ -2,6 +2,8 @@ import { connectReverbMix, createReverbMix, reverbLevels } from './reverbMix';
 import { setEffectGain } from './effectGain';
 import { createVoicePeakGuard } from './voicePeakGuard';
 import { applyVoiceJamming } from '../../common/VoiceJammingState';
+import { bitCharacterStage } from '../../common/BitCharacterState';
+import { syncBitVoice } from './bitVoiceEffect';
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
 import { hasTanukiAddon } from '../../common/tanukiAddon';
 import { MapType } from '../../common/AmongusMap';
@@ -620,6 +622,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 		if (!peer) return;
 		this.peers.delete(peerId);
 		this.destroyTanukiPeer(peer);
+		peer.bitVoice?.disconnect();
 		if (peer.voiceEffect) disconnectProcessingEffect(peer.voiceEffect);
 		peer.peakGuard?.disconnect();
 		peer.rokuroVoice?.disconnect();
@@ -642,6 +645,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 	}
 
 	private destroyTanukiPeer(peer: PeerAudioNodes): void {
+		if (peer.bitVoice) syncBitVoice(peer, -1);
 		peer.megaphoneRecording?.disconnect();
 		peer.megaphoneRecording = undefined;
 		peer.dyingVoiceRecording?.disconnect();
@@ -958,10 +962,11 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 
 		// Restore the ordinary attenuation radius when a megaphone charge ends.
 		applyVoiceJamming(state, other.id, result);
+		const playbackSource = syncBitVoice(peer, bitCharacterStage(state, other));
 		const rokuro = calculateRokuroVoice(voiceInput);
 		if (rokuro && this.context) {
 			if (!peer.rokuroVoice) {
-				peer.rokuroVoice = createRokuroVoice(this.context, peer.source, destination);
+				peer.rokuroVoice = createRokuroVoice(this.context, playbackSource, destination);
 				peer.rokuroDestinationChanged = true;
 			}
 		} else if (peer.rokuroVoice) {

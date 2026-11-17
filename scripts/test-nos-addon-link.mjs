@@ -52,6 +52,7 @@ function channels(now = Date.now()) {
 			{ playerId: 1, kind: 'ng', request: 8, expires: now + 5000, words: ['タスク'] },
 			{ playerId: 7, kind: 'stone', request: 9, expires: now + 5000, words: [], maxCharacters: 8 },
 		],
+		bits: [{ playerId: 1, stage: 5 }],
 	};
 }
 try {
@@ -81,7 +82,7 @@ try {
 	for (const key of Object.keys(c)) {
 		const missing = { ...c };
 		delete missing[key];
-		assert(!valid({ ...base, channels: missing }), `partial ${key} profile rejected`);
+		assert.equal(valid({ ...base, channels: missing }), key === 'bits', `missing ${key} backward compatibility`);
 		assert(!valid({ ...base, channels: { ...c, [key]: [...c[key], c[key][0]] } }), `duplicate ${key} rejected`);
 	}
 	assert(!valid({ ...base, channels: { ...c, speech: [{ playerId: 1, kind: 'hero' }] } }));
@@ -123,6 +124,7 @@ try {
 		tick
 	);
 	assert.equal(first.current(a.pid).channels.heroes[0].kind, 'super');
+	assert.equal(first.current(a.pid).channels.bits[0].stage, 5, '64bit stage crosses actual addon TCP');
 	assert.equal(first.current(a.pid).channels.ears[0].range, 4, 'ear state crosses actual addon TCP link');
 	assert.equal(first.current(a.pid).channels.parrots[0].birdId, 9, 'parrot state crosses actual addon TCP');
 	assert.equal(first.current(a.pid).channels.parrots[0].seconds, 3, 'configured recording duration crosses addon TCP');
@@ -139,6 +141,8 @@ try {
 		['sample', 'ready', 'word', 'parrot']
 	);
 	assert.equal(b.messages.filter((m) => m.command).length, 0);
+	a.state({ ...c, bits: [{ playerId: 1, stage: 6 }] });
+	await until(() => first.current(a.pid)?.channels.bits[0]?.stage === 6, tick);
 	const empty = Object.fromEntries(Object.keys(c).map((key) => [key, []]));
 	a.state(empty);
 	await until(() => first.current(a.pid)?.channels.heroes.length === 0, tick);
