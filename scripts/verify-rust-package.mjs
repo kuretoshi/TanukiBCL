@@ -39,7 +39,7 @@ assert(installerSource.includes('!define INSTALLMODE "currentUser"'));
 const option=(key,fallback)=>process.argv.includes(key)?process.argv[process.argv.indexOf(key)+1]:fallback;
 const preservation=JSON.parse(await readFile(resolve(root,option('--preservation-manifest','.tools/rust-clr-probe/electron-preservation.json')),'utf8'));
 let retained;
-for(const directory of [root,preservation.root]){
+for(const directory of [root,preservation.root,preservation.retainedRoot].filter(Boolean)){
  const candidate=join(directory,'dist-tauri/TanukiBCL-Tauri-Beta-3.2.62-tauri-beta.7/TanukiBCL-Tauri-Beta.exe');
  try{await stat(candidate);retained=candidate;break;}catch(error){if(error.code!=='ENOENT')throw error;}
 }
