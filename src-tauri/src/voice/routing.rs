@@ -84,6 +84,8 @@ pub struct Route {
     pub gains: [f32; 2],
     pub stereo: [[f32; 2]; 2],
     pub effects: Effects,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bit_stage: Option<u8>,
 }
 
 #[cfg(test)]
@@ -648,5 +650,6 @@ pub(super) fn route_at(
         gains: [(gain * angle.cos()) as f32, (gain * angle.sin()) as f32],
         stereo,
         effects,
+        bit_stage: super::bit_voice::stage(state, other),
     }
 }

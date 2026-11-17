@@ -1,6 +1,7 @@
 //! Native voice engine. Audio and networking outlive every WebView.
 mod access;
 mod audio;
+mod bit_voice;
 mod bridge;
 mod control;
 mod cosmetics;

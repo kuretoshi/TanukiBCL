@@ -8,6 +8,7 @@ import type { MegaphoneState } from './MegaphoneState';
 
 export interface AmongUsState {
 	nosParrots?: import('./ParrotState').ParrotState[];
+	nosBitCharacters?: import('./BitCharacterState').BitCharacterState[];
 	nosWallEars?: import('./WallEarState').WallEarState[];
 	nosLimitSpeechMuted?: number[];
 	nosHeroTransforms?: import('./HeroTransformState').HeroTransformState[];

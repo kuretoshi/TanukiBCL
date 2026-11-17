@@ -38,6 +38,7 @@ pub fn row_valid(kind: &str, p: &Value, now: u64) -> bool {
         return false;
     }
     match kind {
+        "bits" => p["stage"].as_u64().is_some_and(|stage| stage <= 6),
         "ears" => {
             range(&p["x"], -10000., 10000.)
                 && range(&p["y"], -10000., 10000.)
@@ -194,6 +195,25 @@ pub fn channels(value: &Value, now: u64) -> bool {
             .get("parrots")
             .is_none_or(|v| rows("parrots", v, now, 120))
         && value.get("ears").is_none_or(|v| rows("ears", v, now, 24))
+        && value.get("bits").is_none_or(|v| rows("bits", v, now, 24))
+}
+
+#[cfg(test)]
+mod bit_channel_tests {
+    use super::*;
+    #[test]
+    fn optional_bit_channel_accepts_64bit_and_final_but_rejects_invalid_rows() {
+        let mut c = json!({"heroes":[],"portable":[],"megaphones":[],"dying":[],"interviews":[],"jamming":[],"echoes":[],"muted":[],"speech":[]});
+        assert!(channels(&c, 0));
+        c["bits"] = json!([{"playerId":1,"stage":5}]);
+        assert!(channels(&c, 0));
+        c["bits"][0]["stage"] = json!(6);
+        assert!(channels(&c, 0));
+        c["bits"][0]["stage"] = json!(7);
+        assert!(!channels(&c, 0));
+        c["bits"] = json!([{"playerId":1,"stage":0},{"playerId":1,"stage":1}]);
+        assert!(!channels(&c, 0));
+    }
 }
 pub fn link_port(value: &Value) -> Option<u16> {
     let value = value.as_u64().filter(|v| *v <= 0x7fff_ffff)? as u32;
@@ -343,6 +363,7 @@ impl Reader {
             self.muted = c["muted"].clone();
             let mut output = json!({"nosBibiriEchoes":c["echoes"].as_array().into_iter().flatten().filter(|e|now().saturating_sub(e["unixMs"].as_u64().unwrap_or(0))<=3000).collect::<Vec<_>>(),"nosInterviews":c["interviews"],"nosDyingVoices":c["dying"],"nosLimitSpeechMuted":c["muted"]});
             output["nosParrots"] = c.get("parrots").cloned().unwrap_or_else(|| json!([]));
+            output["nosBitCharacters"] = c.get("bits").cloned().unwrap_or_else(|| json!([]));
             if phase == 1 {
                 for (key, channel) in [
                     ("nosMegaphones", "megaphones"),

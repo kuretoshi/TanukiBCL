@@ -10,6 +10,7 @@ export interface ExtendedAudioElement extends HTMLAudioElement {
 }
 
 export interface PeerAudioNodes {
+	bitVoice?: ReturnType<typeof import('./bitVoiceEffect').createBitVoiceEffect>;
 	rokuroVoice?: ReturnType<typeof import('./rokuroVoice').createRokuroVoice>;
 	rokuroDestinationChanged?: boolean;
 	dyingVoiceRecording?: ReturnType<typeof import('./dyingVoiceRecording').createDyingVoiceRecording>;

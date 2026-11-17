@@ -40,6 +40,7 @@ pub struct Source {
     pub target: [f32; 2],
     current: [f32; 2],
     effects: super::effects::Processor,
+    bit: super::bit_voice::Processor,
     mono: bool,
     stereo_target: [[f32; 2]; 2],
     stereo_current: [[f32; 2]; 2],
@@ -59,6 +60,7 @@ impl Mixer {
                 target: [0.0; 2],
                 current: [0.0; 2],
                 effects: super::effects::Processor::default(),
+                bit: super::bit_voice::Processor::default(),
                 mono: true,
                 stereo_target: [[0.0; 2]; 2],
                 stereo_current: [[0.0; 2]; 2],
@@ -90,6 +92,7 @@ impl Mixer {
         if let Some(source) = self.sources.get_mut(id) {
             source.stereo_target = route.stereo;
             source.effects.configure(route.effects);
+            source.bit.set_stage(route.bit_stage);
         }
     }
     pub fn body(&mut self, id: &str, route: Option<(super::routing::Route, f32)>) {
@@ -143,6 +146,7 @@ impl Mixer {
         let mut mixed = [0.0f32; 2];
         for (id, s) in &mut self.sources {
             let sample = s.queue.pop_front().unwrap_or([0.0; 2]);
+            let live = s.bit.process(sample);
             let scaled = std::array::from_fn(|ch| {
                 s.current[ch] += (s.target[ch] - s.current[ch]) * 0.004;
                 for input in 0..2 {
@@ -150,22 +154,29 @@ impl Mixer {
                         (s.stereo_target[ch][input] - s.stereo_current[ch][input]) * 0.004;
                 }
                 if s.mono {
+                    live[0] * s.current[ch]
+                } else {
+                    live[0] * s.stereo_current[ch][0] + live[1] * s.stereo_current[ch][1]
+                }
+            });
+            let processed = s.effects.process(scaled);
+            let raw_scaled = std::array::from_fn(|ch| {
+                if s.mono {
                     sample[0] * s.current[ch]
                 } else {
                     sample[0] * s.stereo_current[ch][0] + sample[1] * s.stereo_current[ch][1]
                 }
             });
-            let processed = s.effects.process(scaled);
             let extra = self
                 .recordings
-                .peer(id, (sample[0] + sample[1]) * 0.5, scaled, !muted);
+                .peer(id, (sample[0] + sample[1]) * 0.5, raw_scaled, !muted);
             if !muted {
                 for ch in 0..2 {
                     mixed[ch] += extra[ch];
                 }
             }
             if let Some(body) = &mut s.body {
-                let secondary = body.next(sample, s.mono);
+                let secondary = body.next(live, s.mono);
                 if !muted {
                     for ch in 0..2 {
                         mixed[ch] += secondary[ch];
