@@ -391,7 +391,7 @@ impl Link {
         if self.current().is_some()
             && self.send(
                 "sample",
-                json!({"playerId":player,"rms":rms,"active":active,"version":"3.2.62","host":host}),
+                json!({"playerId":player,"rms":rms,"active":active,"version":crate::compat_version(),"host":host}),
             )
         {
             return true;
@@ -435,7 +435,7 @@ impl Link {
         };
         self.datagram(
             if d["reportVersion"] == true {
-                base + "|3.2.62"
+                format!("{base}|{}", crate::compat_version())
             } else {
                 base
             },
@@ -651,8 +651,34 @@ mod tests {
         assert_eq!(packet["kind"], "sample");
         assert_eq!(packet["session"], "a".repeat(32));
         assert_eq!(packet["playerId"], 1);
+        assert_eq!(packet["version"], crate::compat_version());
+        let release: Value = serde_json::from_str(include_str!("../../../release-base.json")).unwrap();
+        assert_eq!(packet["version"], release["baseVersion"]);
         assert!(!link.sample(&game, 2, 0.4, true, false));
         server.join().unwrap();
+    }
+    #[test]
+    fn legacy_sample_versions_match_the_build_for_local_and_host_relays() {
+        let receiver = UdpSocket::bind(("127.0.0.1", 0)).unwrap();
+        receiver.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+        let descriptor = json!({"port":receiver.local_addr().unwrap().port(),"token":"a".repeat(32),"role":"tanukiMicTest","reportVersion":true});
+        let game = json!({"gameState":0,"isHost":true,"players":[{"id":1,"isLocal":true}]});
+        let mut link = Link::default();
+        link.pid = 42;
+        link.voice = descriptor.clone();
+        link.host = descriptor;
+        let mut bytes = [0; 512];
+        for host in [false, true] {
+            assert!(link.sample(&game, 1, 0.4, false, host));
+            let count = receiver.recv(&mut bytes).unwrap();
+            let text = std::str::from_utf8(&bytes[..count]).unwrap();
+            assert!(text.starts_with(if host { "TBCLH1|" } else { "TBCL1|" }));
+            assert_eq!(text.rsplit('|').next().unwrap(), crate::compat_version());
+        }
+        link.voice["reportVersion"] = json!(false);
+        assert!(link.sample(&game, 1, 0.4, false, false));
+        let count = receiver.recv(&mut bytes).unwrap();
+        assert_eq!(std::str::from_utf8(&bytes[..count]).unwrap().split('|').count(), 6);
     }
     #[test]
     fn publications_are_session_bound_monotonic_and_fresh() {
