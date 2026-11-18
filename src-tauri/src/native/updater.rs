@@ -33,6 +33,7 @@ struct Staged {
 pub struct Updater {
     state: Mutex<Value>,
     candidate: Mutex<Option<Candidate>>,
+    checked: Mutex<Option<(Instant, Result<Option<Candidate>, String>)>>,
     busy: AtomicBool,
 }
 impl Default for Updater {
@@ -40,6 +41,7 @@ impl Default for Updater {
         Self {
             state: Mutex::new(json!({"state":"idle","message":"更新を確認できます"})),
             candidate: Mutex::new(None),
+            checked: Mutex::new(None),
             busy: AtomicBool::new(false),
         }
     }
@@ -88,22 +90,32 @@ impl Updater {
             app,
             json!({"state":"checking","message":"Rust版の更新を確認しています"}),
         );
-        let client = client()?;
-        let url = format!("https://api.github.com/repos/{REPOSITORY}/releases?per_page=20");
-        let response = get(&client, &url)?;
-        let mut bytes = Vec::new();
-        response
-            .take(8 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| e.to_string())?;
-        if bytes.len() > 8 * 1024 * 1024 {
-            return Err("Update release response exceeds limit".into());
-        }
-        let releases: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-        let candidate = select(&releases, env!("CARGO_PKG_VERSION"))?;
+        let candidate = self.cached_check(|| {
+            let client = client()?;
+            find_candidate(
+                env!("CARGO_PKG_VERSION"),
+                |url| metadata(&client, url),
+                |url| download_size(&client, url),
+            )
+        })?;
         *self.candidate.lock().unwrap() = candidate.clone();
         self.publish(app,if let Some(c)=candidate{json!({"state":"available","message":format!("Rust版 {} を利用できます",c.version),"info":{"version":c.version,"releaseName":c.filename}})}else{json!({"state":"not-available","message":"現在利用できる新しいRust版はありません"})});
         Ok(())
+    }
+    fn cached_check(
+        &self,
+        check: impl FnOnce() -> Result<Option<Candidate>, String>,
+    ) -> Result<Option<Candidate>, String> {
+        let mut cached = self.checked.lock().unwrap();
+        if let Some((when, result)) = cached.as_ref() {
+            let ttl = if result.is_ok() { 300 } else { 60 };
+            if when.elapsed() < Duration::from_secs(ttl) {
+                return result.clone();
+            }
+        }
+        let result = check();
+        *cached = Some((Instant::now(), result.clone()));
+        result
     }
     fn download(&self, data: &Path, app: &AppHandle) -> Result<(), String> {
         let candidate = self
@@ -381,6 +393,129 @@ fn select(releases: &Value, current: &str) -> Result<Option<Candidate>, String> 
     }
     Ok(selected)
 }
+fn find_candidate(
+    current: &str,
+    mut fetch: impl FnMut(&str) -> Result<String, String>,
+    mut size: impl FnMut(&str) -> Result<u64, String>,
+) -> Result<Option<Candidate>, String> {
+    let api = format!("https://api.github.com/repos/{REPOSITORY}/releases?per_page=20");
+    let result = fetch(&api).and_then(|body| {
+        let releases = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        select(&releases, current)
+    });
+    match result {
+        Ok(candidate) => Ok(candidate),
+        Err(_) => website_candidate(current, &mut fetch, &mut size).map_err(|_| {
+            "更新情報を取得できませんでした。しばらく待って再確認するか、GitHubのリリースページからTauri版をダウンロードしてください。".into()
+        }),
+    }
+}
+// GitHub's public Atom feed and asset pages remain available when the REST API
+// quota is exhausted. Never read download links or hashes from release notes.
+fn website_candidate(
+    current: &str,
+    fetch: &mut impl FnMut(&str) -> Result<String, String>,
+    size: &mut impl FnMut(&str) -> Result<u64, String>,
+) -> Result<Option<Candidate>, String> {
+    let current = semver::Version::parse(current).map_err(|e| e.to_string())?;
+    let feed = fetch(&format!("https://github.com/{REPOSITORY}/releases.atom"))?;
+    if !feed.contains("<feed ") || !feed.contains("</feed>") {
+        return Err("Invalid release feed".into());
+    }
+    let links = regex::Regex::new(&format!(
+        r#"<link\b[^>]*\bhref="https://github.com/{REPOSITORY}/releases/tag/([^"<>&]+)""#
+    ))
+    .unwrap();
+    let mut tags = Vec::new();
+    for link in links.captures_iter(&feed) {
+        let tag = link[1].to_owned();
+        if !tags.contains(&tag) {
+            tags.push(tag);
+        }
+    }
+    if tags.is_empty() || tags.len() > 20 {
+        return Err("Invalid release feed entries".into());
+    }
+    let rows = regex::Regex::new(r"(?s)<li\b[^>]*>(.*?)</li>").unwrap();
+    let anchors = regex::Regex::new(r#"<a\b[^>]*\bhref="([^"<>&]+)""#).unwrap();
+    let digest = regex::Regex::new(r#"\bvalue="sha256:([a-fA-F0-9]{64})""#).unwrap();
+    let base = tauri::Url::parse("https://github.com").unwrap();
+    let mut newest = current.clone();
+    let mut selected: Option<Candidate> = None;
+    for tag in tags {
+        // Stable release tags may contain later Tauri betas of the same base.
+        if semver::Version::parse(tag.trim_start_matches('v')).is_ok_and(|version| {
+            (version.major, version.minor, version.patch)
+                < (current.major, current.minor, current.patch)
+        }) {
+            continue;
+        }
+        let html = fetch(&format!(
+            "https://github.com/{REPOSITORY}/releases/expanded_assets/{tag}"
+        ))?;
+        if !html.contains("</ul>") {
+            return Err("Invalid release assets page".into());
+        }
+        for row in rows.captures_iter(&html) {
+            for link in anchors.captures_iter(&row[1]) {
+                let Ok(url) = base.join(&link[1]) else {
+                    continue;
+                };
+                let Some(name) = url.path_segments().and_then(|s| s.last()) else {
+                    continue;
+                };
+                let Some(version) = installer_version(name) else {
+                    continue;
+                };
+                if version <= newest || !release_url(url.as_str(), name) {
+                    continue;
+                }
+                let hash = digest.captures(&row[1]).map(|v| v[1].to_ascii_lowercase());
+                let checksum_name = format!("{name}.sha256");
+                let checksum = anchors
+                    .captures_iter(&html)
+                    .filter_map(|v| base.join(&v[1]).ok())
+                    .find(|v| release_url(v.as_str(), &checksum_name))
+                    .map(|v| v.to_string());
+                if hash.is_none() && checksum.is_none() {
+                    continue;
+                }
+                newest = version.clone();
+                selected = Some(Candidate {
+                    version: version.to_string(),
+                    filename: name.into(),
+                    url: url.to_string(),
+                    size: 0,
+                    sha256: hash,
+                    checksum,
+                });
+            }
+        }
+    }
+    if let Some(candidate) = selected.as_mut() {
+        candidate.size = size(&candidate.url)?;
+        if !(1024..=LIMIT).contains(&candidate.size) {
+            return Err("Invalid update download size".into());
+        }
+    }
+    Ok(selected)
+}
+fn metadata(client: &reqwest::blocking::Client, address: &str) -> Result<String, String> {
+    let mut bytes = Vec::new();
+    request(
+        client,
+        reqwest::Method::GET,
+        address,
+        Duration::from_secs(20),
+    )?
+    .take(8 * 1024 * 1024 + 1)
+    .read_to_end(&mut bytes)
+    .map_err(|e| e.to_string())?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err("Update release response exceeds limit".into());
+    }
+    String::from_utf8(bytes).map_err(|e| e.to_string())
+}
 fn client() -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(5))
@@ -390,9 +525,37 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .build()
         .map_err(|e| e.to_string())
 }
+fn download_size(client: &reqwest::blocking::Client, address: &str) -> Result<u64, String> {
+    // HEAD has an empty body. Read the header, which describes a subsequent GET.
+    request(
+        client,
+        reqwest::Method::HEAD,
+        address,
+        Duration::from_secs(20),
+    )?
+    .headers()
+    .get(reqwest::header::CONTENT_LENGTH)
+    .and_then(|value| value.to_str().ok())
+    .and_then(|value| value.parse::<u64>().ok())
+    .filter(|size| (1024..=LIMIT).contains(size))
+    .ok_or_else(|| "Invalid update download size".into())
+}
 fn get(
     client: &reqwest::blocking::Client,
     address: &str,
+) -> Result<reqwest::blocking::Response, String> {
+    request(
+        client,
+        reqwest::Method::GET,
+        address,
+        Duration::from_secs(300),
+    )
+}
+fn request(
+    client: &reqwest::blocking::Client,
+    method: reqwest::Method,
+    address: &str,
+    timeout: Duration,
 ) -> Result<reqwest::blocking::Response, String> {
     let mut address = tauri::Url::parse(address).map_err(|e| e.to_string())?;
     for _ in 0..6 {
@@ -411,7 +574,8 @@ fn get(
             return Err("Unsupported update download host".into());
         }
         let response = client
-            .get(address.clone())
+            .request(method.clone(), address.clone())
+            .timeout(timeout)
             .send()
             .map_err(|e| e.to_string())?;
         if response.status().is_redirection() {
@@ -494,6 +658,225 @@ fn validate_executable(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn feed(tags: &[&str]) -> String {
+        format!("<feed xmlns=\"http://www.w3.org/2005/Atom\">{}</feed>", tags.iter()
+            .map(|tag| format!("<entry><link href=\"https://github.com/{REPOSITORY}/releases/tag/{tag}\"/></entry>"))
+            .collect::<String>())
+    }
+    fn asset_row(name: &str, host: &str, hash: Option<&str>) -> String {
+        format!("<li><a href=\"https://{host}/{REPOSITORY}/releases/download/v3.2.66/{name}\">{name}</a>{}</li>",
+            hash.map(|hash| format!("<clipboard-copy value=\"sha256:{hash}\"></clipboard-copy>")).unwrap_or_default())
+    }
+    #[test]
+    fn rate_limited_api_uses_public_release_assets_and_exact_download_size() {
+        let name = "TanukiBCL-Tauri-Beta-Setup-3.2.66-tauri-beta.1.exe";
+        let hash = "a".repeat(64);
+        let mut requests = Vec::new();
+        let candidate = find_candidate(
+            "3.2.62-tauri-beta.9",
+            |url| {
+                requests.push(url.to_owned());
+                if url.contains("api.github.com") {
+                    return Err("403 rate limit exceeded".into());
+                }
+                if url.ends_with(".atom") {
+                    return Ok(feed(&["v3.2.66", "v3.2.61"]));
+                }
+                assert!(url.ends_with("expanded_assets/v3.2.66"));
+                Ok(format!(
+                    "<ul>{}{}</ul>",
+                    asset_row(
+                        "TanukiBCL-Setup-99.0.0.exe",
+                        "github.com",
+                        Some(&"b".repeat(64))
+                    ),
+                    asset_row(name, "github.com", Some(&hash))
+                ))
+            },
+            |url| {
+                assert!(url.ends_with(name));
+                Ok(59330669)
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(requests.len(), 3);
+        assert_eq!(candidate.version, "3.2.66-tauri-beta.1");
+        assert_eq!(candidate.sha256.as_deref(), Some(hash.as_str()));
+        assert_eq!(candidate.size, 59330669);
+    }
+    #[test]
+    fn website_rejects_foreign_unsigned_and_older_assets_without_borrowing_other_rows_hashes() {
+        let name = "TanukiBCL-Tauri-Beta-Setup-3.2.66-tauri-beta.1.exe";
+        for rows in [
+            asset_row(name, "example.com", Some(&"a".repeat(64))),
+            format!(
+                "{}{}",
+                asset_row(name, "github.com", None),
+                asset_row("other.exe", "github.com", Some(&"b".repeat(64)))
+            ),
+            asset_row(
+                "TanukiBCL-Tauri-Beta-Setup-3.2.62-tauri-beta.8.exe",
+                "github.com",
+                Some(&"a".repeat(64)),
+            ),
+        ] {
+            let result = find_candidate(
+                "3.2.62-tauri-beta.9",
+                |url| {
+                    if url.contains("api.github.com") {
+                        Err("429".into())
+                    } else if url.ends_with(".atom") {
+                        Ok(feed(&["v3.2.66"]))
+                    } else {
+                        Ok(format!("<ul>{rows}</ul>"))
+                    }
+                },
+                |_| panic!("Invalid assets must not be requested"),
+            )
+            .unwrap();
+            assert!(result.is_none());
+        }
+    }
+    #[test]
+    fn website_selects_highest_version_and_accepts_a_checksum_sidecar() {
+        let name = "TanukiBCL-Tauri-Beta-Setup-3.2.66-tauri-beta.2.exe";
+        let candidate = find_candidate(
+            "3.2.66-tauri-beta.1",
+            |url| {
+                if url.contains("api.github.com") {
+                    Err("403".into())
+                } else if url.ends_with(".atom") {
+                    Ok(feed(&["v3.2.66"]))
+                } else {
+                    Ok(format!(
+                        "<ul>{}{}{}</ul>",
+                        asset_row(
+                            "TanukiBCL-Tauri-Beta-Setup-3.2.66-tauri-beta.10.exe",
+                            "github.com",
+                            Some(&"a".repeat(64))
+                        ),
+                        asset_row(name, "github.com", None),
+                        asset_row(&format!("{name}.sha256"), "github.com", None)
+                    ))
+                }
+            },
+            |_| Ok(12345),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(candidate.version, "3.2.66-tauri-beta.10");
+        // A sidecar remains sufficient when GitHub has no digest for an old asset.
+        let candidate = find_candidate(
+            "3.2.66-tauri-beta.1",
+            |url| {
+                if url.contains("api.github.com") {
+                    Err("403".into())
+                } else if url.ends_with(".atom") {
+                    Ok(feed(&["v3.2.66"]))
+                } else {
+                    Ok(format!(
+                        "<ul>{}{}</ul>",
+                        asset_row(name, "github.com", None),
+                        asset_row(&format!("{name}.sha256"), "github.com", None)
+                    ))
+                }
+            },
+            |_| Ok(12345),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(candidate.sha256.is_none());
+        assert!(candidate
+            .checksum
+            .unwrap()
+            .ends_with(&format!("{name}.sha256")));
+    }
+    #[test]
+    fn malformed_web_metadata_and_invalid_sizes_fail_instead_of_reporting_no_update() {
+        for (body, size) in [
+            ("unavailable".to_owned(), 12345),
+            (
+                format!(
+                    "<ul>{}</ul>",
+                    asset_row(
+                        "TanukiBCL-Tauri-Beta-Setup-3.2.66-tauri-beta.1.exe",
+                        "github.com",
+                        Some(&"a".repeat(64))
+                    )
+                ),
+                LIMIT + 1,
+            ),
+        ] {
+            assert!(find_candidate(
+                "3.2.62-tauri-beta.9",
+                |url| {
+                    if url.contains("api.github.com") {
+                        Err("403".into())
+                    } else if url.ends_with(".atom") {
+                        Ok(feed(&["v3.2.66"]))
+                    } else {
+                        Ok(body.clone())
+                    }
+                },
+                |_| Ok(size)
+            )
+            .is_err());
+        }
+    }
+    #[test]
+    fn successful_api_does_not_request_web_pages_and_repeated_checks_use_cache() {
+        assert!(find_candidate(
+            "3.2.66-tauri-beta.1",
+            |url| {
+                assert!(url.contains("api.github.com"));
+                Ok("[]".into())
+            },
+            |_| panic!("No asset download expected")
+        )
+        .unwrap()
+        .is_none());
+        let updater = Updater::default();
+        assert!(updater.cached_check(|| Ok(None)).unwrap().is_none());
+        assert!(updater
+            .cached_check(|| panic!("A repeated click must use the cache"))
+            .unwrap()
+            .is_none());
+        *updater.checked.lock().unwrap() =
+            Some((Instant::now() - Duration::from_secs(301), Ok(None)));
+        assert!(updater.cached_check(|| Err("offline".into())).is_err());
+        assert!(updater
+            .cached_check(|| panic!("Errors must also back off"))
+            .is_err());
+    }
+    #[test]
+    #[ignore = "Reads public GitHub metadata; downloads no installer"]
+    fn live_website_fallback_finds_the_published_tauri_installer() {
+        let client = client().unwrap();
+        let candidate = find_candidate(
+            "3.2.62-tauri-beta.9",
+            |url| {
+                if url.contains("api.github.com") {
+                    Err("Simulated 403 rate limit exceeded".into())
+                } else {
+                    metadata(&client, url)
+                }
+            },
+            |url| download_size(&client, url),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            semver::Version::parse(&candidate.version).unwrap()
+                > semver::Version::parse("3.2.62-tauri-beta.9").unwrap()
+        );
+        assert!((1024..=LIMIT).contains(&candidate.size));
+        assert!(candidate.sha256.is_some() || candidate.checksum.is_some());
+        eprintln!(
+            "Public fallback selected {} ({} bytes)",
+            candidate.filename, candidate.size
+        );
+    }
     #[test]
     fn only_newer_hashed_tauri_installers_from_the_release_repository_are_selected() {
         let name = "TanukiBCL-Tauri-Beta-Setup-3.2.62-tauri-beta.8.exe";

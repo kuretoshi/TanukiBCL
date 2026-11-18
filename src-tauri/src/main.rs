@@ -120,7 +120,7 @@ fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
             notify_backend_window(&handle, &owned_label, false);
         }
         if let tauri::WindowEvent::CloseRequested { .. } = event {
-            if owned_label == "main" && !voice::enabled() {
+            if owned_label == "main" {
                 handle.exit(0);
             }
         }
@@ -227,11 +227,6 @@ fn control(app: &AppHandle, frame: &Value) {
     let result: Result<(), Box<dyn std::error::Error>> = (|| {
         match action {
             "open" => open_window(app, target)?,
-            "quit" if voice::enabled() => {
-                if let Some(window) = app.get_webview_window("main") {
-                    window.destroy()?;
-                }
-            }
             "quit" => app.exit(0),
             "relaunch" => app.restart(),
             "openExternal" => {
