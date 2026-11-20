@@ -236,6 +236,26 @@ impl Sender {
     }
 }
 type Ptr = *mut c_void;
+// Tauri resolves Windows resources through a canonical (verbatim) path.
+// Vosk/Kaldi's narrow file APIs do not accept that prefix, even though the
+// same model opens successfully through the ordinary drive/UNC spelling.
+fn model_c_path(path: &Path) -> Result<CString, String> {
+    let path = path.join("model");
+    let text = path.to_str().ok_or("音声認識モデルのパスを変換できません")?;
+    let ordinary = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(drive) = text.strip_prefix(r"\\?\") {
+        let bytes = drive.as_bytes();
+        if bytes.len() < 3 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' || bytes[2] != b'\\' {
+            return Err("音声認識モデルのパス形式に対応していません".into());
+        }
+        drive.to_owned()
+    } else {
+        text.to_owned()
+    };
+    CString::new(ordinary).map_err(|e| e.to_string())
+}
+
 struct Api {
     module: windows_sys::Win32::Foundation::HMODULE,
     model_new: unsafe extern "C" fn(*const c_char) -> Ptr,
@@ -349,8 +369,7 @@ fn run(
         if enabled && model.is_null() && Instant::now() >= retry {
             let loaded = (|| {
                 let a = Api::load(&path)?;
-                let model_path = CString::new(path.join("model").to_string_lossy().as_bytes())
-                    .map_err(|e| e.to_string())?;
+                let model_path = model_c_path(&path)?;
                 let m = unsafe { (a.model_new)(model_path.as_ptr()) };
                 if m.is_null() {
                     return Err("日本語音声認識モデルを読み込めません".to_string());
@@ -512,8 +531,7 @@ fn run(
 }
 pub fn probe(path: &Path, pcm_path: Option<&Path>) -> Result<Value, String> {
     let api = Api::load(path)?;
-    let model_path =
-        CString::new(path.join("model").to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    let model_path = model_c_path(path)?;
     let model = unsafe { (api.model_new)(model_path.as_ptr()) };
     if model.is_null() {
         return Err("Model did not load".into());
@@ -580,6 +598,19 @@ pub fn probe(path: &Path, pcm_path: Option<&Path>) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn vosk_model_paths_accept_tauri_drive_and_unc_resources() {
+        for (input, expected) in [
+            (r"C:\Apps\TanukiBCL Tauri Beta\rust-speech", r"C:\Apps\TanukiBCL Tauri Beta\rust-speech\model"),
+            (r"\\?\C:\Apps\TanukiBCL Tauri Beta\rust-speech", r"C:\Apps\TanukiBCL Tauri Beta\rust-speech\model"),
+            (r"\\?\UNC\server\share\タヌキ\rust-speech", r"\\server\share\タヌキ\rust-speech\model"),
+            (r"\\server\share\rust-speech", r"\\server\share\rust-speech\model"),
+        ] {
+            assert_eq!(model_c_path(Path::new(input)).unwrap().to_str().unwrap(), expected);
+        }
+        assert!(model_c_path(Path::new(r"\\?\Volume{invalid}\rust-speech")).is_err());
+    }
     #[test]
     fn japanese_unicode_normalization_and_final_word_rules() {
         let hero = json!({"kind":"hero","words":["変身"]});

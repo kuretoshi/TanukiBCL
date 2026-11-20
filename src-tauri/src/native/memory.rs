@@ -60,6 +60,13 @@ pub struct Process {
 }
 
 impl Process {
+    #[cfg(test)]
+    pub(super) fn current_for_test(base: u64) -> Self {
+        let pid = unsafe { GetCurrentProcessId() };
+        let handle = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid) };
+        assert!(!handle.is_null());
+        Self { handle: Handle(handle), pid, base, size: 0, path: PathBuf::new(), x64: cfg!(target_pointer_width = "64") }
+    }
     pub fn open(pid: u32) -> Result<Self, String> {
         let handle = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid) };
         if handle.is_null() {

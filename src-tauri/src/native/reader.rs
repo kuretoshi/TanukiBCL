@@ -407,10 +407,15 @@ impl Reader {
         let process = &self.process;
         let inner = self.ptr(process.base, "/innerNetClient/base")?;
         if inner == 0 {
-            return Ok(menu_state(self.old_state));
+            return Ok(self.return_to_menu());
         }
         let net = &self.offsets["innerNetClient"];
         let raw = process.i32(inner + number(&net["gameState"]) as u64)?;
+        // The lobby's list/count may outlive its players during disconnect.
+        // Once NotJoined is visible, none of those objects are safe to read.
+        if raw == 0 {
+            return Ok(self.return_to_menu());
+        }
         let meeting = self.ptr(process.base, "/meetingHud")?;
         let meeting_cached = self.ptr(meeting, "/objectCachePtr")?;
         let meeting_state = if meeting_cached == 0 {
@@ -579,6 +584,14 @@ impl Reader {
         }
         Ok(result)
     }
+    fn return_to_menu(&mut self) -> Value {
+        let state = menu_state(self.old_state);
+        self.old_state = 3;
+        self.last_light = None;
+        self.stable_colors.clear();
+        self.menu_updates = 20;
+        state
+    }
 }
 
 pub fn hash_code(text: &str) -> i32 {
@@ -690,6 +703,43 @@ pub fn data_directory() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn leaving_lobby_ignores_stale_or_destroyed_players_and_resets_state() {
+        let mut net = [0u64; 4];
+        let players = [0u64; 5];
+        let list = [players.as_ptr() as u64, 3];
+        let mut roots = [net.as_ptr() as u64, list.as_ptr() as u64, 0];
+        let mut reader = Reader {
+            process: Process::current_for_test(roots.as_ptr() as u64),
+            offsets: json!({"innerNetClient":{"base":[0],"gameState":0,"gameId":8,"clientId":12,"hostId":16},
+                "meetingHud":[16],"objectCachePtr":[0],"allPlayersPtr":[8],"allPlayers":[0],"playerCount":[8],
+                "playerAddrPtr":0,"player":{"offsets":[]}}),
+            fields: Vec::new(), broadcast_version: 0, offsets_version: 0,
+            colors: vec![["#fff".into(), "#000".into()]], old_state: 0, last_light: Some(4.),
+            stable_colors: HashMap::from([("old-player".into(), 1)]), last_players_pointer: 123, menu_updates: 0,
+        };
+        let menu = reader.read().expect("NotJoined must ignore leftover count > 0");
+        assert_eq!(menu["gameState"], 3);
+        assert_eq!(menu["oldGameState"], 0);
+        assert_eq!(menu["lobbyCode"], "MENU");
+        assert!(menu["players"].as_array().unwrap().is_empty());
+        assert!(reader.stable_colors.is_empty());
+        assert_eq!(reader.last_light, None);
+        assert_eq!(reader.old_state, 3);
+        // Keep genuine lobby read failures visible instead of suppressing them.
+        net[0] = 1;
+        std::hint::black_box(&net);
+        assert_eq!(reader.read().unwrap_err(), "ゲームのプレイヤー構造を読み取れません");
+        net[0] = 0;
+        roots[1] = 1; // Destroyed lobby list must never be dereferenced in menu.
+        std::hint::black_box((&net, &roots));
+        assert_eq!(reader.read().unwrap()["gameState"], 3);
+        roots[0] = 0;
+        std::hint::black_box(&roots);
+        reader.old_state = 1;
+        assert_eq!(reader.read().unwrap()["oldGameState"], 1);
+        assert_eq!(reader.old_state, 3);
+    }
     #[test]
     fn javascript_hashes_use_utf16_and_wrapping_i32() {
         assert_eq!(hash_code("Crewmate"), 1905167366);

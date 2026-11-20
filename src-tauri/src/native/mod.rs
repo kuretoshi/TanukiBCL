@@ -590,6 +590,11 @@ impl Backend {
                 || reader.as_ref().is_some_and(|r| !r.process.alive())
             {
                 reader = None;
+                failures = 0;
+                if !last_error.is_empty() {
+                    self.emit("main", "ERROR", vec![json!("")]);
+                    last_error.clear();
+                }
                 *self.state.lock().unwrap() = Value::Null;
                 *self.info.lock().unwrap() = Value::Null;
                 if opened {
@@ -609,6 +614,11 @@ impl Backend {
                         reader = Some(value);
                     }
                     Ok(None) => {
+                        failures = 0;
+                        if !last_error.is_empty() {
+                            self.emit("main", "ERROR", vec![json!("")]);
+                            last_error.clear();
+                        }
                         if opened {
                             self.emit("main", "NOTIFY_GAME_OPENED", vec![json!(false)]);
                             opened = false;
