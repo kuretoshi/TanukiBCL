@@ -704,6 +704,43 @@ pub fn data_directory() -> PathBuf {
 mod tests {
     use super::*;
     #[test]
+    fn startup_memory_becomes_readable_without_hiding_failures_after_the_first_snapshot() {
+        use crate::native::reader_startup::Startup;
+        use std::time::Instant;
+
+        let mut roots = [0x10000u64, 0];
+        let mut reader = Reader {
+            process: Process::current_for_test(roots.as_ptr() as u64),
+            offsets: json!({"palette":[0],"palette_playercolor":[0],"palette_shadowColor":[8],
+                "playerCount":[0],"playerAddrPtr":8,"innerNetClient":{"base":[8]}}),
+            fields: Vec::new(), broadcast_version: 0, offsets_version: 0,
+            colors: Vec::new(), old_state: 4, last_light: None,
+            stable_colors: HashMap::new(), last_players_pointer: 0, menu_updates: 20,
+        };
+        let now = Instant::now();
+        let mut startup = Startup::default();
+        startup.observe(Some(reader.process.pid), now);
+        let error = reader.read().unwrap_err();
+        assert_eq!(error, "ゲームメモリの読み取りに失敗しました");
+        assert!(startup.waiting(&error, now));
+
+        let mut colors = [0u32; 20];
+        colors[2] = 4279308742;
+        let mut shadows = [0u32; 20];
+        shadows[0] = 18;
+        let palette = [colors.as_ptr() as u64, shadows.as_ptr() as u64];
+        roots[0] = palette.as_ptr() as u64;
+        std::hint::black_box((&roots, &palette, &colors, &shadows));
+        assert_eq!(reader.read().unwrap()["gameState"], 3);
+        assert_eq!(reader.colors.len(), 18);
+        startup.ready();
+
+        reader.colors.clear();
+        roots[0] = 0x10000;
+        std::hint::black_box(&roots);
+        assert!(!startup.waiting(&reader.read().unwrap_err(), now));
+    }
+    #[test]
     fn leaving_lobby_ignores_stale_or_destroyed_players_and_resets_state() {
         let mut net = [0u64; 4];
         let players = [0u64; 5];

@@ -327,6 +327,15 @@ struct Decoder {
     jobs: Vec<Value>,
     partial_at: Option<Instant>,
 }
+fn job_signature(jobs: &[Value]) -> String {
+    let mut signatures: Vec<_> = jobs.iter().map(|job| {
+        let mut identity = job.clone();
+        if let Some(fields) = identity.as_object_mut() { fields.remove("expires"); }
+        identity.to_string()
+    }).collect();
+    signatures.sort();
+    serde_json::to_string(&signatures).unwrap()
+}
 fn run(
     path: PathBuf,
     config: Arc<Mutex<Config>>,
@@ -417,7 +426,11 @@ fn run(
                 .collect();
             decoders.retain(|key, d| {
                 let keep = active.get(key).is_some_and(|(_, jobs)| {
-                    d.signature == jobs.iter().map(Value::to_string).collect::<String>()
+                    if d.signature != job_signature(jobs) { return false; }
+                    // Refresh live deadlines without throwing away buffered
+                    // speech, including a continuously renewed NG-word job.
+                    d.jobs.clone_from(jobs);
+                    true
                 });
                 if !keep {
                     unsafe { (a.free)(d.ptr) }
@@ -433,7 +446,7 @@ fn run(
                             key.clone(),
                             Decoder {
                                 ptr,
-                                signature: jobs.iter().map(Value::to_string).collect(),
+                                signature: job_signature(jobs),
                                 jobs: jobs.clone(),
                                 partial_at: None,
                             },
@@ -598,6 +611,66 @@ pub fn probe(path: &Path, pcm_path: Option<&Path>) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decoder_identity_tracks_requests_and_rules_but_not_heartbeat_deadlines() {
+        let stone = json!({"playerId":0,"kind":"stone","request":1,"expires":1000,"words":[],"maxCharacters":8});
+        let ng = json!({"playerId":0,"kind":"ng","request":2,"expires":1100,"words":["猫"]});
+        let original = job_signature(&[stone.clone(), ng.clone()]);
+        let mut renewed = ng.clone(); renewed["expires"] = json!(4000);
+        let mut jittered = stone.clone(); jittered["expires"] = json!(1001);
+        assert_eq!(original, job_signature(&[renewed, jittered]));
+        for (field, value) in [("request", json!(3)), ("kind", json!("hero")), ("playerId", json!(1)),
+            ("words", json!(["犬"])), ("maxCharacters", json!(4))] {
+            let mut changed = stone.clone(); changed[field] = value;
+            assert_ne!(original, job_signature(&[changed, ng.clone()]), "{field}");
+        }
+        assert_ne!(original, job_signature(&[ng]));
+    }
+    #[test]
+    #[ignore = "Uses the existing native model and synthetic Japanese PCM fixture; no microphone"]
+    fn stone_worker_keeps_a_recording_across_deadline_rounding_updates() {
+        let resources = std::env::var("TANUKI_SPEECH_TEST_RESOURCES").expect("existing rust-speech directory");
+        let fixture = std::env::var("TANUKI_SPEECH_TEST_PCM").expect("existing 48kHz synthetic speech fixture");
+        let bytes = std::fs::read(fixture).unwrap();
+        let mut samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect();
+        assert!(!samples.is_empty() && samples.iter().all(|v| v.is_finite() && v.abs() <= 1.));
+        samples.extend(vec![0.; 48000 * 3]);
+        for jitter in [false, true] {
+            let mut speech = Speech::new(PathBuf::from(&resources));
+            let mut state = json!({"session":"stone-worker-test","players":[{"playerId":0,"kind":"stone","request":0,"expires":0,"words":[],"maxCharacters":8}]});
+            speech.configure(&state, vec![("local".into(), 0)]);
+            let started = Instant::now();
+            loop {
+                if speech.events().iter().any(|event| matches!(event, Event::Ready(_, 0))) { break; }
+                assert!(started.elapsed() < Duration::from_secs(10), "model did not become ready");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            let deadline = now() + 9000;
+            state["players"][0]["request"] = json!(1);
+            state["players"][0]["expires"] = json!(deadline);
+            speech.configure(&state, vec![("local".into(), 0)]);
+            let sender = speech.sender().unwrap();
+            let mut word = None;
+            for (index, block) in samples.chunks(960).enumerate() {
+                // The addon publishes every 200 ms. UTC and game clocks can
+                // round the same deadline to adjacent milliseconds.
+                if index % 10 == 0 {
+                    state["players"][0]["expires"] = json!(deadline + u64::from(jitter && index % 20 == 0));
+                    speech.configure(&state, vec![("local".into(), 0)]);
+                }
+                sender.push("local", block);
+                std::thread::sleep(Duration::from_millis(20));
+                for event in speech.events() {
+                    if let Event::Word(_, 0, 1, kind, heard) = event {
+                        if kind == "stone" { word = Some(heard); }
+                    }
+                }
+                if word.is_some() { break; }
+            }
+            eprintln!("stone worker jitter={jitter}: {word:?}");
+            assert!(word.is_some(), "recognition was lost (deadline jitter={jitter})");
+        }
+    }
     #[cfg(windows)]
     #[test]
     fn vosk_model_paths_accept_tauri_drive_and_unc_resources() {

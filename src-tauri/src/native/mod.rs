@@ -5,6 +5,7 @@ mod keys;
 mod memory;
 pub(crate) mod mods;
 mod reader;
+mod reader_startup;
 mod services;
 mod settings;
 mod updater;
@@ -572,6 +573,7 @@ impl Backend {
     fn poll(&self) {
         let (name, pid, index) = target();
         let mut reader: Option<reader::Reader> = None;
+        let mut startup = reader_startup::Startup::default();
         let mut mod_reader = mods::Live::new(
             self.resources.clone(),
             self.cosmetics.clone(),
@@ -590,6 +592,7 @@ impl Backend {
                 || reader.as_ref().is_some_and(|r| !r.process.alive())
             {
                 reader = None;
+                startup.observe(None, Instant::now());
                 failures = 0;
                 if !last_error.is_empty() {
                     self.emit("main", "ERROR", vec![json!("")]);
@@ -607,6 +610,7 @@ impl Backend {
                 mod_reader.clear();
                 next_check = std::time::Instant::now() + Duration::from_secs(2);
                 match memory::find_process(&name, pid, index).and_then(|pid| {
+                    startup.observe(pid, Instant::now());
                     pid.map(|pid| reader::Reader::attach(pid, &self.data, &self.client))
                         .transpose()
                 }) {
@@ -625,7 +629,7 @@ impl Backend {
                         }
                     }
                     Err(error) => {
-                        if error != last_error {
+                        if !startup.waiting(&error, Instant::now()) && error != last_error {
                             self.emit("main", "ERROR", vec![json!(&error)]);
                             last_error = error;
                         }
@@ -635,6 +639,7 @@ impl Backend {
             if let Some(reader) = reader.as_mut() {
                 match reader.read() {
                     Ok(mut state) => {
+                        startup.ready();
                         mod_reader.update(&reader.process, &mut state, &reader.colors);
                         if state["mod"] == "NoS" && self.windows.lock().unwrap().contains("debug") {
                             state["nosLoadedContents"] = self.cosmetics.lock().unwrap().status();
@@ -677,7 +682,10 @@ impl Backend {
                     }
                     Err(error) => {
                         failures += 1;
-                        if failures >= 3 && error != last_error {
+                        if failures >= 3
+                            && !startup.waiting(&error, Instant::now())
+                            && error != last_error
+                        {
                             self.emit("main", "ERROR", vec![json!(&error)]);
                             last_error = error;
                         }

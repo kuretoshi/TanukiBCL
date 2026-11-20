@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-21",
+  "version": "3.2.66-tauri-beta.5",
+  "unitTestsPassed": 132,
+  "nativeSpeechWorkerIntegrationPassed": true,
+  "deadlineJitterKeepsRecognition": true,
+  "startupReadProcessMemoryTransitionPassed": true,
+  "startupTimeoutAndProcessRestartPassed": true,
+  "postInitializationFailuresRemainVisible": true,
+  "permissionsOffsetsAndSignatureErrorsRemainVisible": true,
+  "startupGraceSeconds": 120,
+  "uiRuntime": "Built Rust/WASM UI with mock IPC in Chromium",
+  "viewport": { "width": 280, "height": 390 },
+  "menu": { "text": "メニュー", "width": 122, "height": 46, "whiteSpace": "nowrap" },
+  "playerName": { "text": "開発者くれとし", "width": 129, "height": 29, "whiteSpace": "nowrap", "fullNameTooltip": true },
+  "longPlayerName": { "height": 29, "whiteSpace": "nowrap", "textOverflow": "ellipsis", "fullNameTooltip": true, "pageOverflow": false },
+  "lobbyCode": { "text": "46282", "height": 46, "whiteSpace": "nowrap" },
+  "liveGameStartupTested": false,
+  "physicalMicrophoneTested": false
+}

@@ -41,7 +41,7 @@ bundledExecutable.write('__TAURI_BUNDLE_TYPE_VAR_NSS', markerAt, 'ascii');
 assert.equal(sha(extract('tanuki-bcl-tauri.exe')), sha(bundledExecutable));
 const metadata = JSON.parse(extract('backend/release-base.json').toString('utf8'));
 assert.equal(metadata.betaVersion, version);
-assert.equal(metadata.baseVersion, '3.2.66');
+assert.deepEqual(metadata, JSON.parse(await readFile(join(root, 'src-tauri/release-base.json'), 'utf8')));
 const cargo = await readFile(join(root, 'src-tauri/Cargo.toml'), 'utf8');
 assert(cargo.includes(`version = "${version}"`));
 const installerSource = await readFile(join(root, 'src-tauri/target/release/nsis/x64/installer.nsi'), 'utf8');
@@ -49,9 +49,9 @@ assert(installerSource.includes('!define BUNDLEID "work.kuretoshi.tanukibcl.taur
 assert(installerSource.includes('!define INSTALLMODE "currentUser"'));
 const checksum = sha(await readFile(installer));
 assert.equal((await readFile(`${installer}.sha256`, 'utf8')).split(/\s/)[0], checksum);
-const report = { passed: true, version, installerSha256: checksum, installerBytes: (await stat(installer)).size,
+const report = { passed: true, version, baseVersion: metadata.baseVersion, installerSha256: checksum, installerBytes: (await stat(installer)).size,
     executableSha256: sha(bundledExecutable), buildExecutableSha256: sha(executable), nsisBundleTypeMarkerVerified: true,
     verifiedBackendFiles: expected.length, allPackagedResourcesMatched: true,
     portableResourceCopyCreated: false, physicalMicrophoneTested: false, liveGameLobbyExitTested: false };
-await writeFile(join(root, 'docs/validation-rust-package-3.2.66-beta4.json'), JSON.stringify(report, null, 2) + '\n');
+await writeFile(join(root, `docs/validation-rust-package-${version.replace('-tauri-beta.', '-beta')}.json`), JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report));
