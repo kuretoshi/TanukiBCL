@@ -159,6 +159,11 @@ export function registerHeroSpeechBridge(
 			? { pid: d.pid, session: d.token, players: d.players, localNeuralConfigured: localSpeechStatus().enabled }
 			: null;
 	});
+	ipc.on('NOS_HERO_SPEECH_STOP', (event) => {
+		if (!isMainRenderer(event.sender.id)) return;
+		cancelLocal();
+		localStoneWorker.close();
+	});
 	ipc.handle(
 		'VOICE_STONE_LOCAL_TRANSCRIBE',
 		async (event, session: unknown, player: unknown, request: unknown, bytes: unknown) => {

@@ -1,6 +1,6 @@
 import React from 'react';
-import { FormControlLabel, Switch, Typography } from '@mui/material';
-import { ipcRenderer } from '../../lib/electron-bridge';
+import { Button, FormControlLabel, Switch, Typography } from '@mui/material';
+import { ipcRenderer, shell } from '../../lib/electron-bridge';
 import { SettingsSection } from '../SettingsControls';
 export default function VoiceStoneSpeechSettings(): React.ReactElement {
 	const [local, setLocal] = React.useState({ available: false, enabled: false, error: '' });
@@ -29,6 +29,18 @@ export default function VoiceStoneSpeechSettings(): React.ReactElement {
 					: '共有モデルが未準備のため、従来の軽量ローカル認識を使用します。'}
 			</Typography>
 			<Typography variant="body2">{local.error}</Typography>
+			<Button
+				onClick={() =>
+					shell.openExternal(
+						'https://github.com/kuretoshi/TanukiBCL/releases/download/v3.2.69/TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe'
+					)
+				}
+			>
+				共有モデルをダウンロード
+			</Button>
+			<Typography variant="body2">
+				初回のみインストーラーを実行後、ベタクルを再起動してください。各版で同じモデルを使います。タヌキ丼未検出時はモデルを読み込みません。
+			</Typography>
 		</SettingsSection>
 	);
 }

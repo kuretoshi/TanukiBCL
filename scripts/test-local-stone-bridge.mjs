@@ -8,11 +8,15 @@ const dir = await mkdtemp(join(tmpdir(), 'tanuki-neural-bridge-'));
 try {
 	const sent = [];
 	let resolveWord;
+	let modelStarts = 0;
 	globalThis.__localMock = {
 		status: { enabled: true, available: true, error: '' },
 		profile: null,
 		sent,
-		transcribe: async () => new Promise((r) => (resolveWord = r)),
+		transcribe: async () => {
+			modelStarts++;
+			return new Promise((r) => (resolveWord = r));
+		},
 	};
 	const result = await build({
 		entryPoints: ['src/main/heroSpeechBridge.ts'],
@@ -105,6 +109,13 @@ try {
 	wav.writeUInt32LE(3200, 40);
 	const send = handlers.get('VOICE_STONE_LOCAL_TRANSCRIBE'),
 		event = { sender: { id: 42 } };
+	context.state.nosAddonIds = [];
+	for (let i = 0; i < 100; i++) {
+		assert.equal(handlers.get('NOS_HERO_SPEECH_STATE')(event), null);
+		assert.equal(await send(event, session, 1, 1, wav), false);
+	}
+	assert.equal(modelStarts, 0, 'Stale descriptors cannot load a model without detected Tanuki addon');
+	context.state.nosAddonIds = ['tanuki.bcl.roles'];
 	assert.equal(await send({ sender: { id: 2 } }, session, 1, 1, wav), false);
 	assert.equal(await send(event, session, 2, 1, wav), false);
 	assert.equal(await send(event, 'b'.repeat(32), 1, 1, wav), false);

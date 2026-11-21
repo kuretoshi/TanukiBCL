@@ -394,6 +394,7 @@ export class HeroSpeech {
 	}
 	dispose(): void {
 		this.disposed = true;
+		ipcRenderer.send('NOS_HERO_SPEECH_STOP');
 		clearInterval(this.timer);
 		this.clear();
 		this.inputs.clear();
