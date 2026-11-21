@@ -1,4 +1,5 @@
 import React from 'react';
+import VoiceStoneSpeechSettings from './VoiceStoneSpeechSettings';
 import Button from '@mui/material/Button';
 import { Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { TFunction } from 'i18next';
@@ -117,6 +118,7 @@ const AdvancedSection: React.FC<AdvancedSectionProps> = function ({ t, settings,
 				/>
 			</SettingsSection>
 
+			<VoiceStoneSpeechSettings />
 			<SettingsSection title="デバッグ">
 				<SettingRow
 					label="デバッグ情報"

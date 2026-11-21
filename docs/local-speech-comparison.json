@@ -1,0 +1,804 @@
+{
+  "scope": "Synthetic Windows Japanese TTS; not real users or an in-game load benchmark",
+  "cases": [
+    {
+      "text": "インポスター",
+      "file": "Microsoft_Haruka_Desktop-0.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.3,
+      "vosk": {
+        "text": "音 ポスター",
+        "tokens": [
+          {
+            "conf": 0.262804,
+            "end": 0.51,
+            "start": 0.3,
+            "word": "音"
+          },
+          {
+            "conf": 0.841748,
+            "end": 1.11,
+            "start": 0.511309,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 1275,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "音 ポスター",
+        "tokens": [
+          {
+            "conf": 0.271326,
+            "end": 0.42,
+            "start": 0.21,
+            "word": "音"
+          },
+          {
+            "conf": 0.781325,
+            "end": 0.99,
+            "start": 0.42,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 1491
+      },
+      "sensevoice": {
+        "id": "2",
+        "ms": 2078,
+        "text": "インポスター",
+        "word": "インポスター"
+      },
+      "expectedStoneWord": "インポスター"
+    },
+    {
+      "text": "ポスター",
+      "file": "Microsoft_Haruka_Desktop-1.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.155,
+      "vosk": {
+        "text": "ポスター",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.93,
+            "start": 0.36,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 1037,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "ポスター",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.72,
+            "start": 0.18,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 1010
+      },
+      "sensevoice": {
+        "id": "4",
+        "ms": 93,
+        "text": "ポスター",
+        "word": "ポスター"
+      },
+      "expectedStoneWord": "ポスター"
+    },
+    {
+      "text": "クルーメイト",
+      "file": "Microsoft_Haruka_Desktop-2.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.28,
+      "vosk": {
+        "text": "クルー と",
+        "tokens": [
+          {
+            "conf": 0.790261,
+            "end": 0.66,
+            "start": 0.33,
+            "word": "クルー"
+          },
+          {
+            "conf": 0.462164,
+            "end": 1.11,
+            "start": 0.894333,
+            "word": "と"
+          }
+        ],
+        "ms": 1267,
+        "stoneWord": "クルー"
+      },
+      "vadVosk": {
+        "text": "クルー メイト",
+        "tokens": [
+          {
+            "conf": 0.745268,
+            "end": 0.48,
+            "start": 0.15,
+            "word": "クルー"
+          },
+          {
+            "conf": 0.514802,
+            "end": 0.93,
+            "start": 0.48,
+            "word": "メイト"
+          }
+        ],
+        "ms": 1264
+      },
+      "sensevoice": {
+        "id": "6",
+        "ms": 118,
+        "text": "クルーメイト",
+        "word": "クルーメイト"
+      },
+      "expectedStoneWord": "クルーメイト"
+    },
+    {
+      "text": "タスク",
+      "file": "Microsoft_Haruka_Desktop-3.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.045,
+      "vosk": {
+        "text": "タスク",
+        "tokens": [
+          {
+            "conf": 0.545797,
+            "end": 0.84,
+            "start": 0.33,
+            "word": "タスク"
+          }
+        ],
+        "ms": 1061,
+        "stoneWord": null
+      },
+      "vadVosk": {
+        "text": "タスク",
+        "tokens": [
+          {
+            "conf": 0.546012,
+            "end": 0.69,
+            "start": 0.18,
+            "word": "タスク"
+          }
+        ],
+        "ms": 1327
+      },
+      "sensevoice": {
+        "id": "8",
+        "ms": 99,
+        "text": "タスク",
+        "word": "タスク"
+      },
+      "expectedStoneWord": "タスク"
+    },
+    {
+      "text": "ボイスストーン",
+      "file": "Microsoft_Haruka_Desktop-4.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.275,
+      "vosk": {
+        "text": "ボイス ストーン",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.660474,
+            "start": 0.3,
+            "word": "ボイス"
+          },
+          {
+            "conf": 0.992394,
+            "end": 1.05,
+            "start": 0.660474,
+            "word": "ストーン"
+          }
+        ],
+        "ms": 1375,
+        "stoneWord": "ボイス"
+      },
+      "vadVosk": {
+        "text": "ボイス ストーン",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.54,
+            "start": 0.18,
+            "word": "ボイス"
+          },
+          {
+            "conf": 1.0,
+            "end": 0.96,
+            "start": 0.54,
+            "word": "ストーン"
+          }
+        ],
+        "ms": 1277
+      },
+      "sensevoice": {
+        "id": "10",
+        "ms": 105,
+        "text": "ボイスストン",
+        "word": "ボイスストン"
+      },
+      "expectedStoneWord": "ボイスストーン"
+    },
+    {
+      "text": "インポスターが来た",
+      "file": "Microsoft_Haruka_Desktop-5.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.62,
+      "vosk": {
+        "text": "音 ポスター が 来 た",
+        "tokens": [
+          {
+            "conf": 0.378981,
+            "end": 0.48,
+            "start": 0.3,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 0.96,
+            "start": 0.483343,
+            "word": "ポスター"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.08,
+            "start": 0.96,
+            "word": "が"
+          },
+          {
+            "conf": 0.536378,
+            "end": 1.2,
+            "start": 1.08,
+            "word": "来"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.44,
+            "start": 1.2,
+            "word": "た"
+          }
+        ],
+        "ms": 1742,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "音 ポスター が 来 た",
+        "tokens": [
+          {
+            "conf": 0.324945,
+            "end": 0.42,
+            "start": 0.21,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 0.87,
+            "start": 0.42,
+            "word": "ポスター"
+          },
+          {
+            "conf": 1.0,
+            "end": 0.99,
+            "start": 0.87,
+            "word": "が"
+          },
+          {
+            "conf": 0.536465,
+            "end": 1.11,
+            "start": 0.99,
+            "word": "来"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.35,
+            "start": 1.11,
+            "word": "た"
+          }
+        ],
+        "ms": 1433
+      },
+      "sensevoice": {
+        "id": "12",
+        "ms": 139,
+        "text": "インポスターが来た",
+        "word": "インポスター"
+      },
+      "expectedStoneWord": "インポスター"
+    },
+    {
+      "text": "変身",
+      "file": "Microsoft_Haruka_Desktop-6.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 2.045,
+      "vosk": {
+        "text": "返信",
+        "tokens": [
+          {
+            "conf": 0.918269,
+            "end": 0.84,
+            "start": 0.3,
+            "word": "返信"
+          }
+        ],
+        "ms": 687,
+        "stoneWord": "返信"
+      },
+      "vadVosk": {
+        "text": "返信",
+        "tokens": [
+          {
+            "conf": 0.918217,
+            "end": 0.72,
+            "start": 0.21,
+            "word": "返信"
+          }
+        ],
+        "ms": 736
+      },
+      "sensevoice": {
+        "id": "14",
+        "ms": 103,
+        "text": "変信",
+        "word": "変信"
+      },
+      "expectedStoneWord": "変身"
+    },
+    {
+      "text": "あっ",
+      "file": "Microsoft_Haruka_Desktop-7.wav",
+      "voice": "Microsoft Haruka Desktop",
+      "seconds": 1.77,
+      "vosk": {
+        "text": "あっ",
+        "tokens": [
+          {
+            "conf": 0.927894,
+            "end": 0.54,
+            "start": 0.33,
+            "word": "あっ"
+          }
+        ],
+        "ms": 701,
+        "stoneWord": "あっ"
+      },
+      "vadVosk": {
+        "text": "あっ",
+        "tokens": [
+          {
+            "conf": 0.93263,
+            "end": 0.39,
+            "start": 0.21,
+            "word": "あっ"
+          }
+        ],
+        "ms": 727
+      },
+      "sensevoice": {
+        "id": "16",
+        "ms": 90,
+        "text": "あ",
+        "word": "あ"
+      },
+      "expectedStoneWord": "あっ"
+    },
+    {
+      "text": "インポスター",
+      "file": "Microsoft_Ichiro-0.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.435,
+      "vosk": {
+        "text": "音 ポスター",
+        "tokens": [
+          {
+            "conf": 0.380552,
+            "end": 0.54,
+            "start": 0.3,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.14,
+            "start": 0.54,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 1577,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "音 ポスター",
+        "tokens": [
+          {
+            "conf": 0.314674,
+            "end": 0.45,
+            "start": 0.21,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.05,
+            "start": 0.45,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 900
+      },
+      "sensevoice": {
+        "id": "18",
+        "ms": 118,
+        "text": "インポスターは",
+        "word": "インポスター"
+      },
+      "expectedStoneWord": "インポスター"
+    },
+    {
+      "text": "ポスター",
+      "file": "Microsoft_Ichiro-1.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.251,
+      "vosk": {
+        "text": "ポスター",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.901837,
+            "start": 0.33,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 949,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "ポスター",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.778382,
+            "start": 0.18,
+            "word": "ポスター"
+          }
+        ],
+        "ms": 893
+      },
+      "sensevoice": {
+        "id": "20",
+        "ms": 109,
+        "text": "ポスタは",
+        "word": "ポスタ"
+      },
+      "expectedStoneWord": "ポスター"
+    },
+    {
+      "text": "クルーメイト",
+      "file": "Microsoft_Ichiro-2.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.454,
+      "vosk": {
+        "text": "クルー メイト",
+        "tokens": [
+          {
+            "conf": 0.813443,
+            "end": 0.69,
+            "start": 0.33,
+            "word": "クルー"
+          },
+          {
+            "conf": 0.450886,
+            "end": 1.17,
+            "start": 0.69,
+            "word": "メイト"
+          }
+        ],
+        "ms": 1175,
+        "stoneWord": "クルー"
+      },
+      "vadVosk": {
+        "text": "クルー メイト",
+        "tokens": [
+          {
+            "conf": 0.823615,
+            "end": 0.51,
+            "start": 0.15,
+            "word": "クルー"
+          },
+          {
+            "conf": 0.471303,
+            "end": 0.99,
+            "start": 0.51,
+            "word": "メイト"
+          }
+        ],
+        "ms": 1193
+      },
+      "sensevoice": {
+        "id": "22",
+        "ms": 114,
+        "text": "クルーメイト",
+        "word": "クルーメイト"
+      },
+      "expectedStoneWord": "クルーメイト"
+    },
+    {
+      "text": "タスク",
+      "file": "Microsoft_Ichiro-3.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.147,
+      "vosk": {
+        "text": "タスク",
+        "tokens": [
+          {
+            "conf": 0.54596,
+            "end": 0.87,
+            "start": 0.33,
+            "word": "タスク"
+          }
+        ],
+        "ms": 1193,
+        "stoneWord": null
+      },
+      "vadVosk": {
+        "text": "タスク",
+        "tokens": [
+          {
+            "conf": 0.545975,
+            "end": 0.72,
+            "start": 0.18,
+            "word": "タスク"
+          }
+        ],
+        "ms": 1234
+      },
+      "sensevoice": {
+        "id": "24",
+        "ms": 113,
+        "text": "タスク",
+        "word": "タスク"
+      },
+      "expectedStoneWord": "タスク"
+    },
+    {
+      "text": "ボイスストーン",
+      "file": "Microsoft_Ichiro-4.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.509,
+      "vosk": {
+        "text": "ボイス ストーン",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.723285,
+            "start": 0.3,
+            "word": "ボイス"
+          },
+          {
+            "conf": 0.959801,
+            "end": 1.23,
+            "start": 0.723285,
+            "word": "ストーン"
+          }
+        ],
+        "ms": 1574,
+        "stoneWord": "ボイス"
+      },
+      "vadVosk": {
+        "text": "ボイス ストーン",
+        "tokens": [
+          {
+            "conf": 1.0,
+            "end": 0.575842,
+            "start": 0.15,
+            "word": "ボイス"
+          },
+          {
+            "conf": 0.928159,
+            "end": 1.08,
+            "start": 0.575842,
+            "word": "ストーン"
+          }
+        ],
+        "ms": 1534
+      },
+      "sensevoice": {
+        "id": "26",
+        "ms": 113,
+        "text": "ボイスストーン",
+        "word": "ボイスストーン"
+      },
+      "expectedStoneWord": "ボイスストーン"
+    },
+    {
+      "text": "インポスターが来た",
+      "file": "Microsoft_Ichiro-5.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.836,
+      "vosk": {
+        "text": "音 ポスター が 来 た",
+        "tokens": [
+          {
+            "conf": 0.39908,
+            "end": 0.54,
+            "start": 0.3,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.05,
+            "start": 0.54,
+            "word": "ポスター"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.2,
+            "start": 1.05,
+            "word": "が"
+          },
+          {
+            "conf": 0.536377,
+            "end": 1.32,
+            "start": 1.2,
+            "word": "来"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.56,
+            "start": 1.32,
+            "word": "た"
+          }
+        ],
+        "ms": 1793,
+        "stoneWord": "ポスター"
+      },
+      "vadVosk": {
+        "text": "音 ポスター が 来 た",
+        "tokens": [
+          {
+            "conf": 0.388541,
+            "end": 0.45,
+            "start": 0.21,
+            "word": "音"
+          },
+          {
+            "conf": 1.0,
+            "end": 0.96,
+            "start": 0.45,
+            "word": "ポスター"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.11,
+            "start": 0.96,
+            "word": "が"
+          },
+          {
+            "conf": 0.536437,
+            "end": 1.26,
+            "start": 1.11,
+            "word": "来"
+          },
+          {
+            "conf": 1.0,
+            "end": 1.47,
+            "start": 1.26,
+            "word": "た"
+          }
+        ],
+        "ms": 1105
+      },
+      "sensevoice": {
+        "id": "28",
+        "ms": 130,
+        "text": "インポスターが来た",
+        "word": "インポスター"
+      },
+      "expectedStoneWord": "インポスター"
+    },
+    {
+      "text": "変身",
+      "file": "Microsoft_Ichiro-6.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 2.203,
+      "vosk": {
+        "text": "返信",
+        "tokens": [
+          {
+            "conf": 0.918274,
+            "end": 0.93,
+            "start": 0.33,
+            "word": "返信"
+          }
+        ],
+        "ms": 1111,
+        "stoneWord": "返信"
+      },
+      "vadVosk": {
+        "text": "返信",
+        "tokens": [
+          {
+            "conf": 0.918218,
+            "end": 0.81,
+            "start": 0.21,
+            "word": "返信"
+          }
+        ],
+        "ms": 1114
+      },
+      "sensevoice": {
+        "id": "30",
+        "ms": 89,
+        "text": "変信",
+        "word": "変信"
+      },
+      "expectedStoneWord": "変身"
+    },
+    {
+      "text": "あっ",
+      "file": "Microsoft_Ichiro-7.wav",
+      "voice": "Microsoft Ichiro",
+      "seconds": 1.887,
+      "vosk": {
+        "text": "あっ",
+        "tokens": [
+          {
+            "conf": 0.738006,
+            "end": 0.54,
+            "start": 0.33,
+            "word": "あっ"
+          }
+        ],
+        "ms": 682,
+        "stoneWord": "あっ"
+      },
+      "vadVosk": {
+        "text": "あっ",
+        "tokens": [
+          {
+            "conf": 0.690715,
+            "end": 0.42,
+            "start": 0.21,
+            "word": "あっ"
+          }
+        ],
+        "ms": 721
+      },
+      "sensevoice": {
+        "id": "32",
+        "ms": 94,
+        "text": "あ",
+        "word": "あ"
+      },
+      "expectedStoneWord": "あっ"
+    }
+  ],
+  "sensevoiceMemory": {
+    "workingSetMiB": 315.4,
+    "privateMiB": 304.3
+  },
+  "summary": {
+    "vosk": {
+      "exact": 9,
+      "total": 16,
+      "meanMs": 1200,
+      "correctStoneWords": 4
+    },
+    "vadVosk": {
+      "exact": 10,
+      "total": 16,
+      "meanMs": 1122
+    },
+    "sensevoice": {
+      "exact": 9,
+      "total": 16,
+      "meanMs": 232,
+      "correctStoneWords": 10
+    }
+  }
+}

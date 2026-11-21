@@ -1,3 +1,4 @@
+import { registerLocalSpeechIpc } from './localSpeechSettings';
 import electronUpdater from 'electron-updater';
 import { verifyDebugPassword } from './debugAuth';
 import { verifyRemoteDebugPassword } from './remoteDebugAuth';
@@ -728,6 +729,9 @@ if (!gotTheLock) {
 			nosVoiceRoleSender?.close();
 			nosAddonLink.close();
 		});
+		registerLocalSpeechIpc(
+			(id) => global.mainWindow?.webContents.id === id || global.settingsWindow?.webContents.id === id
+		);
 		initSettingsIpc();
 		global.mainWindow = createMainWindow();
 		if (isDevelopment && (voiceDebugEnabled || isDebugLoggingEnabled())) global.debugWindow = createDebugWindow();

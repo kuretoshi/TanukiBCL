@@ -5,7 +5,7 @@ import { applyVoiceJamming } from '../../common/VoiceJammingState';
 import { bitCharacterStage } from '../../common/BitCharacterState';
 import { syncBitVoice } from './bitVoiceEffect';
 import { Player, AmongUsState, GameState } from '../../common/AmongUsState';
-import { hasTanukiAddon } from '../../common/tanukiAddon';
+import { hasTanukiAddon, isTanukiSpeechMuted } from '../../common/tanukiAddon';
 import { MapType } from '../../common/AmongusMap';
 import { ISettings, ILobbySettings } from '../../common/ISettings';
 import { combineVoiceEffectTunings, getVoiceEffectTuning, VoiceEffectTuning } from '../../common/VoiceEffectTuning';
@@ -974,12 +974,7 @@ export class AudioController extends TypedEmitter<AudioControllerEvents> {
 			peer.rokuroVoice = undefined;
 			peer.rokuroDestinationChanged = true;
 		}
-		if (
-			state.mod === 'NoS' &&
-			(state.gameState === GameState.TASKS || state.gameState === GameState.DISCUSSION) &&
-			state.nosLimitSpeechMuted?.includes(other.id)
-		)
-			result.gain = 0;
+		if (isTanukiSpeechMuted(state, other.id)) result.gain = 0;
 		pan.maxDistance = result.panMaxDistance ?? this.maxDistance;
 
 		if (result.muffle && this.context) {
