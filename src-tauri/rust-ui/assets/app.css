@@ -23,8 +23,9 @@ select{color-scheme:dark}
 select option,select optgroup{background-color:#29252e;color:#fff}
 /* Let the header use the available width, including Japanese menu labels. */
 .voice-top{width:100%;min-width:0;padding:0 8px}
-.voice-identity{flex:1;min-width:0;max-width:100%}
-.voice-identity>div:first-child{flex:1;min-width:0;max-width:none}
-.username{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.voice-identity{display:flex;flex-direction:column;align-items:stretch;flex:1;min-width:0;max-width:100%}
+.username{width:100%;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.voice-controls-row{display:flex;align-items:center;justify-content:center;min-width:0;width:100%}
+.voice-controls-row>.mute-buttons{padding-top:0}
 .lobby-code{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mute-buttons{flex-shrink:0}

@@ -162,6 +162,38 @@ async fn wait(ms: i32) -> Result<(), String> {
         .map_err(transport::error)?;
     Ok(())
 }
+fn fit_player_name(document: &web_sys::Document) {
+    let Some(name) = document.get_element_by_id("local-player-name") else {
+        return;
+    };
+    if name.text_content().is_none_or(|text| text.is_empty()) {
+        return;
+    }
+    let width = name.client_width();
+    if width <= 0 {
+        return;
+    }
+    let previous_width = name
+        .get_attribute("data-fit-width")
+        .and_then(|value| value.parse::<i32>().ok());
+    if previous_width == Some(width) && name.scroll_width() <= width {
+        return;
+    }
+    // Measure the actual glyphs, including Japanese fallback fonts. Start over
+    // when the available width grows so a previously reduced name can expand.
+    let mut size = 20.0;
+    let _ = name.set_attribute("style", "font-size:20px");
+    for _ in 0..3 {
+        let measured = name.scroll_width();
+        if measured <= width {
+            break;
+        }
+        size *= f64::from((width - 1).max(1)) / f64::from(measured);
+        let _ = name.set_attribute("style", &format!("font-size:{size:.3}px"));
+    }
+    let _ = name.set_attribute("data-fit-width", &width.to_string());
+}
+
 pub fn render(app: &App, force: bool) {
     refresh_catalog(app);
     let Some(document) = web_sys::window().and_then(|w| w.document()) else {
@@ -311,6 +343,7 @@ pub fn render(app: &App, force: bool) {
     }
     state.settings_signature = settings_signature;
     if state.view == "app" {
+        fit_player_name(&document);
         if let Some(grid) = document.get_element_by_id("other-players-grid") {
             let size = [grid.client_width() as f64, grid.client_height() as f64];
             if state.grid_size != Some(size) {

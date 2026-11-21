@@ -274,7 +274,7 @@ pub fn main_view(s: &State) -> String {
     let muted = s.voice["muted"] == true || s.voice["deafened"] == true;
     let deafened = s.voice["deafened"] == true;
     let displayed_name = if lobby { name } else { "" };
-    let top=format!("<div class=voice-top>{my_avatar}<div class=voice-identity><div><span class=username title=\"{}\">{}</span><button class=\"lobby-code {}\" data-action=copy-code>{}</button></div>{}</div></div>",e(displayed_name),e(displayed_name),if lobby{"in-lobby"}else{""},e(&code),if lobby{format!("<div class=mute-buttons>{}{}</div>",icon_button("mute",if muted{"MicOff"}else{"Mic"},"マイクのミュートを切り替え",""),icon_button("deafen",if deafened{"VolumeOff"}else{"VolumeUp"},"スピーカーのミュートを切り替え",""))}else{String::new()});
+    let top=format!("<div class=voice-top>{my_avatar}<div class=voice-identity><span id=local-player-name class=username title=\"{}\">{}</span><div class=voice-controls-row><button class=\"lobby-code {}\" data-action=copy-code>{}</button>{}</div></div></div>",e(displayed_name),e(displayed_name),if lobby{"in-lobby"}else{""},e(&code),if lobby{format!("<div class=mute-buttons>{}{}</div>",icon_button("mute",if muted{"MicOff"}else{"Mic"},"マイクのミュートを切り替え",""),icon_button("deafen",if deafened{"VolumeOff"}else{"VolumeUp"},"スピーカーのミュートを切り替え",""))}else{String::new()});
     let mut others: Vec<_> = game["players"]
         .as_array()
         .into_iter()

@@ -1,0 +1,127 @@
+{
+  "date": "2026-11-21",
+  "version": "3.2.67-tauri-beta.2",
+  "runtime": "Built Rust/WASM UI with mock IPC in Chromium",
+  "cases": [
+    {
+      "scene": "standard",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "20px",
+        "height": 29,
+        "name": "開発者くれとし",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 140,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    },
+    {
+      "scene": "ten",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "16.7px",
+        "height": 24,
+        "name": "あいうえおかきくけこ",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 167,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    },
+    {
+      "scene": "latin",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "15.182px",
+        "height": 19,
+        "name": "WILLIAM-WIDE-NAME",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 166.859375,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    },
+    {
+      "scene": "emoji",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "17.216px",
+        "height": 25,
+        "name": "🦊プレイヤー🌈名前",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 167.21875,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    },
+    {
+      "scene": "long",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "7.99px",
+        "height": 11,
+        "name": "とても長いプレイヤー名でも一行で表示します",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 166.921875,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    },
+    {
+      "scene": "long-resized-wide",
+      "viewport": 410,
+      "result": {
+        "code": "46282",
+        "fontSize": "14.211px",
+        "height": 20,
+        "name": "とても長いプレイヤー名でも一行で表示します",
+        "pageOverflow": false,
+        "scrollWidth": 298,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 296.859375,
+        "whiteSpace": "nowrap",
+        "width": 298
+      }
+    },
+    {
+      "scene": "long-resized-back",
+      "viewport": 280,
+      "result": {
+        "code": "46282",
+        "fontSize": "7.99px",
+        "height": 11,
+        "name": "とても長いプレイヤー名でも一行で表示します",
+        "pageOverflow": false,
+        "scrollWidth": 168,
+        "textFits": true,
+        "textOverflow": "clip",
+        "textWidth": 166.921875,
+        "whiteSpace": "nowrap",
+        "width": 168
+      }
+    }
+  ],
+  "menuSingleLine": true
+}
