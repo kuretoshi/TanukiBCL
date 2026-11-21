@@ -36,6 +36,33 @@ pub fn addon(state: &Value) -> bool {
             .as_array()
             .is_some_and(|ids| ids.iter().any(|id| id == "tanuki.bcl.roles"))
 }
+pub fn limit_speech_muted(state: &Value, player: &Value) -> bool {
+    addon(state)
+        && matches!(state["gameState"].as_i64(), Some(1 | 2))
+        && state["nosLimitSpeechMuted"]
+            .as_array()
+            .is_some_and(|ids| ids.contains(player))
+}
+
+#[cfg(test)]
+mod addon_gate_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn stale_speech_limit_requires_detected_addon_and_active_game() {
+        let mut state = json!({"mod":"NoS","gameState":1,"nosLimitSpeechMuted":[1]});
+        assert!(!limit_speech_muted(&state, &json!(1)));
+        state["nosAddonIds"] = json!(["tanuki.bcl.roles"]);
+        assert!(limit_speech_muted(&state, &json!(1)));
+        state["gameState"] = json!(2);
+        assert!(limit_speech_muted(&state, &json!(1)));
+        state["gameState"] = json!(0);
+        assert!(!limit_speech_muted(&state, &json!(1)));
+        state["gameState"] = json!(1);
+        state["nosAddonIds"] = json!(["UchuAddon"]);
+        assert!(!limit_speech_muted(&state, &json!(1)));
+    }
+}
 pub fn charging<'a>(state: &'a Value, p: &Value) -> Option<&'a Value> {
     if !addon(state)
         || state["gameState"] != 1

@@ -1,0 +1,50 @@
+{
+  "version": "3.2.68-tauri-beta.1",
+  "basedOn": "ae63bd2d7d2b77c55a956da3b5861792f6ac8c54",
+  "desktopCommit": "fe6a64fa4bd079d4ee66d873b9c1315b19dd97f5",
+  "regressionsBefore": [
+    "inactive speech worker retained",
+    "stale bit effect",
+    "stale wall-ear listening",
+    "absent addon generated discovery nonce"
+  ],
+  "nativeTests": {
+    "passed": 120,
+    "failed": 0,
+    "ignored": 2
+  },
+  "uiTests": {
+    "passed": 16,
+    "failed": 0
+  },
+  "unpublishedNeuralDevelopmentIncluded": false,
+  "resources": {
+    "comparedResourceFiles": 33,
+    "mismatches": [],
+    "baseInstallerSha256": "6e50ee1da727a87237d5269869e61c3382aac142d1140a44ec81ae1b0a10aeee"
+  },
+  "physicalMicrophoneVerified": false,
+  "affectedMultiplayerRoomVerified": false,
+  "sourceFiles": {
+    "src-tauri/src/voice/speech.rs": "2ad1bbe5d57ff7f3d10b7c0ef77860b8cd880b20e87b9c06cae100e835c71e3b",
+    "src-tauri/src/voice/audio.rs": "726b26bd40bb148f8b1d3678f612ea064eb3b34be6dbc9dc64c7d3d86c3d43f6",
+    "src-tauri/src/voice/bit_voice.rs": "2ffc9d08761f9102a98d3545246422711e0b1bff9c08f5aa28580f7017b17a75",
+    "src-tauri/src/voice/routing.rs": "2e1d73411785afeac90a8d6cf3f3ad654a22146e06c7cc239aed73f1540c6974",
+    "src-tauri/src/voice/roles.rs": "dbd585ea1270d8058050323d804aba3e65d10dfd822f0604983b3746c579b477",
+    "src-tauri/src/voice/signaling.rs": "fe8fc9793c147cd53db888d8d7852aa0b766ff4eb516df1cb41b05d256e0d944",
+    "src-tauri/src/voice/recordings.rs": "4f07c192e6d45c4b10a94123cd72ae2c5450a62ca33d3fedd7d340780d3255db",
+    "src-tauri/src/native/mods/link.rs": "dba60b4b33e2ba37bbb35de94937ded4a62ba4bad338ac59c7b13bc0d4b341d0",
+    "src-tauri/Cargo.toml": "fa25898fcec78bebf4ede518edf4569c93281cda38b27ca248e0b8f4fb8c1283",
+    "src-tauri/Cargo.lock": "34c4f90679f7cb772cdf4218420dae802d60022c17735b1830bfbb74c35bd07d",
+    "src-tauri/release-base.json": "2915674b988eea26f5f8a353777d61121cd83a919400e30af645f4d94c4fe83c",
+    "src-tauri/tauri.conf.json": "fa70312554454da95fa911f13c3eb680e1aa2a022b10e1510fc5ec249716736f",
+    "package.json": "cf644d22faeb06c0c0b1731913f07d62ccb9672e310a34423c32d67b7ad296a0",
+    "package-lock.json": "10edc03d2c218889538a1f3c482f9577470170827ed3cd798d753ce9f452dd84",
+    "docs/build-tauri-3.2.68-beta1.md": "a1a6eb363e472bd30e0355d844268ff539a06deb86e1d3a54fc3c4a744d1748e",
+    "src/common/tanukiAddon.ts": "7a608671b1e46b8e89e4df86e07e978bf49c75b7c01d1a373a3213081a4abbfb",
+    "src/common/BitCharacterState.ts": "31b89ecaae63ca1aa3e28eb0e1f123025a045182839c2a0abf3856b24f802694",
+    "src/common/WallEarState.ts": "51b79cbfda95401b279f21bec7fa24b5a524adda874528416246f2b1335c5f60",
+    "src/renderer/voice/AudioController.ts": "0a718ecd63a4ce9c2091bdd753be1101d572c97e56f01a97880686a19f3c75bc",
+    "src/renderer/voice/VoiceController.ts": "a4a86308b915eb1f5908317a3c8dba074e139ad715249469ba4567736e166fe0"
+  }
+}

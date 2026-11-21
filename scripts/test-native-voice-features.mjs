@@ -82,7 +82,7 @@ const scenarios = [
 		'nos-release64-wall-ear',
 		(a,b) => {
 			for(const c of [a,b]) {
-				c.game.mod='NoS';c.game.players[1].x=3;c.lobbySettings.wallsBlockAudio=false;
+				c.game.mod='NoS';c.game.nosAddonIds=['tanuki.bcl.roles'];c.game.players[1].x=3;c.lobbySettings.wallsBlockAudio=false;
 				c.game.nosWallEars=[{playerId:0,x:0,y:0,range:1}];
 				c.steps=[{second:4,game:{...structuredClone(c.game),nosWallEars:[{playerId:0,x:0,y:0,range:4}]}},{second:9,game:structuredClone(c.game)}];
 			}

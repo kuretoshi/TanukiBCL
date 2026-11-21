@@ -38,6 +38,12 @@ fn root() -> Option<PathBuf> {
 fn descriptor(name: &str, limit: usize) -> Option<Value> {
     read_json(&root()?.join(name), limit).ok()
 }
+fn addon_detected(state: &Value) -> bool {
+    state["mod"] == "NoS"
+        && state["nosAddonIds"]
+            .as_array()
+            .is_some_and(|ids| ids.iter().any(|id| id == "tanuki.bcl.roles"))
+}
 pub fn profile_valid(v: &Value, pid: u32, session: &str, previous: u64, t: u64) -> bool {
     v["kind"] == "state"
         && v["protocol"] == 1
@@ -99,7 +105,7 @@ impl Default for Link {
             phase: String::new(),
             local: 256,
             udp: None,
-            discovery_nonce: nonce(),
+            discovery_nonce: String::new(),
             discovered: Value::Null,
             discovered_at: 0,
             next_udp: 0,
@@ -225,10 +231,7 @@ impl Link {
             .then_some(&self.profile)
     }
     pub fn update(&mut self, pid: u32, state: &Value, marker: &Value) -> Option<Value> {
-        let enabled = state["mod"] == "NoS"
-            && state["nosAddonIds"]
-                .as_array()
-                .is_some_and(|ids| ids.iter().any(|s| s == "tanuki.bcl.roles"));
+        let enabled = addon_detected(state);
         let phase = state["gameState"].as_i64().unwrap_or(3);
         if !enabled || !matches!(phase, 0..=2) {
             self.clear();
@@ -337,6 +340,9 @@ impl Link {
         self.speech = descriptor(&format!("hero-speech-{}.json", self.pid), 32768)
             .filter(|v| speech_descriptor(v, self.pid, t))
             .unwrap_or(Value::Null);
+        if self.discovery_nonce.is_empty() {
+            self.discovery_nonce = nonce();
+        }
         let request = format!("TBCLD1|{}|{}", self.pid, self.discovery_nonce);
         self.datagram(request, 57741);
         let mut bytes = [0; 4097];
@@ -371,7 +377,8 @@ impl Link {
         host: bool,
     ) -> bool {
         let phase = state["gameState"].as_i64();
-        if self.pid == 0
+        if !addon_detected(state)
+            || self.pid == 0
             || !rms.is_finite()
             || !(0.0..=1.0).contains(&rms)
             || !matches!(phase, Some(0..=2))
@@ -476,6 +483,7 @@ impl Link {
         speech_kind: &str,
         word: &str,
     ) -> bool {
+        if !addon_detected(state) { return false; }
         let d = self.speech_state();
         if d["session"] != session
             || !(state["isHost"] == true
@@ -552,7 +560,7 @@ impl Link {
         bird: &Value,
         source: &Value,
     ) -> bool {
-        if state["mod"] != "NoS"
+        if !addon_detected(state)
             || state["gameState"] != 1
             || state["isHost"] != true
             || !source.as_u64().is_some_and(|v| v <= 255)
@@ -608,6 +616,28 @@ fn speech_descriptor(v: &Value, pid: u32, t: u64) -> bool {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn no_addon_never_creates_discovery_or_transport_and_removal_clears_state() {
+        let mut link = Link::default();
+        let no_addon = json!({"mod":"NoS","gameState":1,"lobbyCode":"ABCDEF","nosAddonIds":[],"players":[{"id":1,"isLocal":true}]});
+        link.pid = 42;
+        link.voice = json!({"port":9,"token":"a".repeat(32),"role":"tanukiVoiceRoles"});
+        assert!(!link.sample(&no_addon, 1, 0.5, true, false));
+        assert!(link.udp.is_none(), "absent addon opened its legacy UDP sender");
+        for _ in 0..1000 {
+            assert!(link.update(42, &no_addon, &json!(0x5442ffffu32)).is_none());
+        }
+        assert!(link.stream.is_none() && link.udp.is_none());
+        assert!(link.buffer.is_empty() && link.pending.is_empty());
+        assert!(link.discovery_nonce.is_empty(), "absent addon generated discovery nonces");
+        link.scope = "previous-session".into();
+        link.speech = json!({"players":[{"playerId":1}]});
+        link.profile = json!({"channels":{"speech":[{}]}});
+        link.udp = Some(UdpSocket::bind(("127.0.0.1", 0)).unwrap());
+        link.update(42, &no_addon, &Value::Null);
+        assert!(link.scope.is_empty() && link.speech.is_null() && link.profile.is_null());
+        assert!(link.udp.is_none());
+    }
     use super::*;
     #[test]
     fn loopback_stream_handles_fragmented_state_and_sends_authenticated_samples() {
@@ -645,7 +675,7 @@ mod tests {
             assert!(Instant::now() < deadline);
             std::thread::sleep(Duration::from_millis(2));
         }
-        let game = json!({"gameState":1,"players":[{"id":1,"isLocal":true}]});
+        let game = json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"players":[{"id":1,"isLocal":true}]});
         assert!(link.sample(&game, 1, 0.4, true, false));
         let packet = rx.recv_timeout(Duration::from_secs(2)).unwrap();
         assert_eq!(packet["kind"], "sample");
@@ -662,7 +692,7 @@ mod tests {
         let receiver = UdpSocket::bind(("127.0.0.1", 0)).unwrap();
         receiver.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
         let descriptor = json!({"port":receiver.local_addr().unwrap().port(),"token":"a".repeat(32),"role":"tanukiMicTest","reportVersion":true});
-        let game = json!({"gameState":0,"isHost":true,"players":[{"id":1,"isLocal":true}]});
+        let game = json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":0,"isHost":true,"players":[{"id":1,"isLocal":true}]});
         let mut link = Link::default();
         link.pid = 42;
         link.voice = descriptor.clone();
@@ -704,7 +734,7 @@ mod tests {
         link.phase = "tasks".into();
         link.speech = json!({"protocol":2,"pid":42,"port":udp.local_addr().unwrap().port(),"token":token,"updated":t,"players":[{"playerId":1,"kind":"stone","request":7,"expires":t+10000,"words":[],"maxCharacters":3}]});
         let game =
-            json!({"mod":"NoS","gameState":1,"isHost":false,"players":[{"id":1,"isLocal":true}]});
+            json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"isHost":false,"players":[{"id":1,"isLocal":true}]});
         assert!(!link.speech_command(&game, "word", &token, 1, 7, "stone", "猫 犬"));
         assert!(!link.speech_command(&game, "word", "old", 1, 7, "stone", "猫"));
         assert!(!link.speech_command(&game, "word", &token, 1, 8, "stone", "猫"));

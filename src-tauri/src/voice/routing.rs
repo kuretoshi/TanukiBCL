@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 fn wall_ear<'a>(state: &'a Value, me: &Value) -> Option<&'a Value> {
-    if state["mod"] != "NoS"
+    if !roles::addon(state)
         || state["gameState"] != 1
         || ["isDead", "disconnected", "inVent"]
             .iter()
@@ -36,11 +36,16 @@ fn wall_ear<'a>(state: &'a Value, me: &Value) -> Option<&'a Value> {
 
 #[cfg(test)]
 mod wall_ear_tests {
+    #[test]
+    fn stale_wall_ear_data_without_detected_addon_cannot_enable_listening() {
+        let state = json!({"mod":"NoS","gameState":1,"nosWallEars":[{"playerId":0,"x":0.,"y":0.,"range":4.}]});
+        assert!(wall_ear(&state, &json!({"id":0,"x":0.,"y":0.})).is_none());
+    }
     use super::*;
     use serde_json::json;
     #[test]
     fn installed_boundary_survives_json_rounding_but_rejects_a_distant_station() {
-        let mut state = json!({"mod":"NoS","gameState":1,"nosWallEars":[{"playerId":0,"x":7.706,"y":2.7,"range":4.}]});
+        let mut state = json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"nosWallEars":[{"playerId":0,"x":7.706,"y":2.7,"range":4.}]});
         let me = json!({"id":0,"x":6.106,"y":2.7});
         assert!(wall_ear(&state, &me).is_some());
         state["nosWallEars"][0]["x"] = json!(7.70600001);
@@ -48,7 +53,7 @@ mod wall_ear_tests {
     }
     #[test]
     fn missing_coordinates_or_duplicate_stations_cannot_enable_remote_listening() {
-        let mut state = json!({"mod":"NoS","gameState":1,"nosWallEars":[{"playerId":0,"x":0.,"y":0.,"range":4.}]});
+        let mut state = json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"nosWallEars":[{"playerId":0,"x":0.,"y":0.,"range":4.}]});
         assert!(wall_ear(&state, &json!({"id":0})).is_none());
         let me = json!({"id":0,"x":0.,"y":0.});
         state["nosWallEars"] = json!([state["nosWallEars"][0], state["nosWallEars"][0]]);
@@ -589,12 +594,7 @@ pub(super) fn route_at(
             });
         }
     }
-    if nos
-        && matches!(phase, 1 | 2)
-        && state["nosLimitSpeechMuted"]
-            .as_array()
-            .is_some_and(|ids| ids.contains(&other["id"]))
-    {
+    if roles::limit_speech_muted(state, &other["id"]) {
         gain = 0.0;
     }
     let tuning = roles::tuning(

@@ -177,7 +177,7 @@ impl Speech {
             }
         }
         if config.inputs.is_empty() {
-            if let Some(w) = &self.worker {
+            if let Some(w) = self.worker.take() {
                 *w.config.lock().unwrap() = config;
             }
             return;
@@ -222,6 +222,9 @@ pub struct Sender {
     audio: mpsc::SyncSender<Input>,
 }
 impl Sender {
+    pub fn accepts(&self, key: &str) -> bool {
+        self.config.lock().unwrap().inputs.contains_key(key)
+    }
     pub fn push(&self, key: &str, pcm: &[f32]) {
         if pcm.len() > 5760 || !self.config.lock().unwrap().inputs.contains_key(key) {
             return;
@@ -610,6 +613,35 @@ pub fn probe(path: &Path, pcm_path: Option<&Path>) -> Result<Value, String> {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn absent_jobs_never_start_speech_and_removal_stops_existing_worker() {
+        let mut speech = Speech::default();
+        for _ in 0..1000 {
+            speech.configure(&Value::Null, vec![("local".into(), 0)]);
+        }
+        assert!(speech.worker.is_none());
+        assert!(speech.sender().is_none());
+        let config = Arc::new(Mutex::new(Config {
+            session: "current".into(),
+            inputs: HashMap::from([("local".into(), (0, vec![json!({"kind":"hero","request":1})]))]),
+            ..Default::default()
+        }));
+        let (audio, received) = mpsc::sync_channel(1);
+        let (_, events) = mpsc::sync_channel(1);
+        let stop = Arc::new(AtomicBool::new(false));
+        speech.worker = Some(Worker { config: config.clone(), audio, events, stop: stop.clone() });
+        let previous_sender = speech.sender().unwrap();
+        assert!(previous_sender.accepts("local"));
+        assert!(!previous_sender.accepts("not-a-speech-input"));
+        speech.configure(&Value::Null, Vec::new());
+        assert!(speech.worker.is_none(), "inactive speech retained its worker");
+        assert!(speech.sender().is_none(), "inactive speech retained its audio sender");
+        assert!(stop.load(Ordering::Relaxed));
+        assert!(!previous_sender.accepts("local"));
+        previous_sender.push("local", &[0.2; 480]);
+        assert!(received.try_recv().is_err(), "a stale sender queued inactive microphone PCM");
+        assert!(config.lock().unwrap().inputs.is_empty());
+    }
     use super::*;
     #[test]
     fn decoder_identity_tracks_requests_and_rules_but_not_heartbeat_deadlines() {

@@ -1,4 +1,5 @@
 import { AmongUsState, GameState, Player } from './AmongUsState';
+import { hasTanukiAddon } from './tanukiAddon';
 
 export interface WallEarState {
 	playerId: number;
@@ -23,7 +24,8 @@ export function validWallEar(value: unknown): value is WallEarState {
 	);
 }
 export function wallEarFor(state: AmongUsState, me: Player): WallEarState | undefined {
-	if (state.mod !== 'NoS' || state.gameState !== GameState.TASKS || me.isDead || me.disconnected || me.inVent) return;
+	if (!hasTanukiAddon(state) || state.gameState !== GameState.TASKS || me.isDead || me.disconnected || me.inVent)
+		return;
 	const ears = state.nosWallEars;
 	if (!Array.isArray(ears) || ears.length > 24) return;
 	let result: WallEarState | undefined;

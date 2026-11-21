@@ -133,7 +133,7 @@ impl Mixer {
         {
             s.queue.push_back([pair[0], pair[1]]);
         }
-        if let Some(speech) = &self.speech {
+        if let Some(speech) = self.speech.as_ref().filter(|speech| speech.accepts(id)) {
             speech.push(
                 id,
                 &pcm.chunks_exact(2)

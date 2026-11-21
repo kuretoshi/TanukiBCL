@@ -326,7 +326,7 @@ impl Engine {
                     }
                     if radio.active()!=previous_radio{self.controls.radio_cue.store(audio::RADIO_FRAMES as u64,Ordering::Relaxed);}
                     self.controls.radio_pending.store(state["mod"]=="NoS"&&held&&!radio.active(),Ordering::Relaxed);
-                    let game_muted=state["mod"]=="NoS"&&matches!(phase,Some(1|2))&&local(&state).is_some_and(|p|(rules["nosFixerJammingVoiceBlock"]!=false&&p["nosPlayer"]["isJammed"]==true)||state["nosLimitSpeechMuted"].as_array().is_some_and(|ids|ids.contains(&p["id"])));
+                    let game_muted=state["mod"]=="NoS"&&matches!(phase,Some(1|2))&&local(&state).is_some_and(|p|(rules["nosFixerJammingVoiceBlock"]!=false&&p["nosPlayer"]["isJammed"]==true)||super::roles::limit_speech_muted(&state,&p["id"]));
                     self.controls.game_muted.store(game_muted,Ordering::Relaxed);
                     send_controls(&mut socket,&peers,&clients,metadata.outgoing(&state,parsed_host,&rules)).await?;
                     let radio_ids=radio.ids();

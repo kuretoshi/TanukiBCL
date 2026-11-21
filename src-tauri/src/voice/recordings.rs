@@ -712,6 +712,35 @@ impl Book {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn absent_addon_ignores_stale_recordings_and_releases_previous_capture() {
+        let mut b = Book::default();
+        let mut state = serde_json::json!({"mod":"NoS","gameState":1,"lobbyCode":"ABCDEF",
+            "nosAddonIds":[],"players":[{"id":0,"clientId":10,"isLocal":true,"x":0.,"y":0.}],
+            "nosInterviews":[{"playerId":0,"started":clock(),"seconds":1,"visible":[0],"stopped":0,"playStarted":0}],
+            "nosParrots":[],"nosDyingVoices":[],"nosMegaphones":[],"nosBibiriEchoes":[]});
+        let prefs = Preferences::default();
+        let shared = serde_json::json!({});
+        let clients = serde_json::Map::new();
+        let rules = serde_json::json!({});
+        for _ in 0..1000 {
+            b.update(&state, &prefs, &shared, &clients, true, true);
+            b.parrot_update(&state, &prefs, &shared, &clients, &rules, &[], true, true);
+            b.local(&[0.25; 480], true);
+            assert_eq!(b.next(false), [0.; 2]);
+        }
+        assert_eq!(b.bytes(), 0);
+        assert!(b.peers.is_empty() && b.local_audio.is_empty() && b.interviews.is_empty());
+        state["nosAddonIds"] = serde_json::json!(["tanuki.bcl.roles"]);
+        b.update(&state, &prefs, &shared, &clients, true, true);
+        assert!(b.bytes() > 0);
+        b.local(&[0.25; 480], true);
+        assert!(!b.local_audio.is_empty());
+        state["nosAddonIds"] = serde_json::json!([]);
+        b.update(&state, &prefs, &shared, &clients, true, true);
+        assert_eq!(b.bytes(), 0);
+        assert!(b.peers.is_empty() && b.local_audio.is_empty() && b.interviews.is_empty());
+    }
     use super::*;
     #[test]
     fn empty_book_uses_no_pcm_and_shared_budget_is_released() {

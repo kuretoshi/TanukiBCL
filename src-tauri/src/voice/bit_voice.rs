@@ -44,7 +44,7 @@ fn quantize(input: f32, levels: f64) -> f32 {
     (value.signum() * (value.abs() * 256_f64.ln()).exp_m1() / 255.) as f32
 }
 pub fn stage(state: &Value, speaker: &Value) -> Option<u8> {
-    if state["mod"] != "NoS"
+    if !super::roles::addon(state)
         || state["gameState"] != 1
         || speaker["isDead"] == true
         || speaker["disconnected"] == true
@@ -72,6 +72,14 @@ pub fn stage(state: &Value, speaker: &Value) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn stale_bit_data_without_detected_addon_cannot_change_audio() {
+        let mut state = json!({"mod":"NoS","gameState":1,"nosBitCharacters":[{"playerId":1,"stage":0}]});
+        let player = json!({"id":1});
+        assert_eq!(stage(&state, &player), None);
+        state["nosAddonIds"] = json!(["unrelated"]);
+        assert_eq!(stage(&state, &player), None);
+    }
     use super::*;
     use serde_json::json;
     #[test]
@@ -101,7 +109,7 @@ mod tests {
     #[test]
     fn meeting_death_final_duplicates_and_old_state_bypass() {
         let mut state =
-            json!({"mod":"NoS","gameState":1,"nosBitCharacters":[{"playerId":1,"stage":5}]});
+            json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"nosBitCharacters":[{"playerId":1,"stage":5}]});
         let player = json!({"id":1,"isDead":false,"disconnected":false});
         assert_eq!(stage(&state, &player), Some(5));
         state["gameState"] = json!(2);
