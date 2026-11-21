@@ -82,6 +82,7 @@ mod tests {
     }
     use super::*;
     use serde_json::json;
+
     #[test]
     fn six_stages_improve_and_bypass_restores_exact_pcm() {
         let input: Vec<f32> = (0..48000)

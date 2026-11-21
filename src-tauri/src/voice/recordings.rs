@@ -742,6 +742,7 @@ mod tests {
         assert!(b.peers.is_empty() && b.local_audio.is_empty() && b.interviews.is_empty());
     }
     use super::*;
+
     #[test]
     fn empty_book_uses_no_pcm_and_shared_budget_is_released() {
         let b = Book::default();

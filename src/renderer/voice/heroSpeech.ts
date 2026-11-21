@@ -1,3 +1,4 @@
+import { StonePcm, stoneAudioWindow } from '../../common/VoiceStoneAudio';
 import {
 	heardTransformation,
 	heardForbiddenWord,
@@ -59,6 +60,18 @@ interface Capture {
 	partialAt: number;
 }
 export class HeroSpeech {
+	private recordings = new Map<
+		string,
+		{
+			job: HeroSpeechPlayer;
+			session: string;
+			input: Input;
+			recorder: StonePcm;
+			warm: { at: number; samples: Float32Array }[];
+			processor: ScriptProcessorNode;
+			silent: GainNode;
+		}
+	>();
 	private inputs = new Map<string, Input>();
 	private captures = new Map<number, Capture>();
 	private platforms = new Map<string, { platform: SpeechPlatform; until: number }>();
@@ -114,6 +127,8 @@ export class HeroSpeech {
 		this.platforms.delete(key);
 	}
 	private removeCaptureForInput(key: string): void {
+		const input = this.inputs.get(key);
+		for (const [id, capture] of this.recordings) if (capture.input === input) this.stopRecording(id);
 		for (const [player, capture] of this.captures) if (capture.key === key) this.stop(player);
 	}
 	private permitted(key: string, input: Input): boolean {
@@ -150,10 +165,101 @@ export class HeroSpeech {
 		}
 		if (this.state?.session !== state.session) this.clear();
 		this.state = state;
-		const jobs = this.selected(state);
+		const selected = this.selected(state);
+		const neural = state.localNeuralConfigured ? selected.filter((p) => p.kind === 'stone') : [];
+		const recordedJobs = neural.filter((p) => p.recognizer === 'local-neural' || p.request === 0);
+		const jobs = selected.filter(
+			(p) => p.recognizer !== 'local-neural' && !(p.kind === 'stone' && state.localNeuralConfigured && p.request === 0)
+		);
+		this.reconcileRecording(recordedJobs, state.session);
 		if (jobs.length) void this.ensureModel();
-		if (this.model) ipcRenderer.send('NOS_HERO_SPEECH_READY', state.session, [...new Set(jobs.map((p) => p.playerId))]);
+		ipcRenderer.send(
+			'NOS_HERO_SPEECH_READY',
+			state.session,
+			[...new Set([...neural, ...(this.model ? jobs : [])].map((p) => p.playerId))],
+			[...new Set(neural.map((p) => p.playerId))]
+		);
 		this.reconcile(jobs);
+	}
+	private reconcileRecording(jobs: HeroSpeechPlayer[], session: string): void {
+		for (const [id, capture] of this.recordings) {
+			const job = jobs.find((p) => `${p.playerId}|stone` === id);
+			if (!job || capture.session !== session) {
+				this.stopRecording(id);
+				continue;
+			}
+			if (job.request !== capture.job.request) {
+				capture.recorder = new StonePcm();
+				capture.job = job;
+				capture.warm.forEach((chunk) => this.appendRecording(capture, chunk.samples, chunk.at));
+			} else capture.job = job;
+			if (!job.request || job.recordUntil! > Date.now() || this.handled.has(this.jobKey(job))) continue;
+			const wav = capture.recorder.wav();
+			this.handled.add(this.jobKey(job));
+			if (wav)
+				void ipcRenderer
+					.invoke('VOICE_STONE_LOCAL_TRANSCRIBE', session, job.playerId, job.request, wav)
+					.catch(() => {});
+		}
+		for (const job of jobs) {
+			const id = `${job.playerId}|stone`;
+			if (this.recordings.has(id)) continue;
+			const input = [...this.inputs].find(([key, i]) => i.player === job.playerId && this.permitted(key, i))?.[1];
+			if (!input) continue;
+			const processor = this.context.createScriptProcessor(2048, 1, 1),
+				silent = this.context.createGain(),
+				recorder = new StonePcm();
+			silent.gain.value = 0;
+			const capture = {
+				job,
+				session,
+				input,
+				recorder,
+				warm: [] as { at: number; samples: Float32Array }[],
+				processor,
+				silent,
+			};
+			this.recordings.set(id, capture);
+			processor.onaudioprocess = (event) => {
+				if (!this.enabled || this.state?.session !== session || !input.allowed()) {
+					capture.warm = [];
+					return;
+				}
+				const samples = event.inputBuffer.getChannelData(0),
+					at = Date.now() - (samples.length / this.context.sampleRate) * 1000;
+				capture.warm.push({ at, samples: samples.slice() });
+				capture.warm = capture.warm.filter((chunk) => chunk.at >= at - 1000);
+				this.appendRecording(capture, samples, at);
+			};
+			input.source.connect(processor);
+			processor.connect(silent);
+			silent.connect(this.context.destination);
+		}
+	}
+	private appendRecording(
+		capture: { job: HeroSpeechPlayer; recorder: StonePcm },
+		samples: Float32Array,
+		at: number
+	): void {
+		const job = capture.job;
+		if (!job.request || !Number.isSafeInteger(job.recordStarted) || this.handled.has(this.jobKey(job))) return;
+		capture.recorder.append(
+			stoneAudioWindow(samples, this.context.sampleRate, at, job.recordStarted!, job.recordUntil!),
+			this.context.sampleRate
+		);
+	}
+	private stopRecording(id: string): void {
+		const capture = this.recordings.get(id);
+		if (!capture) return;
+		this.recordings.delete(id);
+		capture.processor.onaudioprocess = null;
+		try {
+			capture.input.source.disconnect(capture.processor);
+		} catch {
+			/* Input may already have been removed. */
+		}
+		capture.processor.disconnect();
+		capture.silent.disconnect();
 	}
 	private async ensureModel(): Promise<void> {
 		if (this.model || this.loading || Date.now() < this.retryAt) return;
@@ -281,12 +387,14 @@ export class HeroSpeech {
 		capture.recognizer.remove();
 	}
 	private clear(): void {
+		for (const id of this.recordings.keys()) this.stopRecording(id);
 		for (const player of this.captures.keys()) this.stop(player);
 		this.state = undefined;
 		this.handled.clear();
 	}
 	dispose(): void {
 		this.disposed = true;
+		ipcRenderer.send('NOS_HERO_SPEECH_STOP');
 		clearInterval(this.timer);
 		this.clear();
 		this.inputs.clear();

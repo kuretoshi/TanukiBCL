@@ -282,6 +282,9 @@ pub async fn action(
             crate::render(&app, true);
         }
         "category" => {
+            if argument == "advanced" {
+                let local=t::ipc("VOICE_STONE_LOCAL_STATUS",vec![]).await?;app.borrow_mut().result["localSpeech"]=local;
+            }
             app.borrow_mut().category = argument;
             crate::render(&app, true);
         }
@@ -550,6 +553,12 @@ pub async fn action(
                 app.borrow_mut().form["platformPath"] = path;
                 crate::render(&app, true);
             }
+        }
+        "stone-local-toggle" => {
+            let enabled=app.borrow().result["localSpeech"]["enabled"]!=true;
+            t::ipc("VOICE_STONE_LOCAL_SET",vec![json!(enabled)]).await?;
+            let status=t::ipc("VOICE_STONE_LOCAL_STATUS",vec![]).await?;app.borrow_mut().result["localSpeech"]=status;
+            crate::render(&app,true);
         }
         "open-debug" => {
             let password = app.borrow_mut().form["debugPassword"].take();

@@ -1,4 +1,6 @@
 import { nosAddonLink } from './nosAddonLink';
+import { localSpeechStatus, localStoneWorker } from './localStoneSpeech';
+import { validStoneWav } from './voiceStoneAudio';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSocket, type Socket } from 'node:dgram';
@@ -7,7 +9,6 @@ import { GameState, type AmongUsState } from '../common/AmongUsState';
 import type { HeroSpeechPlayer } from '../common/HeroSpeech';
 import { hasTanukiAddon } from '../common/tanukiAddon';
 import { validStoneWord } from '../common/VoiceStoneSpeech';
-
 interface Descriptor {
 	unified?: boolean;
 	protocol: 2;
@@ -54,8 +55,19 @@ export function validHeroSpeechDescriptor(value: unknown, pid: number, now: numb
 			(p.kind === 'ng' && (p.request === 0 || p.words.length === 0)) ||
 			(p.kind === 'stone' &&
 				(p.words.length !== 0 || !Number.isInteger(p.maxCharacters) || p.maxCharacters < 1 || p.maxCharacters > 12)) ||
+			(p.recognizer !== undefined &&
+				p.recognizer !== 'local' &&
+				!(p.kind === 'stone' && p.recognizer === 'local-neural')) ||
+			(p.recognizer === 'local-neural' &&
+				(!Number.isSafeInteger(p.recordUntil) ||
+					p.recordUntil! > now + 11000 ||
+					(p.request > 0 &&
+						(!Number.isSafeInteger(p.recordStarted) ||
+							p.recordUntil! - p.recordStarted! < 1000 ||
+							p.recordUntil! - p.recordStarted! > 10000 ||
+							p.expires - p.recordUntil! !== 20000)))) ||
 			!Number.isSafeInteger(p.expires) ||
-			(p.request > 0 && (p.expires < now - 100 || p.expires > now + 16000))
+			(p.request > 0 && (p.expires < now - 100 || p.expires > now + (p.recognizer === 'local-neural' ? 31000 : 16000)))
 		)
 			return false;
 		ids.add(`${p.playerId}|${p.kind}`);
@@ -68,6 +80,15 @@ export function registerHeroSpeechBridge(
 	isMainRenderer: (id: number) => boolean
 ): () => void {
 	let udp: Socket | undefined;
+	const localPending = new Map<string, AbortController>();
+	const localSubmitted = new Set<string>();
+	let localSession = '';
+	function cancelLocal(): void {
+		for (const controller of localPending.values()) controller.abort();
+		localPending.clear();
+		localSubmitted.clear();
+		localSession = '';
+	}
 	function close(): void {
 		const current = udp;
 		udp = undefined;
@@ -118,16 +139,95 @@ export function registerHeroSpeechBridge(
 	}
 	ipc.handle('NOS_HERO_SPEECH_STATE', (event) => {
 		if (!isMainRenderer(event.sender.id)) return null;
+		localStoneWorker.idle();
 		const d = descriptor();
-		return d ? { pid: d.pid, session: d.token, players: d.players } : null;
+		if (!d || localSession !== d.token || !localSpeechStatus().enabled) cancelLocal();
+		if (!d) localStoneWorker.close();
+		localSession = d?.token ?? '';
+		for (const [id, controller] of localPending) {
+			if (
+				!d?.players.some(
+					(p) =>
+						`${d.token}|${p.playerId}|${p.request}` === id && p.recognizer === 'local-neural' && p.expires > Date.now()
+				)
+			) {
+				controller.abort();
+				localPending.delete(id);
+			}
+		}
+		return d
+			? { pid: d.pid, session: d.token, players: d.players, localNeuralConfigured: localSpeechStatus().enabled }
+			: null;
 	});
-	ipc.on('NOS_HERO_SPEECH_READY', (event, session: unknown, ready: unknown) => {
+	ipc.on('NOS_HERO_SPEECH_STOP', (event) => {
+		if (!isMainRenderer(event.sender.id)) return;
+		cancelLocal();
+		localStoneWorker.close();
+	});
+	ipc.handle(
+		'VOICE_STONE_LOCAL_TRANSCRIBE',
+		async (event, session: unknown, player: unknown, request: unknown, bytes: unknown) => {
+			if (
+				!isMainRenderer(event.sender.id) ||
+				!localSpeechStatus().enabled ||
+				!(bytes instanceof Uint8Array) ||
+				!validStoneWav(bytes) ||
+				!permitted(player)
+			)
+				return false;
+			const d = descriptor();
+			const job = d?.players.find(
+				(p) =>
+					p.kind === 'stone' &&
+					p.recognizer === 'local-neural' &&
+					p.playerId === player &&
+					p.request === request &&
+					p.request > 0
+			);
+			if (!d || d.token !== session || !job || job.expires <= Date.now() || job.recordUntil! > Date.now() + 100)
+				return false;
+			const id = `${session}|${player}|${request}`;
+			if (localSubmitted.has(id) || localPending.size >= 4 || localSubmitted.size >= 1024) return false;
+			localSubmitted.add(id);
+			const controller = new AbortController();
+			localPending.set(id, controller);
+			const timer = setTimeout(() => controller.abort(), Math.min(18000, job.expires - Date.now()));
+			try {
+				const word = await localStoneWorker.transcribe(bytes, job.maxCharacters!, controller.signal);
+				const live = descriptor();
+				if (
+					!word ||
+					controller.signal.aborted ||
+					!localSpeechStatus().enabled ||
+					live?.token !== session ||
+					!live.players.some(
+						(p) =>
+							p.playerId === player &&
+							p.kind === 'stone' &&
+							p.recognizer === 'local-neural' &&
+							p.request === request &&
+							p.expires > Date.now()
+					)
+				)
+					return false;
+				if (!live.unified) return false;
+				return nosAddonLink.sendCommand(live.pid, 'word', { playerId: player, request, speechKind: 'stone', word });
+			} finally {
+				clearTimeout(timer);
+				localPending.delete(id);
+			}
+		}
+	);
+	ipc.on('NOS_HERO_SPEECH_READY', (event, session: unknown, ready: unknown, neural: unknown = []) => {
 		if (!isMainRenderer(event.sender.id) || !Array.isArray(ready) || ready.length > 24) return;
 		const d = descriptor();
 		if (!d || session !== d.token) return;
 		const allowed = ready.filter((id) => d.players.some((p) => p.playerId === id) && permitted(id));
 		if (d.unified) {
-			nosAddonLink.sendCommand(d.pid, 'ready', { players: allowed });
+			nosAddonLink.sendCommand(d.pid, 'ready', {
+				players: allowed,
+				neural: localSpeechStatus().enabled && Array.isArray(neural) ? allowed.filter((id) => neural.includes(id)) : [],
+			});
 			return;
 		}
 		for (const id of allowed) {
@@ -167,5 +267,9 @@ export function registerHeroSpeechBridge(
 			send(`TBCLHS2|${d.token}|word|${Date.now()}|${armed.playerId}|${armed.request}|${payload}`, d.port);
 		}
 	);
-	return close;
+	return () => {
+		close();
+		cancelLocal();
+		localStoneWorker.close();
+	};
 }

@@ -1,5 +1,7 @@
 //! Experimental Rust backend. The shared React/WebRTC frontend stays unchanged.
 mod assets;
+mod local_speech;
+pub(crate) mod speech_audio;
 mod http;
 mod keys;
 mod memory;
@@ -26,6 +28,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager};
 
 pub struct Backend {
+    local_speech: local_speech::LocalSpeech,
     updater: updater::Updater,
     app: AppHandle,
     running: AtomicBool,
@@ -112,6 +115,7 @@ impl Backend {
         let shortcuts = shortcuts(&settings.current());
         let constants = serde_json::from_slice(&fs::read(resources.join("rust-constants.json"))?)?;
         let backend = Arc::new(Self {
+            local_speech: local_speech::LocalSpeech::default(),
             updater: updater::Updater::default(),
             app: app.clone(),
             running: AtomicBool::new(true),
@@ -247,7 +251,33 @@ impl Backend {
                     sample["host"] == true
                 )));
             }
-            "NOS_HERO_SPEECH_STATE" => return Ok(self.addon_link.lock().unwrap().speech_state()),
+            "VOICE_STONE_LOCAL_STATUS" if matches!(target,"main"|"settings") => return Ok(self.local_speech.status()),
+            "VOICE_STONE_LOCAL_SET" if matches!(target,"main"|"settings") => return Ok(json!(self.local_speech.save(&get(0)))),
+            "VOICE_STONE_LOCAL_TRANSCRIBE" => {
+                if target!="main" || !self.local_speech.enabled() {return Ok(json!(false));}
+                let state=self.state.lock().unwrap().clone();
+                if !local_speech::active_state(&state) { self.local_speech.set_active(false); return Ok(json!(false)); }
+                let player=get(1).as_u64().unwrap_or(256); let request=get(2).as_u64().unwrap_or(0); let session=text(0);
+                if state["isHost"]!=true && !state["players"].as_array().is_some_and(|ps|ps.iter().any(|p|p["id"]==player&&p["isLocal"]==true)){return Ok(json!(false));}
+                let speech=self.addon_link.lock().unwrap().speech_state();
+                let job=speech["players"].as_array().and_then(|ps|ps.iter().find(|p|p["playerId"]==player&&p["kind"]=="stone"&&p["recognizer"]=="local-neural"&&p["request"]==request&&request>0&&p["expires"].as_u64().unwrap_or(0)>mods::addon::now()&&p["recordUntil"].as_u64().unwrap_or(u64::MAX)<=mods::addon::now()+100));
+                if speech["session"]!=session || job.is_none(){return Ok(json!(false));}
+                let raw=get(3);let Some(array)=raw.as_array().filter(|a|a.len()<=320044)else{return Ok(json!(false));};
+                let Some(bytes):Option<Vec<u8>>=array.iter().map(|v|v.as_u64().filter(|n|*n<=255).map(|n|n as u8)).collect()else{return Ok(json!(false));};
+                let word=self.local_speech.transcribe(&bytes,job.unwrap()["maxCharacters"].as_u64().unwrap_or(0)as usize)?;
+                let state=self.state.lock().unwrap().clone();
+                if !self.local_speech.enabled(){return Ok(json!(false));}
+                return Ok(json!(word.is_some_and(|word|self.addon_link.lock().unwrap().speech_command(&state,"word",session,player,request,"stone",&word))));
+            }
+            "NOS_HERO_SPEECH_STATE" => {
+                if target != "main" {return Ok(Value::Null);}
+                let active = local_speech::active_state(&self.state.lock().unwrap());
+                self.local_speech.set_active(active);
+                if !active { return Ok(Value::Null); }
+                let mut speech=self.addon_link.lock().unwrap().speech_state();
+                if speech.is_object(){speech["localNeuralConfigured"]=json!(self.local_speech.enabled());}
+                return Ok(speech);
+            }
             "NOS_HERO_SPEECH_READY" | "NOS_HERO_SPEECH_WORD" => {
                 if target != "main" {
                     return Err("Speech requires main window".into());
@@ -256,6 +286,9 @@ impl Backend {
                 let mut link = self.addon_link.lock().unwrap();
                 if channel == "NOS_HERO_SPEECH_READY" {
                     for p in get(1).as_array().into_iter().flatten().take(24) {
+                        if self.local_speech.enabled() && get(2).as_array().is_some_and(|ids|ids.contains(p)) {
+                            link.neural_ready(&state,text(0),p.as_u64().unwrap_or(256)); continue;
+                        }
                         link.speech_command(
                             &state,
                             "ready",
@@ -584,6 +617,7 @@ impl Backend {
         let mut next_check = std::time::Instant::now();
         let mut failures = 0;
         while self.running.load(Ordering::Relaxed) {
+            self.local_speech.set_active(local_speech::active_state(&self.state.lock().unwrap()));
             if !self.hooked.load(Ordering::Relaxed) {
                 std::thread::sleep(Duration::from_millis(50));
                 continue;
@@ -697,6 +731,7 @@ impl Backend {
     }
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
+        self.local_speech.set_active(false);
         self.addon_link.lock().unwrap().clear();
         keys::stop(self);
     }

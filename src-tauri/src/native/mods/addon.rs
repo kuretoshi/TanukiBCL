@@ -93,7 +93,8 @@ pub fn row_valid(kind: &str, p: &Value, now: u64) -> bool {
                 .as_str()
                 .is_some_and(|s| ["hero", "ng", "stone"].contains(&s))
                 && p["request"].as_u64().is_some_and(|v| v <= 2147483647)
-                && time(&p["expires"], now + 16000)
+                && time(&p["expires"], now + if p["recognizer"]=="local-neural" {31000} else {16000})
+                && (p["recognizer"].is_null() || p["recognizer"] == "local" || p["kind"] == "stone" && p["recognizer"]=="local-neural" && time(&p["recordUntil"],now+11000) && (p["request"] == 0 || p["recordUntil"].as_u64().unwrap_or(0).checked_sub(p["recordStarted"].as_u64().unwrap_or(u64::MAX)).is_some_and(|n|(1000..=10000).contains(&n)) && p["expires"].as_u64().unwrap_or(0).checked_sub(p["recordUntil"].as_u64().unwrap_or(u64::MAX)) == Some(20000)))
                 && p["words"].as_array().is_some_and(|ws| {
                     ws.len() <= 3
                         && ws.iter().all(|w| {
@@ -550,5 +551,13 @@ mod tests {
         let value = scalars(&snapshot).unwrap();
         assert_eq!(value["heroes"][0]["kind"], "super");
         assert_eq!(value["portable"][0]["extraRange"], 10.0);
+    }
+}
+
+#[cfg(test)] mod neural_mode_tests {
+    #[test] fn bounded_neural_stone_only() {
+        let now=10000;let mut p=serde_json::json!({"playerId":1,"kind":"stone","request":1,"expires":35000,"recordUntil":15000,"recordStarted":10000,"recognizer":"local-neural","words":[],"maxCharacters":8});
+        assert!(super::row_valid("speech",&p,now));p["kind"]=serde_json::json!("hero");assert!(!super::row_valid("speech",&p,now));
+        p["kind"]=serde_json::json!("stone");p["recordStarted"]=serde_json::json!(15000);assert!(!super::row_valid("speech",&p,now));
     }
 }

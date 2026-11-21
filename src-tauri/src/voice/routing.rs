@@ -43,6 +43,7 @@ mod wall_ear_tests {
     }
     use super::*;
     use serde_json::json;
+
     #[test]
     fn installed_boundary_survives_json_rounding_but_rejects_a_distant_station() {
         let mut state = json!({"mod":"NoS","nosAddonIds":["tanuki.bcl.roles"],"gameState":1,"nosWallEars":[{"playerId":0,"x":7.706,"y":2.7,"range":4.}]});

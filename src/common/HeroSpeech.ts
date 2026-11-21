@@ -5,6 +5,9 @@ export interface HeroSpeechPlayer {
 	expires: number;
 	words: string[];
 	maxCharacters?: number;
+	recognizer?: 'local' | 'local-neural';
+	recordUntil?: number;
+	recordStarted?: number;
 }
 export type SpeechPlatform = 'desktop' | 'web' | 'mobile';
 export function shouldRecogniseSpeech(local: boolean, host: boolean, platform?: SpeechPlatform): boolean {
@@ -23,6 +26,7 @@ export function heardForbiddenWord(text: unknown, words: readonly string[], fina
 	return words.some((word) => normaliseSpeech(word).length >= 2 && normal.includes(normaliseSpeech(word)));
 }
 export interface HeroSpeechState {
+	localNeuralConfigured?: boolean;
 	pid: number;
 	session: string;
 	players: HeroSpeechPlayer[];

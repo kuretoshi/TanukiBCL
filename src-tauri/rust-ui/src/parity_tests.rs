@@ -230,3 +230,9 @@ fn player_grid_matches_the_electron_algorithm_for_window_sizes_and_groups() {
         );
     }
 }
+
+#[test]
+fn shared_local_model_settings_have_no_cloud_key_fields() {
+ let mut state=State::for_view("settings","test");state.category="advanced".into();state.result["localSpeech"]=json!({"available":true,"enabled":true});
+ let html=settings::render(&state);assert!(html.contains("stone-local-toggle"));assert!(html.contains(">On</button>"));assert!(!html.contains("OpenAI"));assert!(!html.contains("APIキー"));
+}

@@ -1,6 +1,6 @@
 [package]
 name = "tanuki-bcl-tauri"
-version = "3.2.68-tauri-beta.1"
+version = "3.2.69-tauri-beta.1"
 description = "Tanuki BetterCrewLink Tauri beta"
 edition = "2021"
 license = "GPL-3.0-or-later"

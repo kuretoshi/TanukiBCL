@@ -2,7 +2,7 @@
 //! WASAPI, the mixer, or the signaling event loop.
 use serde_json::{json, Value};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     ffi::{c_char, c_void, CStr, CString},
     path::{Path, PathBuf},
     sync::{
@@ -124,15 +124,20 @@ pub fn matches(text: &str, job: &Value, final_result: bool) -> bool {
 }
 #[derive(Clone, Default)]
 struct Config {
+    local_neural: bool,
     session: String,
     inputs: HashMap<String, (u64, Vec<Value>)>,
 }
 pub enum Event {
-    Ready(String, u64),
+    Ready(String, u64, bool),
     Word(String, u64, u64, String, String),
+    Audio(String, u64, u64, Vec<u8>),
     Error(String),
 }
 struct Input {
+    at: u64,
+    session: String,
+    signature: String,
     key: String,
     pcm: Vec<f32>,
 }
@@ -159,22 +164,15 @@ impl Speech {
             ..Default::default()
         }
     }
-    pub fn configure(&mut self, state: &Value, inputs: Vec<(String, u64)>) {
+    pub fn configure(&mut self,state:&Value,inputs:Vec<(String,u64)>) {
         let mut config = Config {
             session: state["session"].as_str().unwrap_or("").into(),
+            local_neural: state["localNeuralConfigured"]==true,
             ..Default::default()
         };
-        for (key, id) in inputs {
-            let jobs: Vec<_> = state["players"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|p| p["playerId"] == id)
-                .cloned()
-                .collect();
-            if !jobs.is_empty() {
-                config.inputs.insert(key, (id, jobs));
-            }
+        for (key,id) in inputs {
+            let jobs:Vec<_>=state["players"].as_array().into_iter().flatten().filter(|p|p["playerId"]==id&&(p["recognizer"]!="local-neural"||config.local_neural)).cloned().collect();
+            if !jobs.is_empty(){config.inputs.insert(key,(id,jobs));}
         }
         if config.inputs.is_empty() {
             if let Some(w) = self.worker.take() {
@@ -226,11 +224,11 @@ impl Sender {
         self.config.lock().unwrap().inputs.contains_key(key)
     }
     pub fn push(&self, key: &str, pcm: &[f32]) {
-        if pcm.len() > 5760 || !self.config.lock().unwrap().inputs.contains_key(key) {
-            return;
-        }
+        let config = self.config.lock().unwrap();
+        let Some((_,jobs)) = config.inputs.get(key) else { return; };
+        if pcm.len() > 5760 { return; }
         let _ = self.audio.try_send(Input {
-            key: key.into(),
+            at: now().saturating_sub(pcm.len() as u64/48), session: config.session.clone(), signature: job_signature(jobs), key: key.into(),
             pcm: pcm
                 .iter()
                 .map(|v| (v * 32768.).clamp(-32768., 32767.))
@@ -339,6 +337,13 @@ fn job_signature(jobs: &[Value]) -> String {
     signatures.sort();
     serde_json::to_string(&signatures).unwrap()
 }
+fn buffered(j:&Value)->bool { j["recognizer"]=="local-neural" }
+fn buffered_or_warm(j:&Value,local_neural:bool)->bool {buffered(j) || local_neural && j["kind"]=="stone" && j["request"]==0}
+fn append_recording(job: &Value, pcm: &mut Vec<i16>, samples: &[i16], at: u64) {
+    let start = job["recordStarted"].as_u64().unwrap_or(u64::MAX).saturating_sub(at).saturating_mul(16).min(samples.len() as u64) as usize;
+    let end = job["recordUntil"].as_u64().unwrap_or(0).saturating_sub(at).saturating_mul(16).min(samples.len() as u64) as usize;
+    if end > start { pcm.extend(samples[start..end].iter().take(160000usize.saturating_sub(pcm.len()))); }
+}
 fn run(
     path: PathBuf,
     config: Arc<Mutex<Config>>,
@@ -348,6 +353,8 @@ fn run(
 ) {
     let mut api: Option<Api> = None;
     let mut model: Ptr = std::ptr::null_mut();
+    let mut warm: HashMap<String, VecDeque<(u64, Vec<i16>)>> = HashMap::new();
+    let mut recordings: HashMap<String, (Value, Vec<i16>)> = HashMap::new();
     let mut decoders: HashMap<String, Decoder> = HashMap::new();
     let mut session = String::new();
     let mut handled = HashSet::new();
@@ -360,6 +367,7 @@ fn run(
         let enabled = !c.inputs.is_empty();
         let changed = session != c.session;
         if changed || !enabled {
+            recordings.clear(); warm.clear();
             if let Some(a) = &api {
                 for (_, d) in decoders.drain() {
                     unsafe { (a.free)(d.ptr) }
@@ -378,7 +386,7 @@ fn run(
                 api = None;
             }
         }
-        if enabled && model.is_null() && Instant::now() >= retry {
+        if c.inputs.values().any(|(_,jobs)|jobs.iter().any(|j|!buffered_or_warm(j,c.local_neural))) && model.is_null() && Instant::now() >= retry {
             let loaded = (|| {
                 let a = Api::load(&path)?;
                 let model_path = model_c_path(&path)?;
@@ -399,6 +407,23 @@ fn run(
                 }
             }
         }
+        let active_recordings: HashMap<_,_> = c.inputs.iter().filter_map(|(key,(id,jobs))| {
+            if jobs.iter().any(|j|buffered_or_warm(j,c.local_neural)) && last_ready.elapsed() >= Duration::from_millis(200) { let _ = events.try_send(Event::Ready(c.session.clone(),*id,c.local_neural&&jobs.iter().any(|j|j["kind"]=="stone"))); }
+            jobs.iter().find(|j|buffered(j) && j["request"].as_u64().is_some_and(|r|r>0) && j["expires"].as_u64().unwrap_or(0)>t && !handled.contains(&format!("{}:{}:{}",j["playerId"],j["kind"],j["request"]))).map(|job|(key.clone(),job.clone()))
+        }).collect();
+        recordings.retain(|key,(job,_)|active_recordings.get(key).is_some_and(|live|live["request"] == job["request"]));
+        for (key, job) in active_recordings {
+            let capture = recordings.entry(key.clone()).or_insert_with(|| {
+                let mut pcm = Vec::new();
+                if let Some(parts) = warm.get(&key) { for (at, samples) in parts { append_recording(&job, &mut pcm, samples, *at); } }
+                (job.clone(),pcm)
+            });
+            if job["recordUntil"].as_u64().unwrap_or(0) <= t {
+                handled.insert(format!("{}:{}:{}",job["playerId"],job["kind"],job["request"]));
+                if let Some(wav) = crate::native::speech_audio::wav(&capture.1) { let _ = events.try_send(Event::Audio(c.session.clone(),job["playerId"].as_u64().unwrap_or(256),job["request"].as_u64().unwrap_or(0),wav)); }
+            }
+        }
+        if api.is_none() && last_ready.elapsed() >= Duration::from_millis(200) { last_ready = Instant::now(); }
         if let Some(a) = &api {
             if last_ready.elapsed() >= Duration::from_millis(200) {
                 ready.clear();
@@ -409,12 +434,12 @@ fn run(
                 .iter()
                 .map(|(key, (id, jobs))| {
                     if ready.insert(*id) {
-                        let _ = events.try_send(Event::Ready(c.session.clone(), *id));
+                        let _ = events.try_send(Event::Ready(c.session.clone(), *id,c.local_neural&&jobs.iter().any(|j|j["kind"]=="stone")));
                     }
                     let jobs: Vec<_> = jobs
                         .iter()
                         .filter(|j| {
-                            j["request"].as_u64().is_some_and(|r| r > 0)
+                            !buffered_or_warm(j,c.local_neural) && j["request"].as_u64().is_some_and(|r| r > 0)
                                 && j["expires"].as_u64().unwrap_or(0) > t
                                 && !handled.contains(&format!(
                                     "{}:{}:{}",
@@ -460,6 +485,16 @@ fn run(
         }
         match audio.recv_timeout(Duration::from_millis(20)) {
             Ok(input) => {
+                let current = config.lock().unwrap();
+                if current.session != input.session || !current.inputs.get(&input.key).is_some_and(|(_,jobs)|job_signature(jobs)==input.signature) { continue; }
+                drop(current);
+                if c.inputs.get(&input.key).is_some_and(|(_,jobs)|jobs.iter().any(|j|buffered_or_warm(j,c.local_neural))) {
+                    let samples: Vec<i16> = input.pcm.chunks_exact(3).map(|frame|(frame.iter().sum::<f32>()/3.).clamp(-32768.,32767.) as i16).collect();
+                    let parts = warm.entry(input.key.clone()).or_default();
+                    parts.push_back((input.at,samples.clone()));
+                    while parts.front().is_some_and(|(at,_)|*at+1000<input.at) { parts.pop_front(); }
+                    if let Some((job,pcm)) = recordings.get_mut(&input.key) { append_recording(job,pcm,&samples,input.at); }
+                }
                 let Some(a) = &api else { continue };
                 let Some(d) = decoders.get_mut(&input.key) else {
                     continue;
@@ -642,6 +677,14 @@ mod tests {
         assert!(received.try_recv().is_err(), "a stale sender queued inactive microphone PCM");
         assert!(config.lock().unwrap().inputs.is_empty());
     }
+    #[test] fn shared_buffer_respects_ability_window() {
+        let job = serde_json::json!({"recordStarted":9500,"recordUntil":10500});
+        let mut pcm = Vec::new(); super::append_recording(&job,&mut pcm,&vec![1000;16000],9000);
+        assert_eq!(pcm.len(),8000); // Half-second first syllable, excluding the preceding half-second.
+        super::append_recording(&job,&mut pcm,&vec![1000;16000],11000); assert_eq!(pcm.len(),8000);
+        let mut other = Vec::new(); super::append_recording(&job,&mut other,&vec![1000;16000],8000); assert!(other.is_empty());
+    }
+
     use super::*;
     #[test]
     fn decoder_identity_tracks_requests_and_rules_but_not_heartbeat_deadlines() {
@@ -673,7 +716,7 @@ mod tests {
             speech.configure(&state, vec![("local".into(), 0)]);
             let started = Instant::now();
             loop {
-                if speech.events().iter().any(|event| matches!(event, Event::Ready(_, 0))) { break; }
+                if speech.events().iter().any(|event| matches!(event, Event::Ready(_, 0, _))) { break; }
                 assert!(started.elapsed() < Duration::from_secs(10), "model did not become ready");
                 std::thread::sleep(Duration::from_millis(20));
             }

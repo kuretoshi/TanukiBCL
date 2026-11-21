@@ -449,6 +449,12 @@ impl Link {
             port,
         )
     }
+    pub fn neural_ready(&mut self,state:&Value,session:&str,player:u64)->bool {
+        if !addon_detected(state) { return false; }
+        let d=self.speech_state();
+        if d["session"]!=session || !(state["isHost"]==true || state["players"].as_array().is_some_and(|ps|ps.iter().any(|p|p["id"]==player&&p["isLocal"]==true))) || !d["players"].as_array().is_some_and(|ps|ps.iter().any(|p|p["playerId"]==player&&p["kind"]=="stone")){return false;}
+        self.send("ready",json!({"players":[player],"neural":[player]}))
+    }
     pub fn speech_state(&self) -> Value {
         if !matches!(self.phase.as_str(), "tasks" | "meeting") {
             return Value::Null;
@@ -639,6 +645,7 @@ mod tests {
         assert!(link.udp.is_none());
     }
     use super::*;
+
     #[test]
     fn loopback_stream_handles_fragmented_state_and_sends_authenticated_samples() {
         use std::io::{BufRead, BufReader};

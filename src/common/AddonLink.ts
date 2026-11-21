@@ -58,7 +58,17 @@ function speechValid(p: HeroSpeechPlayer, now: number): boolean {
 		['hero', 'ng', 'stone'].includes(p.kind) &&
 		Number.isInteger(p.request) &&
 		range(p.request, 0, 2147483647) &&
-		time(p.expires, now + 16000) &&
+		time(p.expires, now + (p.recognizer === 'local-neural' ? 31000 : 16000)) &&
+		(p.recognizer === undefined ||
+			p.recognizer === 'local' ||
+			(p.kind === 'stone' && p.recognizer === 'local-neural')) &&
+		(p.recognizer !== 'local-neural' ||
+			(time(p.recordUntil, now + 11000) &&
+				(p.request === 0 ||
+					(Number.isSafeInteger(p.recordStarted) &&
+						p.recordUntil! - p.recordStarted! >= 1000 &&
+						p.recordUntil! - p.recordStarted! <= 10000 &&
+						p.expires - p.recordUntil! === 20000)))) &&
 		Array.isArray(p.words) &&
 		p.words.length <= 3 &&
 		p.words.every((w) => typeof w === 'string' && w.length >= 2 && w.length <= 32) &&
