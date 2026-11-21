@@ -21,7 +21,12 @@ try {
 	const { bitCharacterStage, validBitCharacter } = await load('src/common/BitCharacterState.ts');
 	const { validAddonChannels } = await load('src/common/AddonLink.ts');
 	const player = { id: 1, isDead: false, disconnected: false };
-	const state = { mod: 'NoS', gameState: 1, nosBitCharacters: [{ playerId: 1, stage: 0 }] };
+	const state = {
+		mod: 'NoS',
+		nosAddonIds: ['tanuki.bcl.roles'],
+		gameState: 1,
+		nosBitCharacters: [{ playerId: 1, stage: 0 }],
+	};
 	assert.equal(bitCharacterStage(state, player), 0);
 	for (const phase of [0, 2, 3, 4])
 		assert.equal(bitCharacterStage({ ...state, gameState: phase }, player), -1, 'meeting/menu/lobby bypass');
