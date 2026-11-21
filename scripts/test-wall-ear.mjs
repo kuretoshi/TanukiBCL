@@ -19,7 +19,15 @@ try {
 	const me = { id: 1, clientId: 10, x: 12, y: -15, isDead: false, isImpostor: false };
 	const other = { id: 2, clientId: 11, x: 15, y: -15, isDead: false, isImpostor: false };
 	const ear = { playerId: 1, x: 12, y: -15, range: 4 };
-	const state = { mod: 'NoS', nosAddonIds: ['tanuki.bcl.roles'], gameState: 1, map: 5, closedDoors: [], currentCamera: 7, players: [me, other] };
+	const state = {
+		mod: 'NoS',
+		nosAddonIds: ['tanuki.bcl.roles'],
+		gameState: 1,
+		map: 5,
+		closedDoors: [],
+		currentCamera: 7,
+		players: [me, other],
+	};
 	const input = {
 		state,
 		me,

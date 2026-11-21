@@ -1,6 +1,6 @@
 {
 	"name": "bettercrewlinkkai",
-	"version": "3.2.67",
+	"version": "3.2.68",
 	"license": "GPL-3.0-or-later",
 	"description": "Free, open, Among Us Proximity Voice Chat",
 	"main": "out/main/index.js",
@@ -85,7 +85,8 @@
 		"dist:lite": "node scripts/prepare-hero-speech.mjs && node scripts/verify-native-deps.mjs source && powershell -File scripts/build-snr-reader.ps1 && powershell -File scripts/build-nos-reader.ps1 && electron-vite build && electron-builder --win --x64 --config electron-builder-lite.yml --publish never && node scripts/verify-native-deps.mjs dist-lite",
 		"publish:lite": "node scripts/prepare-hero-speech.mjs && npm run dist:lite && electron-builder --win --x64 --config electron-builder-lite.yml --publish always",
 		"prepare:hero-speech": "node scripts/prepare-hero-speech.mjs",
-		"prebuild": "node scripts/prepare-hero-speech.mjs"
+		"prebuild": "node scripts/prepare-hero-speech.mjs",
+		"test:no-tanuki-addon": "node scripts/test-no-tanuki-addon.mjs"
 	},
 	"dependencies": {
 		"@jimp/core": "1.6.1",

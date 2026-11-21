@@ -20,7 +20,8 @@ export function bitCharacterStage(
 	state: AmongUsState,
 	speaker: Pick<Player, 'id' | 'isDead' | 'disconnected'>
 ): number {
-	if (!hasTanukiAddon(state) || state.gameState !== GameState.TASKS || speaker.isDead || speaker.disconnected) return -1;
+	if (!hasTanukiAddon(state) || state.gameState !== GameState.TASKS || speaker.isDead || speaker.disconnected)
+		return -1;
 	const rows = state.nosBitCharacters;
 	if (
 		!Array.isArray(rows) ||
