@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "version": "3.2.70-tauri-beta.2",
+  "baseVersion": "3.2.70",
+  "installerSha256": "84a45d73c6fc5ad864c13af759ebb102cf17da4cfdf3ccef5748cffe9a741b15",
+  "installerBytes": 58454353,
+  "executableSha256": "444cd2e2cb043d173a4dbd6a58b0b51b8555ac0e3f126d18cc250337aebace83",
+  "buildExecutableSha256": "ae866b0e831d6922ad40bf2719378a12ec4e63b4f464fd9d2f04f477310a82f8",
+  "nsisBundleTypeMarkerVerified": true,
+  "verifiedBackendFiles": 33,
+  "allPackagedResourcesMatched": true,
+  "portableResourceCopyCreated": false,
+  "physicalMicrophoneTested": false,
+  "liveGameLobbyExitTested": false
+}

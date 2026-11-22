@@ -4,7 +4,7 @@
   "tag": "v3.2.70",
   "commit": "4c01d7d9c2b772b48ee5fa40a8102149fbe26e81",
   "baseVersion": "3.2.70",
-  "betaVersion": "3.2.70-tauri-beta.1",
+  "betaVersion": "3.2.70-tauri-beta.2",
   "publishedAt": null,
   "files": {
     "src/common/AddonLink.ts": "d955e90ac3911f7489c2745ecef59526fffdd48349d49b98aebe3f07a5914b96",

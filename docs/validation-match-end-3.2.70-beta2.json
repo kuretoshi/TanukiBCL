@@ -1,0 +1,46 @@
+{
+  "version": "3.2.70-tauri-beta.2",
+  "passed": true,
+  "date": "2026-11-22T07:10:35.343Z",
+  "baseVersion": "3.2.70",
+  "baseCommit": "4c01d7d9c2b772b48ee5fa40a8102149fbe26e81",
+  "previousTauriSource": "70ea75c343f5ce3d1218c8859be9fbe1c44b28b1",
+  "change": "Read InnerNetClient.Ended (3) before following MeetingHud/player pointers. Publish the normal MENU waiting snapshot, clear stale player/light/colour state, and resume on Joined/Started. Preserve genuine lobby/match read errors.",
+  "tests": {
+    "passed": 159,
+    "ignored": 3,
+    "native": {
+      "passed": 132,
+      "ignored": 3
+    },
+    "clr": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "ui": {
+      "passed": 25,
+      "ignored": 0
+    },
+    "regression": "Self-process memory fixture with unreadable destroyed MeetingHud/player addresses; Joined/Started errors remain visible."
+  },
+  "isolation": {
+    "sourceFiles": 117,
+    "sourceBytes": 4148070,
+    "dependenciesAndResourcesReused": true,
+    "unpublishedSpeechAndUiChangesIncluded": false
+  },
+  "installerSha256": "84a45d73c6fc5ad864c13af759ebb102cf17da4cfdf3ccef5748cffe9a741b15",
+  "executableSha256": "444cd2e2cb043d173a4dbd6a58b0b51b8555ac0e3f126d18cc250337aebace83",
+  "installerBytes": 58454353,
+  "preservation": {
+    "electronTrackedFiles": 328,
+    "beta1InstallerUnchanged": true
+  },
+  "liveMatchEndVerified": false,
+  "installerExecuted": false,
+  "limitations": [
+    "Post-match normal waiting/recovery was tested using real ReadProcessMemory calls on synthetic in-process memory. The user’s live match-end screen has not been reproduced with beta2.",
+    "Three existing tests requiring external speech resources remain ignored.",
+    "No Electron/Lite/.NET application changes; no physical microphone or multi-person call testing for this patch."
+  ]
+}
