@@ -1,5 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Reject a production executable linked against development-mode Tauri.
+const _: () = assert!(
+    cfg!(debug_assertions) || !tauri::is_dev(),
+    "Packaged Tauri UI must use the production protocol"
+);
+
 #[cfg(feature = "node-compat")]
 mod backend;
 mod diagnostics;
@@ -37,8 +43,10 @@ fn notify_backend_window(app: &AppHandle, label: &str, open: bool) {
 
 fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window(label) {
-        window.unminimize()?;
-        if label != "overlay" {
+        if std::env::var_os("TANUKI_STARTUP_PROBE").is_none() {
+            window.unminimize()?;
+        }
+        if label != "overlay" && std::env::var_os("TANUKI_STARTUP_PROBE").is_none() {
             window.show()?;
             window.set_focus()?;
         }
@@ -78,7 +86,11 @@ fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
     if !hardware_acceleration {
         browser_arguments.push_str(" --disable-gpu");
     }
+    let background_probe = std::env::var_os("TANUKI_STARTUP_PROBE").is_some();
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(path.into()))
+        .visible(!background_probe)
+        .focused(!background_probe)
+        .skip_taskbar(background_probe)
         .title(if label == "main" {
             format!("ベタクル Tauri {}", app.package_info().version)
         } else {
@@ -92,10 +104,19 @@ fn open_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
         // Voice-role heartbeats must continue while Among Us has focus.
         .additional_browser_args(&browser_arguments)
         .on_navigation(|url| {
-            url.host_str() == Some("tauri.localhost")
+            let allowed = url.host_str() == Some("tauri.localhost")
                 || (cfg!(debug_assertions)
                     && url.host_str() == Some("localhost")
-                    && url.port() == Some(1420))
+                    && url.port() == Some(1420));
+            if std::env::var_os("TANUKI_STARTUP_PROBE").is_some() {
+                eprintln!("[startup] navigation {url}: allowed={allowed}");
+            }
+            allowed
+        })
+        .on_page_load(|window, payload| {
+            if std::env::var_os("TANUKI_STARTUP_PROBE").is_some() {
+                eprintln!("[startup] page {} {:?} {}", window.label(), payload.event(), payload.url());
+            }
         });
     let builder = if label == "overlay" {
         builder
@@ -341,6 +362,17 @@ fn main() {
             },
         );
     }
+    let context = tauri::generate_context!();
+    if !cfg!(debug_assertions) {
+        assert!(
+            !matches!(context.config().build.frontend_dist, Some(tauri::utils::config::FrontendDist::Url(_))),
+            "Production UI must be embedded from a directory, not a frontend URL"
+        );
+        assert!(context.assets().iter().count() > 0, "Production UI assets are missing");
+    }
+    if std::env::var_os("TANUKI_STARTUP_PROBE").is_some() {
+        eprintln!("[startup] tauri_dev={} embedded_assets={}", tauri::is_dev(), context.assets().iter().count());
+    }
     let app = builder
         .setup(|app| {
             let enabled = Arc::new(AtomicBool::new(false));
@@ -377,7 +409,7 @@ fn main() {
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("Failed to start TanukiBCL Tauri beta");
     app.run(|app, event| {
         if let tauri::RunEvent::ExitRequested {

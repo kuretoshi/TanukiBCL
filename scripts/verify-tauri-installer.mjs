@@ -31,6 +31,10 @@ for (const file of expected) {
     assert.equal(sha(extract(name)), sha(await readFile(file)), `Installer resource differs: ${name}`);
 }
 const executable = await readFile(join(root, 'src-tauri/target/release/tanuki-bcl-tauri.exe'));
+const requiredUiAssets = ['index.html', 'rust-ui/bootstrap.js', 'rust-ui/tbcl_rust_ui_bg.wasm'];
+for (const name of requiredUiAssets) {
+    assert(executable.includes(Buffer.from(name)), `Production UI asset is not embedded: ${name}`);
+}
 // Tauri patches UNK -> NSS while bundling, then restores the build executable.
 // Allow exactly that one fixed marker; every other byte must match the build.
 const marker = Buffer.from('__TAURI_BUNDLE_TYPE_VAR_UNK');
@@ -50,7 +54,7 @@ assert(installerSource.includes('!define INSTALLMODE "currentUser"'));
 const checksum = sha(await readFile(installer));
 assert.equal((await readFile(`${installer}.sha256`, 'utf8')).split(/\s/)[0], checksum);
 const report = { passed: true, version, baseVersion: metadata.baseVersion, installerSha256: checksum, installerBytes: (await stat(installer)).size,
-    executableSha256: sha(bundledExecutable), buildExecutableSha256: sha(executable), nsisBundleTypeMarkerVerified: true,
+    executableSha256: sha(bundledExecutable), buildExecutableSha256: sha(executable), nsisBundleTypeMarkerVerified: true, embeddedUiAssetsVerified: requiredUiAssets,
     verifiedBackendFiles: expected.length, allPackagedResourcesMatched: true,
     portableResourceCopyCreated: false, physicalMicrophoneTested: false, liveGameLobbyExitTested: false };
 await writeFile(join(root, `docs/validation-rust-package-${version.replace('-tauri-beta.', '-beta')}.json`), JSON.stringify(report, null, 2) + '\n');

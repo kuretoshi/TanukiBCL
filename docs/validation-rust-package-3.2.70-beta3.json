@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "version": "3.2.70-tauri-beta.3",
+  "baseVersion": "3.2.70",
+  "installerSha256": "cb5b05c51db06483095c326e8493ef39cafbd4e318ca356916d347278fd60f15",
+  "installerBytes": 59314633,
+  "executableSha256": "3a0e626d887c196f2c4ae42f01ca88f1e089cb17e9edb141d5d41a862cd30bf7",
+  "buildExecutableSha256": "20c4ef7b60c13e571f8e15db726be5e5b9eb06fd90aca89b8ca4186c991836a5",
+  "nsisBundleTypeMarkerVerified": true,
+  "embeddedUiAssetsVerified": [
+    "index.html",
+    "rust-ui/bootstrap.js",
+    "rust-ui/tbcl_rust_ui_bg.wasm"
+  ],
+  "verifiedBackendFiles": 33,
+  "allPackagedResourcesMatched": true,
+  "portableResourceCopyCreated": false,
+  "physicalMicrophoneTested": false,
+  "liveGameLobbyExitTested": false
+}

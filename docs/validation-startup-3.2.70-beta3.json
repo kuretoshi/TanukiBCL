@@ -1,0 +1,65 @@
+{
+  "version": "3.2.70-tauri-beta.3",
+  "passed": true,
+  "date": "2026-11-22T08:36:45.395Z",
+  "baseVersion": "3.2.70",
+  "baseCommit": "4c01d7d9c2b772b48ee5fa40a8102149fbe26e81",
+  "previousTauriSource": "741456b5e69e8f0177fbb63f9b92858d1452a1dd",
+  "change": "Embed UI from a relative directory instead of a Windows drive path parsed as a URL; require custom-protocol and reject empty/remote production assets. Keep the post-match pointer fix.",
+  "tests": {
+    "passed": 159,
+    "ignored": 3,
+    "native": {
+      "passed": 132,
+      "ignored": 3
+    },
+    "clr": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "ui": {
+      "passed": 25,
+      "ignored": 0
+    },
+    "regression": "Self-process memory fixture with unreadable destroyed MeetingHud/player addresses; Joined/Started errors remain visible."
+  },
+  "isolation": {
+    "sourceFiles": 117,
+    "sourceBytes": 4148070,
+    "dependenciesAndResourcesReused": true,
+    "unpublishedSpeechAndUiChangesIncluded": false
+  },
+  "installerSha256": "cb5b05c51db06483095c326e8493ef39cafbd4e318ca356916d347278fd60f15",
+  "executableSha256": "3a0e626d887c196f2c4ae42f01ca88f1e089cb17e9edb141d5d41a862cd30bf7",
+  "installerBytes": 59314633,
+  "preservation": {
+    "electronTrackedFiles": 328,
+    "beta1InstallerUnchanged": true
+  },
+  "startupObservation": {
+    "mainUrl": "https://tauri.localhost/index.html?view=app&version=3.2.70-tauri-beta.3",
+    "mainVersion": "3.2.70-tauri-beta.3",
+    "settingsOpened": true,
+    "settingsClosed": true,
+    "mainStillUsable": true,
+    "backgroundOnly": true,
+    "usesMouseOrKeyboard": false,
+    "executableSha256": "3a0e626d887c196f2c4ae42f01ca88f1e089cb17e9edb141d5d41a862cd30bf7",
+    "installerSha256": "cb5b05c51db06483095c326e8493ef39cafbd4e318ca356916d347278fd60f15",
+    "settingsUrl": "https://tauri.localhost/index.html?view=settings&version=3.2.70-tauri-beta.3",
+    "settingsControls": 2,
+    "settingsOpenedTwice": true
+  },
+  "productionFeatureGuardPassed": true,
+  "emptyUiCandidateRejected": true,
+  "executableExtractedFromInstaller": true,
+  "uiSmokeSeconds": 60,
+  "productionDependencyGuard": true,
+  "liveMatchEndVerified": false,
+  "installerExecuted": false,
+  "limitations": [
+    "Post-match normal waiting/recovery was tested using real ReadProcessMemory calls on synthetic in-process memory. The user’s live match-end screen has not been reproduced with beta3.",
+    "Three existing tests requiring external speech resources remain ignored.",
+    "No Electron/Lite/.NET application changes; no physical microphone or multi-person call testing for this patch."
+  ]
+}

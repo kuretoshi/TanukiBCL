@@ -90,7 +90,7 @@
 		"tauri:frontend:dev": "vite preview --config tauri.rust-ui.vite.config.mjs",
 		"tauri:frontend:build": "powershell -NoProfile -File scripts/build-rust-ui.ps1",
 		"tauri:rust-ui:build": "powershell -NoProfile -File scripts/build-rust-ui.ps1",
-		"tauri:build": "tauri build && node scripts/package-tauri.mjs",
+		"tauri:build": "tauri build --features custom-protocol && node scripts/package-tauri.mjs",
 		"test:tauri": "node scripts/test-tauri.mjs",
 		"test:tauri-voice": "node scripts/test-native-voice.mjs",
 		"test:tauri-voice-live-game": "node scripts/test-native-voice-live-game.mjs",

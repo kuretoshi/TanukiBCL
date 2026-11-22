@@ -1,7 +1,7 @@
 {
   "baseVersion": "3.2.70",
   "baseCommit": "4c01d7d9c2b772b48ee5fa40a8102149fbe26e81",
-  "deliveredVersion": "3.2.70-tauri-beta.2",
+  "deliveredVersion": "3.2.70-tauri-beta.3",
   "objective": "Port every Windows application feature, including UI and remaining managed Mod readers/watchers, to Rust while preserving the Electron edition; compare memory again after full migration.",
   "scope": "Application logic and UI source must be Rust. Generated WebAssembly interoperability glue and existing third-party native libraries are allowed. No application feature may require the React/TypeScript UI, a C# helper, or the Node compatibility backend. Electron source, settings and delivered artifacts are preserved.",
   "complete": true,
@@ -126,10 +126,15 @@
       "feature": "Treat InnerNetClient.Ended as normal waiting before player/meeting reads",
       "status": "packaged-beta.2",
       "version": "3.2.70-tauri-beta.2"
+    },
+    {
+      "feature": "Require the production Tauri protocol and verify packaged UI startup/settings interaction",
+      "status": "packaged-beta.3",
+      "version": "3.2.70-tauri-beta.3"
     }
   ],
   "migrationImplemented": true,
-  "validationReport": "validation-match-end-3.2.70-beta2.json",
+  "validationReport": "validation-startup-3.2.70-beta3.json",
   "memoryReport": "memory-comparison-rust-ui-3.2.62.json",
   "verificationLimits": [
     "TOH4E actual match blocked by game-side lobby creation error; generated decoder and runtime role-transfer tests passed.",
@@ -147,9 +152,10 @@
     "Feature parity and lifecycle checks pass before a new final memory comparison.",
     "No completion claim while required application features remain unported."
   ],
-  "implementedVersion": "3.2.70-tauri-beta.2",
-  "packageReport": "validation-rust-package-3.2.70-beta2.json",
+  "implementedVersion": "3.2.70-tauri-beta.3",
+  "packageReport": "validation-rust-package-3.2.70-beta3.json",
   "completedAt": "2026-11-11T01:13:29.993Z",
   "uiParityReport": "validation-ui-parity-beta9.json",
-  "uiLayoutRestored": true
+  "uiLayoutRestored": true,
+  "latestFixSource": "https://github.com/kuretoshi/TanukiBCL/tree/codex/tauri-3.2.70-beta.3-source"
 }
