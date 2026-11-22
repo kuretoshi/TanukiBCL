@@ -23,7 +23,7 @@ function wavePcm(buffer) {
 }
 try {
 	const result = await build({
-		entryPoints: ['src/main/localStoneSpeech.ts', 'src/common/VoiceStoneAudio.ts'],
+		entryPoints: ['src/main/localStoneSpeech.ts', 'src/common/VoiceStoneAudio.ts', 'src/common/HeroSpeech.ts'],
 		outdir: dir,
 		bundle: true,
 		platform: 'node',
@@ -64,6 +64,28 @@ try {
 		Array(4).fill('インポスター')
 	);
 	assert.equal(worker.child.pid, pid, 'One native worker serves concurrent role requests');
+	const policyFile = result.outputFiles.find((f) => f.path.includes('HeroSpeech'));
+	const policyPath = join(dir, 'policy.mjs');
+	await writeFile(policyPath, policyFile.contents);
+	const { heardTransformation, heardForbiddenWord } = await import(pathToFileURL(policyPath));
+	for (const [file, kind, words] of [
+		['Microsoft_Haruka_Desktop-6.wav', 'hero', ['変身']],
+		['Microsoft_Haruka_Desktop-3.wav', 'ng', ['タスク']],
+		['Microsoft_Haruka_Desktop-5.wav', 'ng', ['インポスター']],
+	]) {
+		const raw = wavePcm(await readFile(join(root, '../evaluation', file))),
+			capture = new StonePcm();
+		capture.append(
+			Float32Array.from({ length: raw.length / 2 }, (_, i) => raw.readInt16LE(i * 2) / 32768),
+			16000
+		);
+		const transcript = await worker.transcribeText(capture.wav(), AbortSignal.timeout(18000));
+		assert(
+			kind === 'hero' ? heardTransformation(transcript, words, true) : heardForbiddenWord(transcript, words, true),
+			`shared ${kind} recognition: ${file}: ${JSON.stringify(transcript)}`
+		);
+	}
+	assert.equal(worker.child.pid, pid, 'Stone, hero and NG share the same native model instance');
 	const abort = new AbortController();
 	abort.abort();
 	assert.equal(await worker.transcribe(capture.wav(), 8, abort.signal), undefined);

@@ -1,4 +1,5 @@
 import { StonePcm, stoneAudioWindow } from '../../common/VoiceStoneAudio';
+import { LiveSpeechAudio } from '../../common/LiveSpeechAudio';
 import {
 	heardTransformation,
 	heardForbiddenWord,
@@ -60,6 +61,21 @@ interface Capture {
 	partialAt: number;
 }
 export class HeroSpeech {
+	private live = new Map<
+		number,
+		{
+			key: string;
+			input: Input;
+			session: string;
+			signature: string;
+			jobs: HeroSpeechPlayer[];
+			audio: LiveSpeechAudio;
+			busy: boolean;
+			processor: ScriptProcessorNode;
+			silent: GainNode;
+		}
+	>();
+	private needsVosk = false;
 	private recordings = new Map<
 		string,
 		{
@@ -130,6 +146,7 @@ export class HeroSpeech {
 		const input = this.inputs.get(key);
 		for (const [id, capture] of this.recordings) if (capture.input === input) this.stopRecording(id);
 		for (const [player, capture] of this.captures) if (capture.key === key) this.stop(player);
+		for (const [player, capture] of this.live) if (capture.key === key) this.stopLive(player);
 	}
 	private permitted(key: string, input: Input): boolean {
 		const identity = this.platforms.get(key);
@@ -166,20 +183,120 @@ export class HeroSpeech {
 		if (this.state?.session !== state.session) this.clear();
 		this.state = state;
 		const selected = this.selected(state);
-		const neural = state.localNeuralConfigured ? selected.filter((p) => p.kind === 'stone') : [];
-		const recordedJobs = neural.filter((p) => p.recognizer === 'local-neural' || p.request === 0);
+		const neural = state.localNeuralConfigured ? selected : [];
+		const recordedJobs = neural.filter(
+			(p) => p.kind === 'stone' && (p.recognizer === 'local-neural' || p.request === 0)
+		);
 		const jobs = selected.filter(
-			(p) => p.recognizer !== 'local-neural' && !(p.kind === 'stone' && state.localNeuralConfigured && p.request === 0)
+			(p) =>
+				p.recognizer !== 'local-neural' && !(state.localNeuralConfigured && (p.kind !== 'stone' || p.request === 0))
 		);
 		this.reconcileRecording(recordedJobs, state.session);
+		this.reconcileLive(
+			neural.filter((p) => p.kind !== 'stone'),
+			state.session
+		);
+		this.needsVosk = jobs.length > 0;
 		if (jobs.length) void this.ensureModel();
+		else if (this.model) {
+			for (const id of this.captures.keys()) this.stop(id);
+			this.model.terminate();
+			this.model = undefined;
+		}
 		ipcRenderer.send(
 			'NOS_HERO_SPEECH_READY',
 			state.session,
 			[...new Set([...neural, ...(this.model ? jobs : [])].map((p) => p.playerId))],
-			[...new Set(neural.map((p) => p.playerId))]
+			[...new Set(neural.filter((p) => p.kind === 'stone').map((p) => p.playerId))]
 		);
 		this.reconcile(jobs);
+	}
+	private reconcileLive(jobs: HeroSpeechPlayer[], session: string): void {
+		const groups = new Map<number, HeroSpeechPlayer[]>();
+		for (const job of jobs)
+			if (job.request > 0 && job.expires > Date.now())
+				groups.set(job.playerId, [...(groups.get(job.playerId) ?? []), job]);
+		for (const [id, c] of this.live) {
+			const current = groups.get(id);
+			if (
+				!current ||
+				c.session !== session ||
+				c.signature !== this.signature(current) ||
+				!this.permitted(c.key, c.input) ||
+				!c.input.allowed()
+			)
+				this.stopLive(id);
+			else c.jobs = current;
+		}
+		for (const [id, entries] of groups) {
+			if (!this.live.has(id)) {
+				const found = [...this.inputs].find(([key, i]) => i.player === id && this.permitted(key, i) && i.allowed());
+				if (!found) continue;
+				const [key, input] = found,
+					processor = this.context.createScriptProcessor(2048, 1, 1),
+					silent = this.context.createGain();
+				silent.gain.value = 0;
+				const c = {
+					key,
+					input,
+					session,
+					signature: this.signature(entries),
+					jobs: entries,
+					audio: new LiveSpeechAudio(),
+					busy: false,
+					processor,
+					silent,
+				};
+				this.live.set(id, c);
+				processor.onaudioprocess = (e) => {
+					if (!this.enabled || this.state?.session !== session || !this.permitted(key, input) || !input.allowed()) {
+						c.audio.reset();
+						return;
+					}
+					const samples = e.inputBuffer.getChannelData(0);
+					c.audio.append(
+						samples,
+						this.context.sampleRate,
+						Date.now() - (samples.length * 1000) / this.context.sampleRate
+					);
+				};
+				input.source.connect(processor);
+				processor.connect(silent);
+				silent.connect(this.context.destination);
+			}
+			const c = this.live.get(id)!;
+			if (c.busy) continue;
+			const wav = c.audio.take(Date.now());
+			if (!wav) continue;
+			c.busy = true;
+			void ipcRenderer
+				.invoke(
+					'HERO_SPEECH_LOCAL_TRANSCRIBE',
+					session,
+					id,
+					c.jobs.map((j) => ({ kind: j.kind, request: j.request })),
+					Date.now(),
+					wav
+				)
+				.catch(() => {})
+				.finally(() => {
+					c.busy = false;
+				});
+		}
+	}
+	private stopLive(id: number): void {
+		const c = this.live.get(id);
+		if (!c) return;
+		this.live.delete(id);
+		c.processor.onaudioprocess = null;
+		try {
+			c.input.source.disconnect(c.processor);
+		} catch {
+			/* Source already removed. */
+		}
+		c.processor.disconnect();
+		c.silent.disconnect();
+		c.audio.reset();
 	}
 	private reconcileRecording(jobs: HeroSpeechPlayer[], session: string): void {
 		for (const [id, capture] of this.recordings) {
@@ -268,7 +385,7 @@ export class HeroSpeech {
 			const library = await loadLibrary();
 			if (this.disposed || !this.enabled) return;
 			const model = await library.createModel(asset('model-ja.tar.gz'), -1);
-			if (this.disposed || !this.enabled) {
+			if (this.disposed || !this.enabled || !this.needsVosk) {
 				model.terminate();
 				return;
 			}
@@ -387,6 +504,10 @@ export class HeroSpeech {
 		capture.recognizer.remove();
 	}
 	private clear(): void {
+		for (const id of this.live.keys()) this.stopLive(id);
+		this.needsVosk = false;
+		this.model?.terminate();
+		this.model = undefined;
 		for (const id of this.recordings.keys()) this.stopRecording(id);
 		for (const player of this.captures.keys()) this.stop(player);
 		this.state = undefined;

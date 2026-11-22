@@ -107,7 +107,7 @@ try {
  snapshot={...snapshot,players:[{...job(3,'hero',9),words:['闇落ち','やみおち']}]};
  speech.setContext({...state,isHost:false}); await speech.poll();
  assert.equal(speech.captures.size,0,'nonhost cannot keep remote captures');
- snapshot={...snapshot,players:[job(1,'hero',2),job(3)]}; await speech.poll();
+ snapshot={...snapshot,players:[job(1,'hero',2),job(3)]}; await speech.poll(); await speech.poll();
  assert.deepEqual([...speech.captures.keys()],[1],'nonhost recognises own microphone');
  const beforeMute=speech.captures.get(1); localAllowed=false;
  beforeMute.processor.onaudioprocess({}); assert(!speech.captures.has(1),'mute discards buffered recognition');
