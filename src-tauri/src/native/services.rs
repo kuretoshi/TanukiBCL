@@ -19,6 +19,7 @@ const LOG_LIMIT: usize = 1024 * 1024;
 const LOGS: [&str; 3] = ["backend.log", "frontend.log", "memory.jsonl"];
 pub struct Services {
     authorized: AtomicBool,
+    authenticating: AtomicBool,
     next_attempt: Mutex<Instant>,
     selected: Mutex<HashSet<PathBuf>>,
 }
@@ -26,6 +27,7 @@ impl Default for Services {
     fn default() -> Self {
         Self {
             authorized: AtomicBool::new(false),
+            authenticating: AtomicBool::new(false),
             next_attempt: Mutex::new(Instant::now()),
             selected: Mutex::new(HashSet::new()),
         }
@@ -189,35 +191,36 @@ impl Services {
         })
     }
     fn authenticate(&self, target: &str, password: &Value, client: &Client) -> &'static str {
+        self.authenticate_with(target, password, Instant::now(), || {
+            let endpoint = std::env::var("TANUKI_DEBUG_AUTH_URL")
+                .unwrap_or_else(|_| "https://debug-auth.kuretoshi.work/v1/debug-auth/verify".into());
+            if !valid_endpoint(&endpoint) { return "unavailable"; }
+            let result = (|| -> Result<&'static str, String> {
+                let response = client.post(endpoint).json(&json!({"password":password}))
+                    .send().map_err(|e| e.to_string())?;
+                let status = response.status().as_u16();
+                let mut bytes = Vec::new();
+                response.take(1025).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+                Ok(auth_response(status, &bytes))
+            })();
+            result.unwrap_or("unavailable")
+        })
+    }
+    fn authenticate_with(&self, target: &str, password: &Value, now: Instant, request: impl FnOnce() -> &'static str) -> &'static str {
         if target != "settings" || text(password, 1024).is_none() {
             return "denied";
         }
+        if self.authenticating.swap(true, Ordering::AcqRel) { return "pending"; }
+        struct Pending<'a>(&'a AtomicBool);
+        impl Drop for Pending<'_> { fn drop(&mut self) { self.0.store(false, Ordering::Release); } }
+        let _pending = Pending(&self.authenticating);
         let mut next = self.next_attempt.lock().unwrap();
-        if Instant::now() < *next {
-            return "denied";
+        if now < *next {
+            return "retry";
         }
-        *next = Instant::now() + Duration::from_secs(10);
+        *next = now + Duration::from_secs(1);
         drop(next);
-        let endpoint = std::env::var("TANUKI_DEBUG_AUTH_URL")
-            .unwrap_or_else(|_| "https://debug-auth.kuretoshi.work/v1/debug-auth/verify".into());
-        if !valid_endpoint(&endpoint) {
-            return "unavailable";
-        }
-        let result = (|| -> Result<&'static str, String> {
-            let response = client
-                .post(endpoint)
-                .json(&json!({"password":password}))
-                .send()
-                .map_err(|e| e.to_string())?;
-            let status = response.status().as_u16();
-            let mut bytes = Vec::new();
-            response
-                .take(1025)
-                .read_to_end(&mut bytes)
-                .map_err(|e| e.to_string())?;
-            Ok(auth_response(status, &bytes))
-        })();
-        let result = result.unwrap_or("unavailable");
+        let result = request();
         if result == "authorized" {
             self.authorized.store(true, Ordering::Relaxed);
         }
@@ -354,6 +357,21 @@ impl Services {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn auth_retries_after_one_second_and_rejects_duplicates_without_calling_server() {
+        let services=Services::default();let now=Instant::now();let password=json!("synthetic-only");
+        assert_eq!(services.authenticate_with("settings",&password,now,||"denied"),"denied");
+        assert!(!services.authorized());
+        assert_eq!(services.authenticate_with("settings",&password,now+Duration::from_millis(500),||panic!("early retry called server")),"retry");
+        assert_eq!(services.authenticate_with("settings",&password,now+Duration::from_secs(1),||"authorized"),"authorized");
+        assert!(services.authorized());
+        services.authenticating.store(true,Ordering::Release);
+        assert_eq!(services.authenticate_with("settings",&password,now+Duration::from_secs(2),||panic!("duplicate called server")),"pending");
+        services.authenticating.store(false,Ordering::Release);
+        for target in ["main","debug","player-history"] {
+            assert_eq!(services.authenticate_with(target,&password,now+Duration::from_secs(2),||panic!("untrusted window called server")),"denied");
+        }
+    }
     #[test]
     fn debug_auth_never_accepts_failure_redirect_or_unbounded_responses() {
         assert_eq!(auth_response(200, br#"{"authorized":true}"#), "authorized");

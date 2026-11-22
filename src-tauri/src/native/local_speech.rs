@@ -83,6 +83,7 @@ impl Worker {
         maximum: usize,
         deadline: Instant,
         active: &AtomicBool,
+        text: bool,
     ) -> Result<Option<String>, String> {
         use base64::Engine;
         self.used = Instant::now();
@@ -112,6 +113,9 @@ impl Worker {
         if result["id"] != id || !result["error"].is_null() {
             return Err("高精度ローカル認識に失敗しました".into());
         }
+        if text {
+            return Ok(result["text"].as_str().filter(|t| t.encode_utf16().count() <= 4096).map(str::to_owned));
+        }
         Ok(result["word"]
             .as_str()
             .filter(|w| crate::voice::speech::valid_stone_word(w, maximum))
@@ -126,6 +130,10 @@ pub struct LocalSpeech {
     error: Mutex<String>,
 }
 impl LocalSpeech {
+    pub fn refresh_status(&self) -> Value {
+        super::vc_runtime::installed(&root().join("runtime"), true);
+        self.status()
+    }
     pub fn set_active(&self, active: bool) {
         self.active.store(active, Ordering::Release);
         if !active {
@@ -134,7 +142,8 @@ impl LocalSpeech {
     }
     pub fn status(&self) -> Value {
         let root = root();
-        let available = [
+        let runtime_installed = super::vc_runtime::installed(&root.join("runtime"), false);
+        let model_available = [
             "runtime/TanukiSpeechWorker.exe",
             "runtime/sherpa-onnx-c-api.dll",
             "runtime/onnxruntime.dll",
@@ -148,7 +157,8 @@ impl LocalSpeech {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or(Value::Null);
-        json!({"available":available,"enabled":available&&preferences["enabled"]!=false,"error":self.error.lock().unwrap().clone()})
+        let available = model_available && runtime_installed;
+        json!({"runtimeInstalled":runtime_installed,"modelAvailable":model_available,"available":available,"enabled":available&&preferences["enabled"]!=false,"error":self.error.lock().unwrap().clone()})
     }
     pub fn enabled(&self) -> bool {
         self.status()["enabled"] == true
@@ -164,6 +174,12 @@ impl LocalSpeech {
         .is_ok()
     }
     pub fn transcribe(&self, wav: &[u8], maximum: usize) -> Result<Option<String>, String> {
+        self.transcribe_mode(wav, maximum, false)
+    }
+    pub fn transcribe_text(&self, wav: &[u8]) -> Result<Option<String>, String> {
+        self.transcribe_mode(wav, 12, true)
+    }
+    fn transcribe_mode(&self, wav: &[u8], maximum: usize, text: bool) -> Result<Option<String>, String> {
         if !self.active.load(Ordering::Acquire)
             || !self.enabled()
             || !super::speech_audio::valid_wav(wav)
@@ -209,7 +225,7 @@ impl LocalSpeech {
         let result = worker
             .as_mut()
             .unwrap()
-            .transcribe(wav, maximum, deadline, &self.active);
+            .transcribe(wav, maximum, deadline, &self.active, text);
         if result.is_err() {
             *worker = None;
         }
@@ -247,6 +263,7 @@ mod tests {
         ] {
             service.set_active(active_state(&state));
             assert!(service.transcribe(&wav, 8).unwrap().is_none());
+            assert!(service.transcribe_text(&wav).unwrap().is_none());
             assert!(service.worker.lock().unwrap().is_none());
         }
         assert!(active_state(
@@ -298,6 +315,24 @@ mod tests {
             service.transcribe(&wav, 8).unwrap().as_deref(),
             Some("インポスター")
         );
+        let process_id=service.worker.lock().unwrap().as_ref().unwrap().child.id();
+        for (file,job) in [
+            ("Microsoft_Haruka_Desktop-6.wav", json!({"kind":"hero","words":["変身"]})),
+            ("Microsoft_Haruka_Desktop-3.wav", json!({"kind":"ng","words":["タスク"]})),
+            ("Microsoft_Haruka_Desktop-5.wav", json!({"kind":"ng","words":["インポスター"]})),
+        ] {
+            let raw=std::fs::read(root().parent().unwrap().join("evaluation").join(file)).unwrap();
+            let mut at=12;
+            let pcm=loop {
+                assert!(at+8<=raw.len());
+                let n=u32::from_le_bytes(raw[at+4..at+8].try_into().unwrap())as usize;
+                if &raw[at..at+4]==b"data" {break raw[at+8..at+8+n].chunks_exact(2).map(|p|i16::from_le_bytes([p[0],p[1]])).collect::<Vec<_>>();}
+                at+=8+n+n%2;
+            };
+            let text=service.transcribe_text(&super::super::speech_audio::wav(&pcm).unwrap()).unwrap().unwrap();
+            assert!(crate::voice::speech::matches(&text,&job,true),"shared hero/NG full transcript failed");
+            assert_eq!(service.worker.lock().unwrap().as_ref().unwrap().child.id(),process_id,"one native model serves all roles");
+        }
         service.set_active(false);
         assert!(service.worker.lock().unwrap().is_none());
         assert!(service.transcribe(&wav, 8).unwrap().is_none());

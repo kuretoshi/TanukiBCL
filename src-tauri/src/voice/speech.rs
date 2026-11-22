@@ -107,7 +107,7 @@ pub fn matches(text: &str, job: &Value, final_result: bool) -> bool {
         if n.contains("変身")
             || n.contains("へんしん")
             || n.contains("ヘンシン")
-            || (final_result && n == "返信")
+            || (final_result && matches!(n.as_str(), "返信" | "変信" | "返身"))
         {
             return true;
         }
@@ -132,6 +132,7 @@ pub enum Event {
     Ready(String, u64, bool),
     Word(String, u64, u64, String, String),
     Audio(String, u64, u64, Vec<u8>),
+    LiveAudio(String, u64, Vec<Value>, u64, Vec<u8>, Arc<AtomicBool>),
     Error(String),
 }
 struct Input {
@@ -338,7 +339,8 @@ fn job_signature(jobs: &[Value]) -> String {
     serde_json::to_string(&signatures).unwrap()
 }
 fn buffered(j:&Value)->bool { j["recognizer"]=="local-neural" }
-fn buffered_or_warm(j:&Value,local_neural:bool)->bool {buffered(j) || local_neural && j["kind"]=="stone" && j["request"]==0}
+fn shared_live(j:&Value,local_neural:bool)->bool {local_neural && j["kind"]!="stone"}
+fn buffered_or_warm(j:&Value,local_neural:bool)->bool {buffered(j) || shared_live(j,local_neural) || local_neural && j["kind"]=="stone" && j["request"]==0}
 fn append_recording(job: &Value, pcm: &mut Vec<i16>, samples: &[i16], at: u64) {
     let start = job["recordStarted"].as_u64().unwrap_or(u64::MAX).saturating_sub(at).saturating_mul(16).min(samples.len() as u64) as usize;
     let end = job["recordUntil"].as_u64().unwrap_or(0).saturating_sub(at).saturating_mul(16).min(samples.len() as u64) as usize;
@@ -355,6 +357,7 @@ fn run(
     let mut model: Ptr = std::ptr::null_mut();
     let mut warm: HashMap<String, VecDeque<(u64, Vec<i16>)>> = HashMap::new();
     let mut recordings: HashMap<String, (Value, Vec<i16>)> = HashMap::new();
+    let mut live: HashMap<String, (String, super::live_speech_audio::LiveAudio, Arc<AtomicBool>)> = HashMap::new();
     let mut decoders: HashMap<String, Decoder> = HashMap::new();
     let mut session = String::new();
     let mut handled = HashSet::new();
@@ -367,7 +370,7 @@ fn run(
         let enabled = !c.inputs.is_empty();
         let changed = session != c.session;
         if changed || !enabled {
-            recordings.clear(); warm.clear();
+            recordings.clear(); warm.clear(); live.clear();
             if let Some(a) = &api {
                 for (_, d) in decoders.drain() {
                     unsafe { (a.free)(d.ptr) }
@@ -386,7 +389,32 @@ fn run(
                 api = None;
             }
         }
-        if c.inputs.values().any(|(_,jobs)|jobs.iter().any(|j|!buffered_or_warm(j,c.local_neural))) && model.is_null() && Instant::now() >= retry {
+        // A single full transcript can satisfy both hero and NG jobs. A renewed
+        // NG deadline does not reset the audio, but a new request/word does.
+        let live_jobs: HashMap<_,_> = c.inputs.iter().filter_map(|(key,(id,jobs))| {
+            let jobs: Vec<_> = jobs.iter().filter(|j| shared_live(j,c.local_neural) && j["request"].as_u64().is_some_and(|r|r>0) && j["expires"].as_u64().unwrap_or(0)>t).cloned().collect();
+            (!jobs.is_empty()).then_some((key.clone(),(*id,jobs)))
+        }).collect();
+        live.retain(|key,(signature,_,_)|live_jobs.get(key).is_some_and(|(_,jobs)|*signature==job_signature(jobs)));
+        for (key,(id,jobs)) in &live_jobs {
+            let (_,audio,busy)=live.entry(key.clone()).or_insert_with(||(job_signature(jobs),super::live_speech_audio::LiveAudio::default(),Arc::new(AtomicBool::new(false))));
+            if !busy.load(Ordering::Acquire) {
+                if let Some(wav)=audio.take(t) {
+                    busy.store(true,Ordering::Release);
+                    let refs=jobs.iter().map(|j|json!({"kind":j["kind"],"request":j["request"]})).collect();
+                    if events.try_send(Event::LiveAudio(c.session.clone(),*id,refs,t,wav,busy.clone())).is_err(){busy.store(false,Ordering::Release);}
+                }
+            }
+        }
+        let needs_vosk = c.inputs.values().any(|(_,jobs)|jobs.iter().any(|j|!buffered_or_warm(j,c.local_neural)));
+        if !needs_vosk {
+            if let Some(a)=&api {
+                for (_,d) in decoders.drain(){unsafe{(a.free)(d.ptr)}}
+                if !model.is_null(){unsafe{(a.model_free)(model)}model=std::ptr::null_mut();}
+            }
+            api=None;
+        }
+        if needs_vosk && model.is_null() && Instant::now() >= retry {
             let loaded = (|| {
                 let a = Api::load(&path)?;
                 let model_path = model_c_path(&path)?;
@@ -488,7 +516,12 @@ fn run(
                 let current = config.lock().unwrap();
                 if current.session != input.session || !current.inputs.get(&input.key).is_some_and(|(_,jobs)|job_signature(jobs)==input.signature) { continue; }
                 drop(current);
-                if c.inputs.get(&input.key).is_some_and(|(_,jobs)|jobs.iter().any(|j|buffered_or_warm(j,c.local_neural))) {
+                if input.at + input.pcm.len() as u64 / 48 + 250 < now() { continue; }
+                if let Some((_,audio,_))=live.get_mut(&input.key) {
+                    let samples:Vec<i16>=input.pcm.chunks_exact(3).map(|f|(f.iter().sum::<f32>()/3.).clamp(-32768.,32767.) as i16).collect();
+                    audio.append(&samples,input.at);
+                }
+                if c.inputs.get(&input.key).is_some_and(|(_,jobs)|jobs.iter().any(|j|j["kind"]=="stone"&&buffered_or_warm(j,c.local_neural))) {
                     let samples: Vec<i16> = input.pcm.chunks_exact(3).map(|frame|(frame.iter().sum::<f32>()/3.).clamp(-32768.,32767.) as i16).collect();
                     let parts = warm.entry(input.key.clone()).or_default();
                     parts.push_back((input.at,samples.clone()));
@@ -687,6 +720,38 @@ mod tests {
 
     use super::*;
     #[test]
+    fn shared_live_jobs_use_one_utterance_without_loading_vosk() {
+        let mut speech=Speech::new(PathBuf::from("missing-vosk-must-not-be-opened"));
+        let t=now();
+        let mut state=json!({"session":"shared-live","localNeuralConfigured":true,"players":[
+            {"playerId":1,"kind":"hero","request":1,"expires":t+5000,"words":["変身"]},
+            {"playerId":1,"kind":"ng","request":2,"expires":t+1400,"words":["タスク"]}
+        ]});
+        speech.configure(&state,vec![("local".into(),1)]);
+        let sender=speech.sender().unwrap();
+        for _ in 0..6 {sender.push("local",&vec![0.1;4800]);std::thread::sleep(Duration::from_millis(100));}
+        state["players"][1]["expires"]=json!(now()+1400);
+        speech.configure(&state,vec![("local".into(),1)]);
+        let deadline=Instant::now()+Duration::from_secs(2);
+        let mut received=false;
+        while Instant::now()<deadline && !received {
+            for e in speech.events() {
+                match e {
+                    Event::Error(message)=>panic!("Vosk was loaded for shared jobs: {message}"),
+                    Event::LiveAudio(session,1,jobs,_,wav,busy)=>{
+                        assert_eq!(session,"shared-live");assert_eq!(jobs.len(),2);assert!(crate::native::speech_audio::valid_wav(&wav));
+                        assert!(busy.load(Ordering::Acquire));busy.store(false,Ordering::Release);received=true;
+                    }
+                    _=>{}
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(received,"shared utterance was not emitted after the speech pause");
+        speech.configure(&Value::Null,Vec::new());
+        assert!(!sender.accepts("local"));
+    }
+    #[test]
     fn decoder_identity_tracks_requests_and_rules_but_not_heartbeat_deadlines() {
         let stone = json!({"playerId":0,"kind":"stone","request":1,"expires":1000,"words":[],"maxCharacters":8});
         let ng = json!({"playerId":0,"kind":"ng","request":2,"expires":1100,"words":["猫"]});
@@ -764,6 +829,10 @@ mod tests {
         let hero = json!({"kind":"hero","words":["変身"]});
         assert!(matches(" ヘンシン！", &hero, false));
         assert!(matches("返信", &hero, true));
+        assert!(matches("返身", &hero, true));
+        assert!(!matches("返身", &hero, false));
+        assert!(!matches("Hey Siri", &hero, true));
+        assert!(!matches("変身", &json!({"kind":"hero","words":["蒸着","じょうちゃく"]}), true));
         assert!(!matches("返信", &hero, false));
         let ng = json!({"kind":"ng","words":["バナナ"]});
         assert!(matches("ﾊﾞﾅﾅ です", &ng, true));

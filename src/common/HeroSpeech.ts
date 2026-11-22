@@ -38,7 +38,7 @@ export function heardHenshin(text: unknown, final = true): boolean {
 		normalized.includes('変身') ||
 		normalized.includes('へんしん') ||
 		normalized.includes('ヘンシン') ||
-		(final && normalized === '返信')
+		(final && ['返信', '変信', '返身'].includes(normalized))
 	);
 }
 export function heardTransformation(text: unknown, words: readonly string[], final = true): boolean {

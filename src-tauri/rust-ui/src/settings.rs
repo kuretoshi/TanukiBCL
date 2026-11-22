@@ -562,21 +562,62 @@ pub fn render(s: &State) -> String {
  "keybinds"=>{let mut keys=vec!["pushToTalkShortcut","impostorRadioShortcut"];if s.effective_game()["mod"]=="NoS"{keys.push("jackalRadioShortcut");}keys.extend(["muteShortcut","deafenShortcut"]);key_section(s,"settings.keyboard.title",&keys)},
  "overlay"=>key_section(s,"settings.overlay.title",&["enableOverlay","compactOverlay","meetingOverlay","overlayPosition"]),
  "players"=>section(&s.t("settings.players.title"),crate::views::player_controls(s)),
- "advanced"=>format!("{}{}{}{}",stone_speech_section(s),section(&s.t("settings.advanced.title"),format!("{}{}<div class=setting-row><div><label>{}</label><p class=hint>{}</p></div>{}</div>",key_row(s,"serverURL"),key_row(s,"natFix"),e(&s.t("settings.advanced.voice_server")),e(&text(&s.settings["serverURL"])),button("edit-server","サーバーを追加"))),section("デバッグ",format!("<div class=setting-row><div><label>デバッグ情報</label><p class=hint>ゲーム状態・音声接続・ログを別ウィンドウで表示します。</p></div>{}</div>",button("debug-dialog","デバッグ情報を開く"))),key_section(s,"settings.beta.title",&["mobileHost","hardware_acceleration","echoCancellation","autoGainControl","enableSpatialAudio","noiseSuppression","oldSampleDebug"])),
+ "advanced"=>format!("{}{}{}{}",section(&s.t("settings.advanced.title"),format!("{}{}<div class=setting-row><div><label>{}</label><p class=hint>{}</p></div>{}</div>",key_row(s,"serverURL"),key_row(s,"natFix"),e(&s.t("settings.advanced.voice_server")),e(&text(&s.settings["serverURL"])),button("edit-server","サーバーを追加"))),stone_speech_section(s),section("デバッグ",format!("<div class=setting-row><div><label>デバッグ情報</label><p class=hint>ゲーム状態・音声接続・ログを別ウィンドウで表示します。</p></div>{}</div>",button("debug-dialog","デバッグ情報を開く"))),key_section(s,"settings.beta.title",&["mobileHost","hardware_acceleration","echoCancellation","autoGainControl","enableSpatialAudio","noiseSuppression","oldSampleDebug"])),
  "streaming"=>{let mut html=key_row(s,"hideCode");html.push_str(&key_row(s,"obsOverlay"));if s.settings["obsOverlay"]==true{html.push_str(&format!("<div class=row-content><label>{}</label><input readonly value=\"{}\">{}</div>",e(&s.t("settings.streaming.obs_url")),e(&obs_url(s)),button("copy-obs",&s.t("settings.streaming.copy_url"))));}section(&s.t("settings.streaming.title"),html)},
- "update"=>section("アップデート",format!("<div class=row-content><p>現在のバージョン: {}</p><p id=updater-status>{}</p>{}{}{}<p class=hint>更新情報は5分間保持します。確認に失敗した場合は1分後に再確認できます。</p><button type=button data-action=open-link data-value=\"https://github.com/kuretoshi/TanukiBCL/releases\">手動でダウンロード</button></div>",e(&s.version),e(&text(&s.updater["message"])),button("check-updates","更新を確認"),button("download-update","更新をダウンロード").replace("type=button",if s.updater["state"]=="available"&&!s.busy{"type=button"}else{"type=button disabled"}),button("install-update","インストーラーを起動").replace("type=button",if s.updater["state"]=="downloaded"&&!s.busy{"type=button"}else{"type=button disabled"}))),
+ "update"=>crate::update::render(s),
  "inquiry"=>crate::views::inquiry(s),_=>String::new()};
     let modal = dialogs(s);
-    format!("<div class=settings-layout><nav>{navigation}</nav><main id=settings-content><div class=settings-inner>{content}<div id=status-message role=status>{}</div></div></main>{modal}</div>",e(&s.notice()))
+    format!("<div class=settings-layout><nav>{navigation}</nav><main id=settings-content data-scroll-key=settings-content><div class=settings-inner>{content}<div id=status-message role=status>{}</div></div></main>{modal}</div>",e(&s.notice()))
 }
-fn stone_speech_section(s:&State)->String {
- let local=&s.result["localSpeech"];
- section("ボイスストーンの音声認識",format!("<div class=setting-row><div><label>共有モデルで認識する</label><p class=hint>{}</p></div><button type=button data-action=stone-local-toggle {}>{}</button></div><p class=hint>{}</p>",if local["available"]==true{"通常は共有モデル（Silero VAD＋SenseVoice）を使用します。録音終了後に判定します。PCは各自、Web・モバイル分はホストが認識します。オフで従来の軽量方式に戻せます。"}else{"共有モデルが未準備のため、軽量ローカル認識を使用します。"},if local["available"]==true{""}else{"disabled"},if local["enabled"]==true{"On"}else{"Off"},e(&text(&local["error"])))) + "<button type=button data-action=\"open-link\" data-value=\"https://github.com/kuretoshi/TanukiBCL/releases/download/v3.2.69/TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe\">共有モデルをダウンロード</button><p class=hint>初回のみインストーラーを実行後、ベタクルを再起動してください。タヌキ丼未検出時はモデルを読み込みません。</p>"
+pub fn speech_setup_url(local: &Value) -> &'static str {
+    if local["runtimeInstalled"] == true {
+        "https://github.com/kuretoshi/TanukiBCL/releases/download/v3.2.69/TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe"
+    } else {
+        "https://learn.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist"
+    }
+}
+fn stone_speech_section(s: &State) -> String {
+    let local = &s.result["localSpeech"];
+    let runtime = local["runtimeInstalled"].as_bool();
+    let hint = match runtime {
+        None => "実行環境を確認しています。",
+        Some(false) => "Microsoft Visual C++ v14 Redistributable（x64）が未導入、または必要なファイルが不足しています。公式ページからx64版を導入後、「再確認」を押してください。",
+        Some(true) if local["available"] == true => "PCは各自の端末、Web・モバイル参加者の分はホストが認識します。オフにすると従来の軽量方式を使います。",
+        _ => "共有モデルが未準備のため、軽量ローカル認識を使用します。",
+    };
+    let download = if runtime == Some(true) { "共有モデルをダウンロード" } else { "Visual C++の公式ダウンロードページ" };
+    let error = text(&local["error"]);
+    let error = if error.is_empty() { String::new() } else {
+        format!("<p class=\"hint speech-model-error\" role=alert>{}</p>", e(&error))
+    };
+    section("音声認識", format!(
+        "<div class=setting-row><div><label id=shared-speech-label>共有モデルで認識する</label><p class=hint id=shared-speech-help>変身・NGワード・ボイスストーンに使用します。</p></div>\
+         <div class=\"setting-control switch-control\"><button type=button class=\"switch shared-speech-switch\" role=switch aria-labelledby=shared-speech-label aria-describedby=shared-speech-help aria-checked={enabled} data-action=stone-local-toggle {disabled}></button></div></div>\
+         <div class=\"row-content speech-model-content\"><p class=hint>{hint}</p>{error}\
+         <div class=speech-model-actions><button type=button data-action=stone-speech-download {download_disabled}>{download}</button>{refresh}</div>\
+         <p class=\"hint speech-model-note\">導入後はアプリを再起動してください。タヌキ丼未検出時はモデルを読み込みません。</p></div>",
+        disabled = if local["available"] == true { "" } else { "disabled" },
+        enabled = if local["enabled"] == true { "true" } else { "false" },
+        hint = e(hint),
+        download_disabled = if runtime.is_some() { "" } else { "disabled" },
+        download = e(download),
+        refresh = button("stone-local-refresh", "再確認"),
+    ))
 }
 pub fn dialogs(s: &State) -> String {
     let close = button("close-dialog", "キャンセル");
     if s.form["debugDialog"] == true {
-        return format!("<div class=modal-backdrop><div class=modal role=dialog aria-modal=true><h3>デバッグ画面の認証</h3><label>パスワード<input type=password data-form=debugPassword autocomplete=off value=\"{}\"></label><p class=hint>開発者または確認担当者用のデバッグパスワードを入力してください。</p><div class=modal-actions>{close}{}</div></div></div>",e(&text(&s.form["debugPassword"])),button("open-debug","開く"));
+        let pending=s.form["debugAuthenticating"]==true;
+        let error=text(&s.form["debugError"]);
+        let helper=if !error.is_empty(){error.as_str()}else if pending{"認証しています…"}else{"開発者または確認担当者用のデバッグパスワードを入力してください。"};
+        return format!("<div class=modal-backdrop><form class=modal role=dialog aria-modal=true data-debug-auth><h3>デバッグ画面の認証</h3><label for=debug-password>パスワード</label><input id=debug-password type=password data-form=debugPassword autocomplete=off maxlength=1024 aria-describedby=debug-auth-help {input_disabled} value=\"{password}\"><p id=debug-auth-help class=\"hint {error_class}\" role=status>{helper}</p><div class=modal-actions><button type=button data-action=close-dialog {input_disabled}>キャンセル</button><button type=submit data-debug-submit {submit_disabled}>{submit_label}</button></div></form></div>",
+            password=e(&text(&s.form["debugPassword"])),
+            helper=e(helper),
+            error_class=if error.is_empty(){""}else{"debug-auth-error"},
+            input_disabled=if pending{"disabled"}else{""},
+            submit_disabled=if pending||text(&s.form["debugPassword"]).is_empty(){"disabled"}else{""},
+            submit_label=if pending{"認証中…"}else{"開く"},
+        );
     }
     if s.form["serverDialog"] == true {
         return format!("<div class=modal-backdrop><div class=modal role=dialog><h3>サーバーを追加</h3><datalist id=voice-servers data-setting-list=serverURLs></datalist><input type=url data-form=serverURL value=\"{}\" placeholder=https://><div class=modal-actions>{close}{}</div></div></div>",e(&text(&s.form["serverURL"])),button("save-server","追加"));

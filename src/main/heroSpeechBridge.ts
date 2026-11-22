@@ -7,6 +7,7 @@ import { createSocket, type Socket } from 'node:dgram';
 import type { IpcMain } from 'electron';
 import { GameState, type AmongUsState } from '../common/AmongUsState';
 import type { HeroSpeechPlayer } from '../common/HeroSpeech';
+import { heardTransformation, heardForbiddenWord } from '../common/HeroSpeech';
 import { hasTanukiAddon } from '../common/tanukiAddon';
 import { validStoneWord } from '../common/VoiceStoneSpeech';
 interface Descriptor {
@@ -83,7 +84,18 @@ export function registerHeroSpeechBridge(
 	const localPending = new Map<string, AbortController>();
 	const localSubmitted = new Set<string>();
 	let localSession = '';
+	const livePending = new Map<number, { controller: AbortController; jobs: HeroSpeechPlayer[] }>();
+	const liveHandled = new Set<string>();
+	const liveLastClip = new Map<number, number>();
+	const identity = (p: HeroSpeechPlayer) => JSON.stringify([p.playerId, p.kind, p.request, p.words]);
+	function sameJob(a: HeroSpeechPlayer, b: HeroSpeechPlayer): boolean {
+		return identity(a) === identity(b) && b.request > 0 && b.expires > Date.now();
+	}
 	function cancelLocal(): void {
+		for (const p of livePending.values()) p.controller.abort();
+		livePending.clear();
+		liveHandled.clear();
+		liveLastClip.clear();
 		for (const controller of localPending.values()) controller.abort();
 		localPending.clear();
 		localSubmitted.clear();
@@ -155,6 +167,12 @@ export function registerHeroSpeechBridge(
 				localPending.delete(id);
 			}
 		}
+		for (const [player, p] of livePending) {
+			if (!permitted(player) || !p.jobs.some((j) => d?.players.some((live) => sameJob(j, live)))) {
+				p.controller.abort();
+				livePending.delete(player);
+			}
+		}
 		return d
 			? { pid: d.pid, session: d.token, players: d.players, localNeuralConfigured: localSpeechStatus().enabled }
 			: null;
@@ -164,6 +182,94 @@ export function registerHeroSpeechBridge(
 		cancelLocal();
 		localStoneWorker.close();
 	});
+	ipc.handle(
+		'HERO_SPEECH_LOCAL_TRANSCRIBE',
+		async (event, session: unknown, player: unknown, refs: unknown, capturedAt: unknown, bytes: unknown) => {
+			if (
+				!isMainRenderer(event.sender.id) ||
+				!localSpeechStatus().enabled ||
+				!permitted(player) ||
+				typeof player !== 'number' ||
+				typeof capturedAt !== 'number' ||
+				!Number.isSafeInteger(capturedAt) ||
+				Date.now() - capturedAt > 5000 ||
+				capturedAt > Date.now() + 100 ||
+				!(bytes instanceof Uint8Array) ||
+				!validStoneWav(bytes) ||
+				!Array.isArray(refs) ||
+				refs.length < 1 ||
+				refs.length > 2
+			)
+				return false;
+			const d = descriptor();
+			if (!d || d.token !== session) return false;
+			const jobs = d.players.filter(
+				(p) =>
+					p.playerId === player &&
+					p.kind !== 'stone' &&
+					p.request > 0 &&
+					p.expires > Date.now() &&
+					refs.some((r) => r?.kind === p.kind && r?.request === p.request)
+			);
+			if (
+				jobs.length !== refs.length ||
+				livePending.has(player) ||
+				livePending.size + localPending.size >= 4 ||
+				(liveLastClip.get(player) ?? 0) >= capturedAt ||
+				liveHandled.size >= 1024
+			)
+				return false;
+			liveLastClip.set(player, capturedAt);
+			const controller = new AbortController(),
+				entry = { controller, jobs };
+			livePending.set(player, entry);
+			const timer = setTimeout(() => controller.abort(), 18000);
+			try {
+				const text = await localStoneWorker.transcribeText(bytes, controller.signal);
+				const live = descriptor();
+				if (
+					!text ||
+					controller.signal.aborted ||
+					!localSpeechStatus().enabled ||
+					!permitted(player) ||
+					live?.token !== session ||
+					Date.now() - capturedAt > 5000
+				)
+					return false;
+				let sent = false;
+				for (const job of jobs) {
+					const key = identity(job);
+					if (
+						liveHandled.has(key) ||
+						!live.players.some((p) => sameJob(job, p)) ||
+						!(job.kind === 'ng'
+							? heardForbiddenWord(text, job.words, true)
+							: heardTransformation(text, job.words, true))
+					)
+						continue;
+					liveHandled.add(key);
+					if (live.unified)
+						sent =
+							nosAddonLink.sendCommand(live.pid, 'word', {
+								playerId: player,
+								request: job.request,
+								speechKind: job.kind,
+							}) || sent;
+					else {
+						send(
+							`TBCLHS2|${live.token}|word|${Date.now()}|${player}|${job.request}|${job.kind === 'ng' ? 'ng' : 'henshin'}`,
+							live.port
+						);
+						sent = true;
+					}
+				}
+				return sent;
+			} finally {
+				clearTimeout(timer);
+				if (livePending.get(player) === entry) livePending.delete(player);
+			}
+		}
+	);
 	ipc.handle(
 		'VOICE_STONE_LOCAL_TRANSCRIBE',
 		async (event, session: unknown, player: unknown, request: unknown, bytes: unknown) => {

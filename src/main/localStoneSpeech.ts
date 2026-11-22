@@ -4,14 +4,17 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validStoneWord } from '../common/VoiceStoneSpeech';
 import { validStoneWav } from './voiceStoneAudio';
+import { vcRuntimeInstalled } from './vcRuntime';
+import type { SharedSpeechStatus } from '../common/SharedSpeechSetup';
 
 export function localSpeechRoot(): string {
 	return join(process.env.LOCALAPPDATA ?? '', 'TanukiBCL', 'Speech', 'sherpa-2.0.2');
 }
 let error = '';
-export function localSpeechStatus(): { available: boolean; enabled: boolean; error: string } {
+export function localSpeechStatus(refreshRuntime = false): SharedSpeechStatus {
 	const root = localSpeechRoot();
-	const available =
+	const runtimeInstalled = vcRuntimeInstalled(join(root, 'runtime'), refreshRuntime);
+	const modelAvailable =
 		!!process.env.LOCALAPPDATA &&
 		[
 			'runtime/TanukiSpeechWorker.exe',
@@ -21,13 +24,14 @@ export function localSpeechStatus(): { available: boolean; enabled: boolean; err
 			'sensevoice/tokens.txt',
 			'silero_vad.onnx',
 		].every((p) => existsSync(join(root, p)));
+	const available = modelAvailable && runtimeInstalled;
 	let enabled = true;
 	try {
 		enabled = JSON.parse(readFileSync(join(root, 'preferences.json'), 'utf8')).enabled !== false;
 	} catch {
 		/* Use the shared model by default when its files are available. */
 	}
-	return { available, enabled: available && enabled, error };
+	return { runtimeInstalled, modelAvailable, available, enabled: available && enabled, error };
 }
 export function setLocalSpeech(enabled: unknown): boolean {
 	if (typeof enabled !== 'boolean' || !localSpeechStatus().available) return false;
@@ -41,7 +45,7 @@ class LocalStoneWorker {
 	private lastUsed = 0;
 	private pending = new Map<
 		string,
-		{ resolve: (word?: string) => void; timer: ReturnType<typeof setTimeout>; maximum: number }
+		{ resolve: (word?: string) => void; timer: ReturnType<typeof setTimeout>; maximum: number; text: boolean }
 	>();
 	private start(): void {
 		if (this.child) return;
@@ -76,12 +80,23 @@ class LocalStoneWorker {
 			clearTimeout(request.timer);
 			this.pending.delete(result.id);
 			error = result.error ? '高精度ローカル認識に失敗しました。モデルを確認してください。' : '';
-			request.resolve(validStoneWord(result.word, request.maximum) ? result.word : undefined);
+			request.resolve(
+				request.text
+					? typeof result.text === 'string' && result.text.length <= 4096 && !result.error
+						? result.text
+						: undefined
+					: validStoneWord(result.word, request.maximum)
+						? result.word
+						: undefined
+			);
 		} catch {
 			/* Ignore native library diagnostic lines. */
 		}
 	}
-	async transcribe(wav: Uint8Array, maximum: number, signal: AbortSignal): Promise<string | undefined> {
+	transcribeText(wav: Uint8Array, signal: AbortSignal): Promise<string | undefined> {
+		return this.transcribe(wav, 12, signal, true);
+	}
+	async transcribe(wav: Uint8Array, maximum: number, signal: AbortSignal, text = false): Promise<string | undefined> {
 		if (!localSpeechStatus().enabled || !validStoneWav(wav) || signal.aborted || this.pending.size >= 4) return;
 		this.lastUsed = Date.now();
 		this.start();
@@ -103,7 +118,7 @@ class LocalStoneWorker {
 				error = '高精度ローカル認識が時間内に完了しませんでした。';
 				this.stop(child);
 			}, 18000);
-			this.pending.set(id, { resolve: finish, timer, maximum });
+			this.pending.set(id, { resolve: finish, timer, maximum, text });
 			signal.addEventListener('abort', cancel, { once: true });
 			child.stdin.write(JSON.stringify({ id, maximum, wav: Buffer.from(wav).toString('base64') }) + '\n', (err) => {
 				if (err) this.stop(child);

@@ -9,6 +9,7 @@ mod effects;
 mod gate;
 mod geometry;
 mod lobby_browser;
+mod live_speech_audio;
 mod model;
 mod peer;
 mod pitch;

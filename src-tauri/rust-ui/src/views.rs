@@ -435,7 +435,22 @@ pub fn inquiry(s: &State) -> String {
         && !text(&s.form["subject"]).trim().is_empty()
         && !text(&s.form["body"]).trim().is_empty()
         && !s.busy;
-    format!("<div class=inquiry-view><h3>問い合わせ</h3><div class=inquiry-fields><div class=inquiry-warning>送信すると、本文・選択した添付ファイル・自動添付されるログが公開GitHub Issueに掲載されます。個人情報や秘密情報が含まれていないか確認してください。</div><label class=inquiry-ack><input type=checkbox data-form=publicIssueAcknowledged {}>公開される内容を確認しました</label><select data-form=tag aria-label=種別>{tags}</select><div class=outlined-field><input id=inquiry-subject data-form=subject maxlength=100 placeholder=\" \" value=\"{}\"><label for=inquiry-subject>件名 *</label></div><div class=outlined-field><textarea id=inquiry-body data-form=body maxlength=1800 rows=6 placeholder=\" \">{}</textarea><label for=inquiry-body>本文 *</label></div><div class=inquiry-attachments>{}{attachments}</div><div id=status-message role=status>{}</div></div><div class=inquiry-actions>{}</div></div>",if s.form["publicIssueAcknowledged"]==true{"checked"}else{""},e(&text(&s.form["subject"])),e(&text(&s.form["body"])),button("inquiry-attachments","添付ファイルを選択"),e(&s.notice()),button("submit-inquiry",if s.busy{"送信中…"}else{"送信"}).replace("type=button",if ready{"type=button class=contained-danger"}else{"type=button disabled"}))
+    let acknowledged = if s.form["publicIssueAcknowledged"] == true { "checked" } else { "" };
+    let submit = button("submit-inquiry", if s.busy { "送信中…" } else { "送信" })
+        .replace("type=button", if ready { "type=button class=contained-danger" } else { "type=button disabled" });
+    format!(
+        "<div class=inquiry-view><h3>問い合わせ</h3><div class=inquiry-fields>\
+         <div class=inquiry-warning>送信すると、本文・選択した添付ファイル・自動添付されるログが公開GitHub Issueに掲載されます。個人情報や秘密情報が含まれていないか確認してください。</div>\
+         <select data-form=tag aria-label=種別>{tags}</select>\
+         <div class=outlined-field><input id=inquiry-subject data-form=subject maxlength=100 placeholder=\" \" value=\"{subject}\"><label for=inquiry-subject>件名 *</label></div>\
+         <div class=outlined-field><textarea id=inquiry-body data-form=body maxlength=1800 rows=6 placeholder=\" \">{body}</textarea><label for=inquiry-body>本文 *</label></div>\
+         <div class=inquiry-attachments>{attachment_button}{attachments}</div><div id=status-message role=status>{notice}</div></div>\
+         <div class=inquiry-actions><label class=inquiry-ack><input type=checkbox data-form=publicIssueAcknowledged {acknowledged}>公開される内容を確認しました</label>{submit}</div></div>",
+        subject = e(&text(&s.form["subject"])),
+        body = e(&text(&s.form["body"])),
+        attachment_button = button("inquiry-attachments", "添付ファイルを選択"),
+        notice = e(&s.notice()),
+    )
 }
 pub fn lobbies(s: &State) -> String {
     let mut rows = String::new();
@@ -504,11 +519,12 @@ pub fn debug(s: &State) -> String {
             dump(&game["players"]),
         ));
     }
-    sections.extend([("appearance","プレイヤーの外見・サイズ・座標など",dump(&game["players"])),("bans","ユーザーBAN管理",bans(s,false)),("game","ゲーム状態（JSON）",dump(game)),("voice","音声接続（JSON）",dump(&s.voice)),("logs","ログ",format!("<p class=hint>最新のログ（最大64KB）を1秒ごとに更新します。</p><pre id=debug-log>{}</pre>",e(&text(&s.result["logs"]))))]);
+    sections.extend([("appearance","プレイヤーの外見・サイズ・座標など",dump(&game["players"])),("bans","ユーザーBAN管理",bans(s,false)),("game","ゲーム状態（JSON）",dump(game)),("voice","音声接続（JSON）",dump(&s.voice)),("logs","ログ",format!("<p class=hint>最新のログ（最大64KB）を1秒ごとに更新します。</p><pre id=debug-log data-scroll-key=debug-logs>{}</pre>",e(&text(&s.result["logs"]))))]);
     for (id, title, content) in sections {
+        let content = content.replace("<pre>", &format!("<pre data-scroll-key=\"debug-{id}\">"));
         panels.push_str(&format!("<details class=debug-accordion data-debug-section={id} {}><summary>{title}</summary><div>{content}</div></details>",if s.form["debugSections"][id]==true{"open"}else{""}));
     }
-    format!("<main class=debug-panel><div class=debug-toolbar><span>起動中のMOD: {} ／ ゲーム: {phase} ／ {count}人</span>{}</div><p class=debug-caption>ゲーム・音声の状態を自動更新します。詳しい情報は下の項目を開いて確認できます。</p><div class=debug-player-panel><h3>プレイヤー・役職情報</h3><input data-form=debugSearch placeholder=プレイヤー名・ID・衣装で検索 value=\"{}\"><div id=debug-player-list>{}</div></div><div class=debug-accordions>{panels}</div><div id=status-message>{}</div></main>",e(if mode=="NONE"{"Vanilla"}else{mode}),button("save-logs","ログを保存"),e(&text(&s.form["debugSearch"])),debug_players(s),e(&s.notice()))
+    format!("<main class=debug-panel data-scroll-key=debug-panel><div class=debug-toolbar><span>起動中のMOD: {} ／ ゲーム: {phase} ／ {count}人</span>{}</div><p class=debug-caption>ゲーム・音声の状態を自動更新します。詳しい情報は下の項目を開いて確認できます。</p><div class=debug-player-panel><h3>プレイヤー・役職情報</h3><input data-form=debugSearch placeholder=プレイヤー名・ID・衣装で検索 value=\"{}\"><div id=debug-player-list>{}</div></div><div class=debug-accordions>{panels}</div><div id=status-message>{}</div></main>",e(if mode=="NONE"{"Vanilla"}else{mode}),button("save-logs","ログを保存"),e(&text(&s.form["debugSearch"])),debug_players(s),e(&s.notice()))
 }
 pub fn debug_players(s: &State) -> String {
     let query = text(&s.form["debugSearch"]).trim().to_lowercase();
@@ -533,17 +549,18 @@ pub fn debug_players(s: &State) -> String {
         })
     {
         let id = text(&player["id"]);
-        result.push_str(&format!("<details data-debug-open=\"{}\" {}><summary>{} ／ ID: {} ／ {} ／ {}</summary><div class=debug-player>{}<div><p>座標: {} / {} ／ 状態: {}{}</p><p>本体陣営値: {} ／ 役職: {}</p><p>外見: 色 {} → {} ／ Outfit {}</p><h4>Mod役職・能力・衣装</h4><pre>{}</pre><h4>無線</h4><pre>{}</pre></div></div></details>",e(&id),if s.form["debugExpanded"][&id]==true{"open"}else{""},e(&text(&player["name"])),e(&id),e(&role_label(player)),if player["isLocal"]==true{"自分"}else{"他プレイヤー"},avatar(s,player),e(&text(&player["x"])),e(&text(&player["y"])),if player["disconnected"]==true{"切断"}else if player["isDead"]==true{"死亡"}else{"生存"},if player["inVent"]==true{" / ベント"}else{""},e(&text(&player["roleTeam"])),e(&text(&player["roleName"])),e(&text(&player["colorId"])),e(&text(&player["appearanceColorId"])),e(&text(&player["currentOutfit"])),e(&serde_json::to_string_pretty(player).unwrap_or_default()),e(&serde_json::to_string_pretty(&if player["isLocal"]==true{s.effective_game()["nosRadios"].clone()}else{s.snapshot()["nosRadiosByPlayer"][&id].clone()}).unwrap_or_default())));
+        let scroll_id = e(&id);
+        result.push_str(&format!("<details data-debug-open=\"{}\" {}><summary>{} ／ ID: {} ／ {} ／ {}</summary><div class=debug-player>{}<div><p>座標: {} / {} ／ 状態: {}{}</p><p>本体陣営値: {} ／ 役職: {}</p><p>外見: 色 {} → {} ／ Outfit {}</p><h4>Mod役職・能力・衣装</h4><pre data-scroll-key=\"player-{scroll_id}-appearance\">{}</pre><h4>無線</h4><pre data-scroll-key=\"player-{scroll_id}-radio\">{}</pre></div></div></details>",e(&id),if s.form["debugExpanded"][&id]==true{"open"}else{""},e(&text(&player["name"])),e(&id),e(&role_label(player)),if player["isLocal"]==true{"自分"}else{"他プレイヤー"},avatar(s,player),e(&text(&player["x"])),e(&text(&player["y"])),if player["disconnected"]==true{"切断"}else if player["isDead"]==true{"死亡"}else{"生存"},if player["inVent"]==true{" / ベント"}else{""},e(&text(&player["roleTeam"])),e(&text(&player["roleName"])),e(&text(&player["colorId"])),e(&text(&player["appearanceColorId"])),e(&text(&player["currentOutfit"])),e(&serde_json::to_string_pretty(player).unwrap_or_default()),e(&serde_json::to_string_pretty(&if player["isLocal"]==true{s.effective_game()["nosRadios"].clone()}else{s.snapshot()["nosRadiosByPlayer"][&id].clone()}).unwrap_or_default())));
     }
     result
 }
-fn ban_flag(value: &Value) -> bool {
+pub(crate) fn ban_flag(value: &Value) -> bool {
     value == true || value.as_i64().is_some_and(|n| n != 0)
 }
 pub fn bans(s: &State, history: bool) -> String {
+    if !history { return crate::ban_panel::render(s); }
     let data = &s.result["bans"];
     let ip = s.form["banType"] == "ip" && data["ipBansAvailable"] == true;
-    let disabled = if s.busy { " disabled" } else { "" };
     let field = |key: &str| e(&text(&s.form[key]));
     let mut content=format!("<section><h3>{}</h3><div class=form-grid><label>BAN管理者パスワード<input type=password data-form=banPassword autocomplete=off value=\"{}\"></label><label>登録理由<input data-form=banReason maxlength=500 value=\"{}\"></label><label>BANの種類<select data-form=banType><option value=uid {}>UID</option><option value=ip {} {}>IP</option></select></label><label>プレイヤー名<input data-form=banName maxlength=80 value=\"{}\"></label>",if history{"プレイヤー履歴"}else{"BAN管理"},field("banPassword"),field("banReason"),if ip{""}else{"selected"},if ip{"selected"}else{""},if data["ipBansAvailable"]==true{""}else{"disabled"},field("banName"));
     if history {
@@ -567,34 +584,7 @@ pub fn bans(s: &State, history: bool) -> String {
             },
         ),
     );
-    if !history {
-        content.push_str(&button("ban-name", "名前で予約する"));
-        content.push_str(
-            "<p class=hint>名前による予約は、先に接続した同名プレイヤーのUIDに適用されます。</p>",
-        );
-    }
     content.push_str("</div>");
-    if !history {
-        content.push_str("<h3>現在のロビー</h3>");
-        for player in s.effective_game()["players"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|p| p["playerUid"].as_str().is_some_and(|v| !v.is_empty()))
-        {
-            content.push_str(&format!("<p>{} ／ Friend Code: {} <button data-action=ban-player data-value=\"{}\" data-player-uid=\"{}\"{disabled}>BAN登録</button></p>",e(&text(&player["name"])),e(&text(&player["friendCode"])),e(&text(&player["clientId"])),e(&text(&player["playerUid"]))));
-        }
-        content.push_str("<h3>UID待ち</h3>");
-        for record in data["pending"].as_array().into_iter().flatten() {
-            content.push_str(&format!("<p>{} ／ {} <button data-action=ban-remove-name data-value=\"{}\"{disabled}>解除</button></p>",e(&text(&record["player_name"])),e(&text(&record["reason"])),e(&text(&record["player_name"]))));
-        }
-        content.push_str("<h3>登録済み</h3>");
-        for record in data["bans"].as_array().into_iter().flatten() {
-            let ip = record["ban_type"] == "ip";
-            let id = &record[if ip { "public_ip" } else { "uid_digest" }];
-            content.push_str(&format!("<p>{} ／ {} BAN ／ UID: {} ／ IP: {} ／ {} <button data-action=ban-record data-value=\"{}\" data-ban-type={} data-history=false{disabled}>解除</button></p>",e(&text(&record["display_name"])),if ip{"IP"}else{"UID"},e(&text(&record["player_uid"])),e(&text(&record["public_ip"])),e(&text(&record["reason"])),e(&text(id)),if ip{"ip"}else{"uid"}));
-        }
-    }
     content.push_str(&format!(
         "<h3>登録済みプレイヤー（{}人）</h3>",
         data["historyTotal"].as_u64().unwrap_or(0)
@@ -629,7 +619,7 @@ pub fn bans(s: &State, history: bool) -> String {
     ));
     content
 }
-fn seen_at(value: &Value) -> String {
+pub(crate) fn seen_at(value: &Value) -> String {
     let Some(timestamp) = value.as_f64() else {
         return text(value);
     };
@@ -648,7 +638,7 @@ pub fn body(s: &State) -> String {
         "settings" => crate::settings::render(s),
         "lobbies" => lobbies(s),
         "debug" => debug(s),
-        "player-history" => format!("<main class=history-panel><h2>過去に同じロビーで確認したプレイヤー</h2><p class=hint>初回・最終日時は、アプリが同じロビーで確認した時刻です。日付検索は最終確認日を対象にします。</p>{}</main>", bans(s, true)),
+        "player-history" => format!("<main class=history-panel data-scroll-key=history-panel><h2>過去に同じロビーで確認したプレイヤー</h2><p class=hint>初回・最終日時は、アプリが同じロビーで確認した時刻です。日付検索は最終確認日を対象にします。</p>{}</main>", bans(s, true)),
         "overlay" => crate::overlay::render(s),
         _ => main_view(s),
     }

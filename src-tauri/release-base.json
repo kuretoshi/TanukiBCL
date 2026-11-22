@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "repository": "https://github.com/kuretoshi/TanukiBCL",
-  "tag": "v3.2.69",
-  "commit": "6432afd90659eaa194a11f9ae5364d8d44c39b67",
-  "baseVersion": "3.2.69",
-  "betaVersion": "3.2.69-tauri-beta.1",
+  "tag": "v3.2.70",
+  "commit": "4c01d7d9c2b772b48ee5fa40a8102149fbe26e81",
+  "baseVersion": "3.2.70",
+  "betaVersion": "3.2.70-tauri-beta.1",
   "publishedAt": null,
   "files": {
     "src/common/AddonLink.ts": "d955e90ac3911f7489c2745ecef59526fffdd48349d49b98aebe3f07a5914b96",
@@ -15,7 +15,7 @@
     "src/common/Errors.ts": "c0b4d72f4bd072500a2bb7d3cf5161f849c0481503f13a8ddb223d91b589a959",
     "src/common/GameInfo.ts": "f4873b0fc6d9df152f17f6b21759e86902dad2308f3b76a9446bb0e4f8440c9b",
     "src/common/GamePlatform.ts": "ece4ab71542311b32abf7be5d0081168f88b658197dd20e46ba8c8d240af5f31",
-    "src/common/HeroSpeech.ts": "64c7e7e65d9350a250a23cf8292c4a86bb9dcc88a23ce269315863b05a4c60e5",
+    "src/common/HeroSpeech.ts": "5853ff9190707e39f2745a243a62a48e08351ba2ca1b938494fa4227ff0855ea",
     "src/common/HeroTransformState.ts": "64cd1a15788299dbf11a8c9db6c23152b2767a8491a91f318719a59a48e1e0fe",
     "src/common/ISettings.d.ts": "e07e764d65d82c5e7605d41abe1f52a30862c0405f2ca6f2ce5e56e489f4ee4f",
     "src/common/Impostor.ts": "19c2c93f16333e3966b1d3317eb550e3ab150466154fb88305a4261bb44cf5f5",
@@ -54,7 +54,7 @@
     "src/main/debugAuth.ts": "c41b73a557ba4409fa45f9e4a993cb06c37edd4eaedce351bd82616080d1064c",
     "src/main/dyingVoiceState.ts": "56ef3a72b9c29e799c5527d43ae1f954de0e02dd340ece64915ca4488aeab268",
     "src/main/electron-overlay-window.d.ts": "55d9b0cb1235cd59b3b50431e97ef0cbb97048e30a37db666120f4aed39c4b55",
-    "src/main/heroSpeechBridge.ts": "1b9d5e62a1d37c7180e1db2502b7c4cf77bb276ca98f45fb05b0d4ba4c2c2894",
+    "src/main/heroSpeechBridge.ts": "d42b51254f89a7eb578af85521aaedd502379e8080c6958df7bcc571f116ec46",
     "src/main/heroTransformState.ts": "ededcb2eb09f7d143586b0a7ce127acbce91fe861d291a5680473178f2687063",
     "src/main/index.ts": "680f9dc8b6210a3498cb03571e369ae0328c618ade3e25e1eada1f7677cc427f",
     "src/main/inquiryConfig.ts": "3eab96b07f4055ef3ea99cd6aeaedb826df765c1287b72849235ac6af3e555b6",
@@ -107,7 +107,7 @@
     "src/renderer/voice/connectionQuality.ts": "a45556b44a4c23ef267d2e0ef1ba61a6a725cebb5e2b5cd9154c1e8a15b18c68",
     "src/renderer/voice/dyingVoiceRecording.ts": "a748fea37dbc9f01c2cc2f2f8eb63179bb85e35f848ed652e37954f11a025cc0",
     "src/renderer/voice/effectGain.ts": "efdf549f95cefbd43ad1cb7f1501c1f13d345e233ed1bf3712780a7200475f96",
-    "src/renderer/voice/heroSpeech.ts": "9cd1b76abcdf5e2ddcffe75cde726c16e45c1e5c2312494a4bf9f37affdd2e3a",
+    "src/renderer/voice/heroSpeech.ts": "a2328dd3521a9f99076b2fdd4eb537bf35213f7ad6021dc7a42f4bddb60a2b97",
     "src/renderer/voice/interviewerRecording.ts": "c2c88a9eaac0826939cbaad3b95d4e7a391404ae32bd3d411c3052fc2526f06d",
     "src/renderer/voice/megaphoneRecording.ts": "767f05d72e6734d77a03331a5942da5a631a63e64312c09ab530710418a92f5f",
     "src/renderer/voice/megaphoneVoice.ts": "34cac253fb202084733fcb12ea32811f76ccf157d7f843c247739327e29241fd",
@@ -143,6 +143,13 @@
     "src/renderer/views/VoiceView.tsx": "eced88f3209e726affe1a7c45b26fdc0ae9c97c8fde0a6d9c9daed7a98f618be",
     "src/renderer/voice/parrotRecording.ts": "4e71cf44f73edc497db0e7958861a14ffbd4ee8b068c91cb2fd2d60dd4095e19",
     "src/common/BitCharacterState.ts": "31b89ecaae63ca1aa3e28eb0e1f123025a045182839c2a0abf3856b24f802694",
-    "src/renderer/voice/bitVoiceEffect.ts": "ba3cebddf9c5951b514f8ec245df699152e85db90f84df4818aa89628194278c"
+    "src/renderer/voice/bitVoiceEffect.ts": "ba3cebddf9c5951b514f8ec245df699152e85db90f84df4818aa89628194278c",
+    "src/common/LiveSpeechAudio.ts": "f2b3ff68578e128f9b33b54576205369d63eaac6942e7eaa665d5f8bb492eabb",
+    "src/common/SharedSpeechSetup.ts": "f9180437d7ea3572f19e6e59b17ce066bcdfa3f0388bc1132ca04c7b70e5b470",
+    "src/main/localSpeechSettings.ts": "b794a392f2409c1edcb053cad7b4b45a96ef6b3272de8373691b83d5aae12529",
+    "src/main/localStoneSpeech.ts": "e68e157dfb34264ccfaf61c24e63ae583f47ac62224b498cba14f60026ee3516",
+    "src/main/vcRuntime.ts": "423b567eb10220276ee6b403e19bfe96cd458b89b2260831032359ca765525c3",
+    "src/renderer/InquiryForm.tsx": "17f4085bcc752840d514c71381ded9a7777ec46e9753db4c5d38693e1b75ec43",
+    "src/renderer/settings/sections/VoiceStoneSpeechSettings.tsx": "64f7716cdfb453321682fd20c4cbe3ec752d5bdfbde0835f0a55145586872c7e"
   }
 }

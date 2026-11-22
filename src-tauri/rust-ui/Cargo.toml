@@ -18,4 +18,4 @@ png = "0.18"
 base64 = "0.22"
 percent-encoding = "2"
 url = "2"
-web-sys = { version = "=0.3.107", features = ["Document", "DomRect", "Element", "Event", "EventTarget", "HtmlElement", "HtmlInputElement", "HtmlSelectElement", "HtmlTextAreaElement", "Location", "Node", "NodeList", "Window", "KeyboardEvent", "MouseEvent", "Storage", "Navigator", "Clipboard", "HtmlImageElement", "console", "VisibilityState"] }
+web-sys = { version = "=0.3.107", features = ["Document", "FocusOptions", "DomRect", "Element", "Event", "EventTarget", "HtmlElement", "HtmlInputElement", "HtmlSelectElement", "HtmlTextAreaElement", "Location", "Node", "NodeList", "Window", "KeyboardEvent", "MouseEvent", "Storage", "Navigator", "Clipboard", "HtmlImageElement", "console", "VisibilityState"] }

@@ -258,12 +258,21 @@ pub async fn action(
                 "serverDialog"
             };
             app.borrow_mut().form[key] = json!(true);
+            if name == "debug-dialog" {
+                let mut s=app.borrow_mut();
+                s.form["debugPassword"]=Value::Null;
+                s.form["debugError"]=json!("");
+                s.message.clear();
+            }
             crate::render(&app, true);
         }
         "close-dialog" => {
+            if app.borrow().form["debugAuthenticating"] == true { return Ok(()); }
             for key in ["debugDialog", "serverDialog", "platformDialog"] {
                 app.borrow_mut().form[key] = json!(false);
             }
+            app.borrow_mut().form["debugPassword"] = Value::Null;
+            app.borrow_mut().form["debugError"] = Value::Null;
             crate::render(&app, true);
         }
         "save-server" => {
@@ -554,6 +563,15 @@ pub async fn action(
                 crate::render(&app, true);
             }
         }
+        "stone-local-refresh" | "stone-speech-download" => {
+            let status = t::ipc("VOICE_STONE_LOCAL_STATUS", vec![]).await?;
+            let url = crate::settings::speech_setup_url(&status);
+            app.borrow_mut().result["localSpeech"] = status;
+            crate::render(&app, true);
+            if name == "stone-speech-download" {
+                t::invoke("open_external", json!({"url":url})).await?;
+            }
+        }
         "stone-local-toggle" => {
             let enabled=app.borrow().result["localSpeech"]["enabled"]!=true;
             t::ipc("VOICE_STONE_LOCAL_SET",vec![json!(enabled)]).await?;
@@ -561,16 +579,10 @@ pub async fn action(
             crate::render(&app,true);
         }
         "open-debug" => {
-            let password = app.borrow_mut().form["debugPassword"].take();
-            let result = t::ipc("OPEN_DEBUG", vec![password]).await?;
-            if result == "authorized" {
-                app.borrow_mut().form["debugDialog"] = json!(false);
-            }
-            app.borrow_mut().message = if result == "authorized" {
-                "デバッグ情報を開きました".into()
-            } else {
-                text(&result)
-            };
+            let Some(password) = crate::debug_auth::begin(&mut app.borrow_mut()) else { return Ok(()); };
+            crate::render(&app, true);
+            let result = t::ipc("OPEN_DEBUG", vec![password]).await;
+            crate::debug_auth::finish(&mut app.borrow_mut(), result);
             crate::render(&app, true);
         }
         "debug-tab" => {
@@ -635,6 +647,11 @@ pub async fn action(
             }
             crate::render(&app, true);
         }
+        "ban-type" => {
+            if app.borrow().busy || !["uid","ip"].contains(&argument.as_str()) || argument=="ip" && app.borrow().result["bans"]["ipBansAvailable"]!=true { return Ok(()); }
+            app.borrow_mut().form["banType"]=json!(argument);
+            crate::render(&app,true);
+        }
         "ban-list" | "ban-add" | "ban-player" | "ban-name" | "ban-record" | "ban-remove-name"
         | "history-previous" | "history-next" => {
             ban_action(app, name.as_str(), &argument, &element).await?;
@@ -656,14 +673,27 @@ pub async fn action(
                 .unwrap_or(""));
             crate::render(&app, true);
         }
-        "check-updates" | "download-update" | "install-update" => {
-            let channel = match name.as_str() {
-                "check-updates" => "updater:check",
-                "download-update" => "update-app",
-                _ => "RESTART_AND_UPDATE",
+        "check-updates" | "start-update" => {
+            let initial = app.borrow().updater.clone();
+            if name == "check-updates" {
+                app.borrow_mut().updater = json!({"state":"checking"});
+            } else {
+                app.borrow_mut().updater["state"] = json!("downloading");
+            }
+            crate::render(&app, true);
+            let result = if name == "check-updates" {
+                t::ipc("updater:check", vec![]).await
+            } else {
+                crate::update::start(&initial, |channel| t::ipc(channel, vec![])).await
             };
-            let result = t::ipc(channel, vec![]).await?;
-            app.borrow_mut().updater = result;
+            match result {
+                Ok(state) => app.borrow_mut().updater = state,
+                Err(error) => {
+                    app.borrow_mut().updater = json!({"state":"error","error":error});
+                    crate::render(&app, true);
+                    return Err(error);
+                }
+            }
             crate::render(&app, true);
         }
         _ => {}
@@ -791,7 +821,7 @@ async fn ban_action(app: App, name: &str, argument: &str, element: &Element) -> 
             .as_str()
             .unwrap_or("一覧を更新しました")
             .into();
-        state.result["bans"] = result;
+        if result["error"].is_null() { state.result["bans"] = result; }
         if state.result["bans"]["ipBansAvailable"] != true {
             state.form["banType"] = json!("uid");
         }
@@ -913,8 +943,7 @@ pub fn bind_all(app: App) -> Result<(), JsValue> {
             "history-previous",
             "history-next",
             "check-updates",
-            "download-update",
-            "install-update",
+            "start-update",
         ]
         .contains(&name.as_str());
         if guarded {
@@ -935,10 +964,38 @@ pub fn bind_all(app: App) -> Result<(), JsValue> {
         });
     })?;
     let state = app.clone();
+    bind(&document, "submit", move |event| {
+        let Some(form) = target(&event).and_then(|e| e.closest("form[data-debug-auth]").ok().flatten()) else { return; };
+        event.prevent_default();
+        let app=state.clone();
+        t::dispatch(action(app,"open-debug".into(),String::new(),form));
+    })?;
+    let state = app.clone();
     bind(&document, "input", move |event| {
         if let Some(element) = target(&event) {
             if let Some(key) = element.get_attribute("data-form") {
                 state.borrow_mut().form[&key] = value(&element);
+                if ["banPassword","banName"].contains(&key.as_str()) {
+                    let s=state.borrow();
+                    if let Some(document)=web_sys::window().and_then(|w|w.document()) {
+                        if let Ok(buttons)=document.query_selector_all("[data-ban-control]") {
+                            for index in 0..buttons.length() {
+                                if let Some(button)=buttons.item(index).and_then(|n|n.dyn_into::<Element>().ok()) {
+                                    let action=button.get_attribute("data-action").unwrap_or_default();
+                                    let blocked=button.get_attribute("data-ban-blocked").as_deref()==Some("true");
+                                    if crate::ban_panel::enabled(&s,&action,blocked){let _=button.remove_attribute("disabled");}else{let _=button.set_attribute("disabled","");}
+                                }
+                            }
+                        }
+                    }
+                }
+                if key == "debugPassword" {
+                    let s=state.borrow();
+                    let ready=s.form["debugAuthenticating"]!=true && s.form["debugPassword"].as_str().is_some_and(|p|!p.is_empty());
+                    if let Some(button)=web_sys::window().and_then(|w|w.document()).and_then(|d|d.query_selector("[data-debug-submit]").ok().flatten()) {
+                        if ready {let _=button.remove_attribute("disabled");} else {let _=button.set_attribute("disabled","");}
+                    }
+                }
                 if ["publicIssueAcknowledged", "subject", "body"].contains(&key.as_str()) {
                     let s = state.borrow();
                     let ready = s.form["publicIssueAcknowledged"] == true

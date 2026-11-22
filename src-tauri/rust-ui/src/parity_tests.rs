@@ -50,7 +50,7 @@ fn every_release_setting_descriptor_has_a_control_in_the_rust_ui() {
     }
     for action in [
         "save-platform",
-        "open-debug",
+        "data-debug-auth",
         "reset-settings",
         "effect-test",
         "speaker-test",
@@ -233,6 +233,20 @@ fn player_grid_matches_the_electron_algorithm_for_window_sizes_and_groups() {
 
 #[test]
 fn shared_local_model_settings_have_no_cloud_key_fields() {
- let mut state=State::for_view("settings","test");state.category="advanced".into();state.result["localSpeech"]=json!({"available":true,"enabled":true});
- let html=settings::render(&state);assert!(html.contains("stone-local-toggle"));assert!(html.contains(">On</button>"));assert!(!html.contains("OpenAI"));assert!(!html.contains("APIキー"));
+ let mut state=State::for_view("settings","test");state.category="advanced".into();state.result["localSpeech"]=json!({"runtimeInstalled":true,"available":true,"enabled":true});
+ let html=settings::render(&state);assert!(html.contains("stone-local-toggle"));assert!(html.contains("role=switch"));assert!(html.contains("aria-checked=true"));assert!(!html.contains("OpenAI"));assert!(!html.contains("APIキー"));
+}
+
+#[test]
+fn shared_setup_routes_missing_runtime_to_microsoft_before_model_download() {
+    let mut state = State::for_view("settings", "test");
+    state.category = "advanced".into();
+    state.result["localSpeech"] = json!({"runtimeInstalled":false,"modelAvailable":true,"available":false,"enabled":false});
+    let html = settings::render(&state);
+    assert!(html.contains("Microsoft Visual C++ v14 Redistributable（x64）"));
+    assert!(html.contains("再確認"));
+    assert!(html.contains("data-action=stone-speech-download"));
+    assert!(settings::speech_setup_url(&state.result["localSpeech"]).starts_with("https://learn.microsoft.com/"));
+    state.result["localSpeech"]["runtimeInstalled"] = json!(true);
+    assert!(settings::speech_setup_url(&state.result["localSpeech"]).ends_with("TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe"));
 }

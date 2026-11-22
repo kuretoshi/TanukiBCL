@@ -1,6 +1,8 @@
 //! Experimental Rust backend. The shared React/WebRTC frontend stays unchanged.
 mod assets;
 mod local_speech;
+mod live_speech;
+mod vc_runtime;
 pub(crate) mod speech_audio;
 mod http;
 mod keys;
@@ -29,6 +31,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 pub struct Backend {
     local_speech: local_speech::LocalSpeech,
+    live_speech: Mutex<live_speech::Requests>,
     updater: updater::Updater,
     app: AppHandle,
     running: AtomicBool,
@@ -116,6 +119,7 @@ impl Backend {
         let constants = serde_json::from_slice(&fs::read(resources.join("rust-constants.json"))?)?;
         let backend = Arc::new(Self {
             local_speech: local_speech::LocalSpeech::default(),
+            live_speech: Mutex::new(live_speech::Requests::default()),
             updater: updater::Updater::default(),
             app: app.clone(),
             running: AtomicBool::new(true),
@@ -251,8 +255,34 @@ impl Backend {
                     sample["host"] == true
                 )));
             }
-            "VOICE_STONE_LOCAL_STATUS" if matches!(target,"main"|"settings") => return Ok(self.local_speech.status()),
+            "VOICE_STONE_LOCAL_STATUS" if matches!(target,"main"|"settings") => return Ok(self.local_speech.refresh_status()),
             "VOICE_STONE_LOCAL_SET" if matches!(target,"main"|"settings") => return Ok(json!(self.local_speech.save(&get(0)))),
+            "HERO_SPEECH_LOCAL_TRANSCRIBE" => {
+                if target!="main" || !self.local_speech.enabled(){return Ok(json!(false));}
+                let state=self.state.lock().unwrap().clone();
+                let permitted=|state:&Value,player:u64| local_speech::active_state(state) && (state["isHost"]==true || state["players"].as_array().is_some_and(|ps|ps.iter().any(|p|p["id"]==player&&p["isLocal"]==true)));
+                let session=text(0);let player=get(1).as_u64().unwrap_or(256);let at=get(3).as_u64().unwrap_or(0);
+                if !permitted(&state,player){return Ok(json!(false));}
+                let speech=self.addon_link.lock().unwrap().speech_state();
+                let jobs=live_speech::jobs(&speech,session,player,&get(2),mods::addon::now());
+                let raw=get(4); let Some(array)=raw.as_array().filter(|a|a.len()<=320044)else{return Ok(json!(false));};
+                let Some(bytes):Option<Vec<u8>>=array.iter().map(|v|v.as_u64().filter(|n|*n<=255).map(|n|n as u8)).collect()else{return Ok(json!(false));};
+                if jobs.is_empty() || !speech_audio::valid_wav(&bytes) || !self.live_speech.lock().unwrap().begin(session,player,at,mods::addon::now()){return Ok(json!(false));}
+                let result=self.local_speech.transcribe_text(&bytes);
+                if !self.live_speech.lock().unwrap().end(session,player,at){return Ok(json!(false));}
+                let Some(text)=result? else{return Ok(json!(false));};
+                let state=self.state.lock().unwrap().clone();
+                if !permitted(&state,player)||!self.local_speech.enabled()||mods::addon::now().saturating_sub(at)>5000{return Ok(json!(false));}
+                let mut link=self.addon_link.lock().unwrap();let live=link.speech_state();
+                if live["session"]!=session{return Ok(json!(false));}
+                let mut sent=false;
+                for job in jobs {
+                    if live_speech::current(&job,&live,mods::addon::now()) && crate::voice::speech::matches(&text,&job,true) && self.live_speech.lock().unwrap().accept(&job) {
+                        sent=link.speech_command(&state,"word",session,player,job["request"].as_u64().unwrap_or(0),job["kind"].as_str().unwrap_or(""),"")||sent;
+                    }
+                }
+                return Ok(json!(sent));
+            }
             "VOICE_STONE_LOCAL_TRANSCRIBE" => {
                 if target!="main" || !self.local_speech.enabled() {return Ok(json!(false));}
                 let state=self.state.lock().unwrap().clone();
@@ -273,8 +303,9 @@ impl Backend {
                 if target != "main" {return Ok(Value::Null);}
                 let active = local_speech::active_state(&self.state.lock().unwrap());
                 self.local_speech.set_active(active);
-                if !active { return Ok(Value::Null); }
+                if !active { self.live_speech.lock().unwrap().reset("");return Ok(Value::Null); }
                 let mut speech=self.addon_link.lock().unwrap().speech_state();
+                self.live_speech.lock().unwrap().reset(speech["session"].as_str().unwrap_or(""));
                 if speech.is_object(){speech["localNeuralConfigured"]=json!(self.local_speech.enabled());}
                 return Ok(speech);
             }

@@ -9,14 +9,18 @@ use std::{
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 mod avatar;
+mod ban_panel;
 mod chrome;
+mod debug_auth;
 mod events;
 mod overlay;
+mod scroll;
 #[cfg(test)]
 mod parity_tests;
 mod settings;
 mod state;
 mod transport;
+mod update;
 mod views;
 thread_local! {static ACTIVE:RefCell<Option<Weak<RefCell<state::State>>>>=const{RefCell::new(None)};}
 
@@ -100,8 +104,11 @@ pub fn start() -> Result<(), JsValue> {
         let platforms =
             transport::ipc("REQUEST_PLATFORMS_AVAILABLE", vec![custom_platforms]).await?;
         state.borrow_mut().result["platforms"] = platforms;
-        let updater = transport::ipc("updater:get-state", vec![]).await?;
-        state.borrow_mut().updater = updater;
+        let needs_updater = matches!(state.borrow().view.as_str(), "app" | "settings");
+        if needs_updater {
+            let updater = transport::ipc("updater:get-state", vec![]).await?;
+            state.borrow_mut().updater = updater;
+        }
         let game = transport::ipc("GET_INITIAL_STATE", vec![]).await?;
         state.borrow_mut().game = game;
         let context = transport::ipc("native:context", vec![]).await?;
@@ -216,7 +223,7 @@ pub fn render(app: &App, force: bool) {
         ];
     }
     let settings_signature = if state.view == "settings" {
-        json!({"settings":state.settings,"host":state.effective_game()["isHost"],"phase":state.effective_game()["gameState"],"catalog":state.snapshot()["tohRoleCatalog"],"activeRules":state.snapshot()["activeLobbySettings"],"players":if state.category=="players"{state.effective_game()["players"].clone()}else{Value::Null},"notice":state.notice()}).to_string()
+        json!({"settings":state.settings,"host":state.effective_game()["isHost"],"phase":state.effective_game()["gameState"],"catalog":state.snapshot()["tohRoleCatalog"],"activeRules":state.snapshot()["activeLobbySettings"],"players":if state.category=="players"{state.effective_game()["players"].clone()}else{Value::Null},"notice":state.notice(),"updater":if state.category=="update"{state.updater.clone()}else{Value::Null},"updateBusy":state.category=="update"&&state.busy}).to_string()
     } else {
         String::new()
     };
@@ -229,21 +236,6 @@ pub fn render(app: &App, force: bool) {
                 "style",
                 &format!("width:{}%", settings::microphone_meter_level(&state)),
             );
-        }
-        if let Some(status) = document.get_element_by_id("updater-status") {
-            status.set_text_content(Some(&state::text(&state.updater["message"])));
-        }
-        for (id, enabled) in [
-            ("download-update", state.updater["state"] == "available"),
-            ("install-update", state.updater["state"] == "downloaded"),
-        ] {
-            if let Ok(Some(button)) = document.query_selector(&format!("[data-action={id}]")) {
-                if enabled {
-                    let _ = button.remove_attribute("disabled");
-                } else {
-                    let _ = button.set_attribute("disabled", "");
-                }
-            }
         }
         return;
     }
@@ -294,10 +286,7 @@ pub fn render(app: &App, force: bool) {
                 draft,
             )
         });
-        let scroll = document
-            .get_element_by_id("settings-content")
-            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-            .map(|e| e.scroll_top());
+        let scroll = scroll::capture(&document);
         if let Some(root) = document.get_element_by_id("app") {
             root.set_inner_html(&html);
         }
@@ -320,7 +309,9 @@ pub fn render(app: &App, force: bool) {
                     input.set_value(&draft);
                 }
                 if let Some(element) = element.dyn_ref::<web_sys::HtmlElement>() {
-                    let _ = element.focus();
+                    let options = web_sys::FocusOptions::new();
+                    options.set_prevent_scroll(true);
+                    let _ = element.focus_with_options(&options);
                 }
                 if let Some((start, end)) = selection {
                     if let Some(input) = element.dyn_ref::<web_sys::HtmlInputElement>() {
@@ -331,14 +322,7 @@ pub fn render(app: &App, force: bool) {
                 }
             }
         }
-        if let Some(scroll) = scroll {
-            if let Some(element) = document
-                .get_element_by_id("settings-content")
-                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-            {
-                element.set_scroll_top(scroll);
-            }
-        }
+        scroll::restore(&document, &scroll);
         state.rendered = html;
     }
     state.settings_signature = settings_signature;

@@ -128,16 +128,6 @@ export const InquiryForm: React.FC = function () {
 						送信すると、本文・選択した添付ファイル・自動添付されるログが公開GitHub
 						Issueに掲載されます。個人情報や秘密情報が含まれていないか確認してください。
 					</Alert>
-					<FormControlLabel
-						control={
-							<Checkbox
-								checked={publicIssueAcknowledged}
-								onChange={(event) => setPublicIssueAcknowledged(event.target.checked)}
-								disabled={sending}
-							/>
-						}
-						label="公開される内容を確認しました"
-					/>
 					<Select
 						inputProps={{ 'aria-label': TEXT.tag }}
 						value={tag}
@@ -193,13 +183,25 @@ export const InquiryForm: React.FC = function () {
 			<Box
 				sx={{
 					display: 'flex',
-					justifyContent: 'flex-end',
+					flexDirection: 'column',
+					alignItems: 'flex-end',
 					gap: 1,
 					px: 0,
 					py: 2,
 					borderTop: '1px solid rgba(255,255,255,0.08)',
 				}}
 			>
+				<FormControlLabel
+					sx={{ alignSelf: 'stretch', m: 0 }}
+					control={
+						<Checkbox
+							checked={publicIssueAcknowledged}
+							onChange={(event) => setPublicIssueAcknowledged(event.target.checked)}
+							disabled={sending}
+						/>
+					}
+					label="公開される内容を確認しました"
+				/>
 				<Button
 					variant="contained"
 					color="secondary"
