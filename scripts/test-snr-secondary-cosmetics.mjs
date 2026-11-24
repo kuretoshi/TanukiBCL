@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
+import { setImmediate } from 'node:timers';
 import process from 'node:process';
 import console from 'node:console';
 import { Buffer } from 'node:buffer';
@@ -125,7 +126,7 @@ await writeFile(
 );
 await writeFile(
 	join(fixture, 'plugin/Plugin.cs'),
-	`namespace SuperNewRoles.Modules { public class ExPlayerControl { public static ExPlayerControl[]? _exPlayerControlsArray; } }
+	`namespace SuperNewRoles.Modules { public class ExPlayerControl { public static ExPlayerControl[]? _exPlayerControlsArray; public byte PlayerId; public short Role,ModifierRole,GhostRole; } }
 namespace SuperNewRoles.CustomCosmetics.UI {
  public class Package { public string name="Fixture"; }
  public class Data { public Package package=new();public string hat_id="Hat",visor_id="Visor"; }
@@ -206,6 +207,35 @@ try {
 	});
 	await command('empty-role-array');
 	assert.deepEqual(capture().players, []);
+	const clockOriginal = Date.now;
+	let clock = 10000,
+		discoveries = 0;
+	Date.now = () => clock;
+	try {
+		const emptyRole = capture();
+		const refreshing = new SnrLiveTracker(async () => {
+			discoveries++;
+			return capture();
+		});
+		const roleUnavailable = (address, size) => {
+			if (address === emptyRole.liveLayout.arraySlot) throw new Error('Roles are temporarily unavailable');
+			return read(address, size);
+		};
+		refreshing.update(child.pid, 'roleless-lobby', roleUnavailable);
+		await new Promise(setImmediate);
+		clock += 1100;
+		refreshing.update(child.pid, 'roleless-lobby', roleUnavailable);
+		await new Promise(setImmediate);
+		await command('changed');
+		clock += 6000;
+		refreshing.update(child.pid, 'roleless-lobby', roleUnavailable);
+		await new Promise(setImmediate);
+		assert.equal(discoveries, 3, 'Empty role metadata must not permanently stop periodic cosmetic discovery');
+		assert.equal(refreshing.cosmetics(player, read).snrHat2Id, 'Modded_Fixture_Changed');
+		assert.equal(refreshing.cosmetics(player, read).snrVisor2Id, 'Modded_Fixture_Changed');
+	} finally {
+		Date.now = clockOriginal;
+	}
 	await command('changed');
 	await command('gc');
 	assert.deepEqual(readSnrSecondaryCosmetics(capture().secondaryCosmetics, player, read), {

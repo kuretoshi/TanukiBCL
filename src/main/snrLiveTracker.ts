@@ -132,12 +132,8 @@ export class SnrLiveTracker {
 		const refreshCosmetics = discovered && Date.now() >= this.cosmeticRefreshAt;
 		const discoverySession = discovered
 			? `${session}:${
-					this.needsRoleMetadata
-						? 'metadata'
-						: this.needsAbilityLayout
-							? 'abilities'
-							: `cosmetics-${Math.floor(Date.now() / 5000)}`
-				}`
+					this.needsRoleMetadata ? 'metadata' : this.needsAbilityLayout ? 'abilities' : 'cosmetics'
+				}:${Math.floor(Date.now() / 5000)}`
 			: session;
 		const retryReady =
 			(!this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt) && Date.now() >= this.discoveryRetryAt;
