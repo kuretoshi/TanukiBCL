@@ -1,7 +1,9 @@
 import { AmongUsState, Player } from '../../common/AmongUsState';
+import { cosmeticType, getCosmetic, isSnrScaledVisor } from '../lib/cosmetics';
+import { isLiteRuntime } from '../../common/appVariant';
 
 type Parts = NonNullable<Player['nosCosmetics']>;
-type Asset = { id: string; png: string };
+type Asset = { id: string; png: string; scale?: boolean };
 type MobileFrame = { gameState: AmongUsState; nosCosmeticAssets?: Record<string, string>; nosVoiceFrameTime?: number };
 const MAX_IMAGE_BYTES = 192 * 1024;
 const MAX_CACHE_BYTES = 8 * 1024 * 1024;
@@ -40,7 +42,7 @@ export class MobileCosmetics {
 			this.session = session;
 		}
 		const active = new Set<string>();
-		const players = state.players.map((player) => this.webPlayer(player, state.mod === 'NoS', active));
+		const players = state.players.map((player) => this.webPlayer(player, state.mod, active));
 		return {
 			gameState: { ...state, players, nosLoadedContents: undefined },
 			nosVoiceFrameTime: state.mod === 'NoS' ? Date.now() : undefined,
@@ -48,8 +50,9 @@ export class MobileCosmetics {
 		};
 	}
 
-	private webPlayer(player: Player, enabled: boolean, active: Set<string>): Player {
-		const entries = enabled ? Object.entries(player.nosCosmetics ?? {}) : [];
+	private webPlayer(player: Player, mod: AmongUsState['mod'], active: Set<string>): Player {
+		if (mod === 'SUPER_NEW_ROLES' && !isLiteRuntime()) return this.snrPlayer(player, active);
+		const entries = mod === 'NoS' ? Object.entries(player.nosCosmetics ?? {}) : [];
 		const parts: Parts = Object.fromEntries(
 			entries
 				.filter(([, source]) => source.startsWith('nos-cosmetic://image/'))
@@ -59,7 +62,48 @@ export class MobileCosmetics {
 					return [part, `nos-web://${this.cache.get(source)?.id ?? 'pending'}`];
 				})
 		);
-		return { ...player, nosCosmetics: Object.keys(parts).length ? parts : undefined };
+		return {
+			...player,
+			nosCosmetics: Object.keys(parts).length ? parts : undefined,
+			snrCosmetics: undefined,
+			snrCosmeticScale: undefined,
+		};
+	}
+
+	private snrPlayer(player: Player, active: Set<string>): Player {
+		const outfit = player.currentOutfit > 0 && player.currentOutfit <= 10;
+		const id = (part: 'hat' | 'skin' | 'visor') => {
+			const appearance = player[`appearance${part === 'hat' ? 'Hat' : part === 'skin' ? 'Skin' : 'Visor'}Id`];
+			return outfit || appearance?.startsWith('Modded_') ? appearance : player[`${part}Id`];
+		};
+		const color = outfit && player.appearanceColorId >= 0 ? player.appearanceColorId : player.colorId;
+		const ids = {
+			hat: id('hat'),
+			skin: id('skin'),
+			visor: id('visor'),
+			hat2: player.snrHat2Id,
+			visor2: player.snrVisor2Id,
+		};
+		const sources = {
+			hat: [ids.hat, cosmeticType.hat],
+			hatBack: [ids.hat, cosmeticType.hat_back],
+			skin: [ids.skin, cosmeticType.skin],
+			visor: [ids.visor, cosmeticType.visor],
+			hat2: [ids.hat2, cosmeticType.hat],
+			hat2Back: [ids.hat2, cosmeticType.hat_back],
+			visor2: [ids.visor2, cosmeticType.visor],
+		} as const;
+		const parts: NonNullable<Player['snrCosmetics']> = {};
+		const scale: NonNullable<Player['snrCosmeticScale']> = {};
+		for (const [part, [id, type]] of Object.entries(sources)) {
+			if (!id?.startsWith('Modded_')) continue;
+			const source = getCosmetic(color, true, type, id, 'SUPER_NEW_ROLES');
+			active.add(source);
+			this.load(source);
+			parts[part as keyof typeof parts] = `nos-web://${this.cache.get(source)?.id ?? 'pending'}`;
+			if (part === 'visor' || part === 'visor2') scale[part] = this.cache.get(source)?.scale ?? isSnrScaledVisor(id);
+		}
+		return { ...player, nosCosmetics: undefined, snrCosmetics: parts, snrCosmeticScale: scale };
 	}
 
 	private nextAssets(active: Set<string>): Record<string, string> | undefined {
@@ -95,7 +139,8 @@ export class MobileCosmetics {
 			const id = Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('');
 			const png = this.pngDataUrl(bytes);
 			if (generation !== this.generation) return;
-			this.storeAsset(source, { id, png });
+			const scale = response.headers.get('X-Tanuki-Snr-Scale');
+			this.storeAsset(source, { id, png, scale: scale === null ? undefined : scale === '1' });
 		} catch {
 			if (generation === this.generation) this.retryAt.set(source, Date.now() + 5000);
 		} finally {

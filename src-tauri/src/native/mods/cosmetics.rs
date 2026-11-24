@@ -55,7 +55,20 @@ pub fn probe(input: &Path, output: &Path) -> Result<(), String> {
             );
         }
         if let (Some(id), Some(part)) = (request["snrId"].as_str(), request["snrPart"].as_str()) {
-            match cosmetics.snr.image(id, part) {
+            let image = if let Some(color) = request["snrColor"].as_u64() {
+                let palette: Vec<[String; 2]> =
+                    serde_json::from_value(config["palette"].clone()).map_err(|e| e.to_string())?;
+                cosmetics.snr.image_for_color(
+                    id,
+                    part,
+                    &palette,
+                    color as usize,
+                    request["snrFallbackAdaptive"] == true,
+                )
+            } else {
+                cosmetics.snr.image(id, part)
+            };
+            match image {
                 Ok(bytes) => {
                     images.insert(
                         "snr".into(),

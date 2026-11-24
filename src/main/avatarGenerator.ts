@@ -4,6 +4,7 @@ import png from '@jimp/js-png';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const Jimp = createJimp({ formats: [png] });
 
@@ -101,7 +102,9 @@ export async function GenerateAvatars(colors: string[][]): Promise<void> {
 
 export async function GenerateHat(imagePath: URL, colors: string[][], colorId: number) {
 	try {
-		const img = await Jimp.read(imagePath.href);
+		const input =
+			imagePath.protocol === 'file:' ? await fs.promises.readFile(fileURLToPath(imagePath)) : imagePath.href;
+		const img = await Jimp.read(input);
 		const originalData = new Uint8Array(img.bitmap.data);
 		const color = colors[colorId][0];
 		const shadow = colors[colorId][1];

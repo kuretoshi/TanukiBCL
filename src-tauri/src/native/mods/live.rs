@@ -96,6 +96,105 @@ fn detect_files(path: &Path, files: &[String]) -> &'static str {
     "NONE"
 }
 
+struct SecondaryCosmetics {
+    ps: usize,
+    control_class: u64,
+    cosmetics_class: u64,
+    player_id_offset: u64,
+    cosmetics_offset: u64,
+    layers: HashMap<u64, (Value, Value)>,
+}
+impl SecondaryCosmetics {
+    fn parse(value: &Value, pid: u32) -> Result<Option<Self>, String> {
+        if value.is_null() {
+            return Ok(None);
+        }
+        let ps = pointer_size(value, pid)?;
+        let control_class = pointer_field(&value["controlClass"], ps)?;
+        let cosmetics_class = pointer_field(&value["cosmeticsClass"], ps)?;
+        let player_id_offset = offset(&value["playerIdOffset"], 1, 4096)? as u64;
+        let cosmetics_offset = offset(&value["cosmeticsOffset"], ps, 4096)? as u64;
+        if player_id_offset < (2 * ps) as u64 || cosmetics_offset < (2 * ps) as u64 {
+            return Err("Invalid native SNR cosmetics fields".into());
+        }
+        let rows = value["layers"]
+            .as_array()
+            .filter(|rows| rows.len() <= 4096)
+            .ok_or("Invalid native SNR cosmetics layers")?;
+        let mut layers = HashMap::new();
+        for row in rows {
+            let address = pointer_field(&row["address"], ps)?;
+            if pointer_field(&row["class"], ps)? != cosmetics_class {
+                return Err("Native SNR cosmetics layer class mismatch".into());
+            }
+            let costume = |key: &str| -> Result<Value, String> {
+                let id = &row[key];
+                if id.is_null()
+                    || id
+                        .as_str()
+                        .is_some_and(|id| !id.is_empty() && id.encode_utf16().count() <= 1024)
+                {
+                    Ok(id.clone())
+                } else {
+                    Err("Invalid native SNR secondary cosmetic ID".into())
+                }
+            };
+            if layers
+                .insert(address, (costume("hat2Id")?, costume("visor2Id")?))
+                .is_some()
+            {
+                return Err("Duplicate native SNR cosmetics layer".into());
+            }
+        }
+        Ok(Some(Self {
+            ps,
+            control_class,
+            cosmetics_class,
+            player_id_offset,
+            cosmetics_offset,
+            layers,
+        }))
+    }
+    fn player(&self, player: &Value, read: &Read<'_>) -> Result<Option<&(Value, Value)>, String> {
+        if player["disconnected"] == true {
+            return Ok(None);
+        }
+        let control = pointer_field(&player["objectPtr"], self.ps)?;
+        let id = uint(&player["id"], 255)?;
+        let sample = || -> Result<u64, String> {
+            if ptr(read, control, self.ps)? != self.control_class
+                || slice(&read(control + self.player_id_offset, 1)?, 0, 1)?[0] as u64 != id
+            {
+                return Err("Native SNR cosmetic owner changed".into());
+            }
+            let cosmetics = ptr(read, control + self.cosmetics_offset, self.ps)?;
+            if !pointer_valid(cosmetics, self.ps)
+                || ptr(read, cosmetics, self.ps)? != self.cosmetics_class
+            {
+                return Err("Native SNR cosmetics changed".into());
+            }
+            Ok(cosmetics)
+        };
+        let cosmetics = sample()?;
+        let result = self.layers.get(&cosmetics);
+        if sample()? != cosmetics {
+            return Err("Native SNR cosmetic binding changed during read".into());
+        }
+        Ok(result)
+    }
+    fn enrich(&self, state: &mut Value, read: &Read<'_>) {
+        for player in state["players"].as_array_mut().into_iter().flatten() {
+            let (hat, visor) = self
+                .player(player, read)
+                .ok()
+                .flatten()
+                .cloned()
+                .unwrap_or((Value::Null, Value::Null));
+            player["snrHat2Id"] = hat;
+            player["snrVisor2Id"] = visor;
+        }
+    }
+}
 pub struct Live {
     resources: PathBuf,
     pid: u32,
@@ -112,6 +211,7 @@ pub struct Live {
     roles_at: Option<Instant>,
     snr: Option<snr::Layout>,
     snr_metadata: Value,
+    snr_cosmetics: Option<SecondaryCosmetics>,
     toh: Option<toh::Layout>,
     publication: Option<u64>,
     fresh: Option<Instant>,
@@ -146,6 +246,7 @@ impl Live {
             roles_at: None,
             snr: None,
             snr_metadata: Value::Null,
+            snr_cosmetics: None,
             toh: None,
             publication: None,
             fresh: None,
@@ -212,8 +313,15 @@ impl Live {
                         self.roles_at = Some(Instant::now());
                     }
                     Kind::Snr => {
-                        self.snr = Some(snr::Layout::parse(&value["liveLayout"], process.pid)?);
+                        let cosmetics =
+                            SecondaryCosmetics::parse(&value["secondaryCosmetics"], process.pid)?;
+                        self.snr = if value["liveLayout"].is_null() {
+                            None
+                        } else {
+                            Some(snr::Layout::parse(&value["liveLayout"], process.pid)?)
+                        };
                         self.snr_metadata = value["players"].clone();
+                        self.snr_cosmetics = cosmetics;
                     }
                     Kind::Toh => {
                         self.toh = Some(toh::Layout::parse(&value["layout"], process.pid)?);
@@ -225,6 +333,10 @@ impl Live {
                 if reply.kind == Kind::NosRoles {
                     self.roles = Value::Null;
                     self.roles_at = None;
+                }
+                if reply.kind == Kind::Snr {
+                    self.snr_cosmetics = None;
+                    self.snr_metadata = Value::Null;
                 }
                 self.message = error;
                 self.next.insert(
@@ -270,6 +382,8 @@ impl Live {
             self.palette = None;
             self.roles = Value::Null;
             self.snr = None;
+            self.snr_metadata = Value::Null;
+            self.snr_cosmetics = None;
             self.toh = None;
             return;
         }
@@ -289,6 +403,7 @@ impl Live {
             self.roles_at = None;
             self.snr = None;
             self.snr_metadata = Value::Null;
+            self.snr_cosmetics = None;
             self.toh = None;
             self.publication = None;
             self.fresh = None;
@@ -401,19 +516,22 @@ impl Live {
                     .unwrap()
                     .snr
                     .update(process.path.parent().unwrap_or(Path::new(".")));
-                if active {
-                    self.request(
-                        Kind::Snr,
-                        process,
-                        Duration::from_secs(if self.snr.is_some() { 5 } else { 10 }),
-                    );
-                }
+                // Secondary cosmetic slots exist in the lobby before role
+                // assignment; retain the existing bounded discovery cadence.
+                self.request(
+                    Kind::Snr,
+                    process,
+                    Duration::from_secs(if self.snr.is_some() { 5 } else { 10 }),
+                );
                 let rows = if active {
                     self.snr.as_ref().and_then(|l| l.read(&read).ok())
                 } else {
                     None
                 };
                 enrich_snr(state, rows.as_ref(), &self.snr_metadata);
+                if let Some(cosmetics) = &self.snr_cosmetics {
+                    cosmetics.enrich(state, &read);
+                }
                 self.push
                     .update(&self.resources, process.pid, process.x64, state);
                 if phase == 2 {
@@ -604,6 +722,11 @@ fn enrich_nos(
 }
 fn enrich_snr(state: &mut Value, rows: Option<&Value>, metadata: &Value) {
     for p in state["players"].as_array_mut().into_iter().flatten() {
+        let cosmetics = (p["disconnected"] != true)
+            .then(|| metadata.as_array().and_then(|rs| rs.iter().find(|r| r["playerId"] == p["id"])))
+            .flatten();
+        p["snrHat2Id"] = cosmetics.map(|m| m["hat2Id"].clone()).unwrap_or(Value::Null);
+        p["snrVisor2Id"] = cosmetics.map(|m| m["visor2Id"].clone()).unwrap_or(Value::Null);
         let role = if p["disconnected"] == true {
             None
         } else {
@@ -659,8 +782,6 @@ fn enrich_snr(state: &mut Value, rows: Option<&Value>, metadata: &Value) {
         } else {
             p["roleName"] = json!("SNR役職未取得");
         }
-        p["snrHat2Id"] = role["hat2Id"].clone();
-        p["snrVisor2Id"] = role["visor2Id"].clone();
         p["snrRole"] = role;
     }
 }
@@ -687,6 +808,131 @@ fn enrich_toh(state: &mut Value, rows: Option<&Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn secondary_layout(ps: usize) -> Value {
+        json!({"pid":7,"pointerSize":ps,"controlClass":0x30000,
+            "cosmeticsClass":0x50000,"playerIdOffset":2*ps,"cosmeticsOffset":3*ps,
+            "layers":[{"address":0x40000,"class":0x50000,
+                "hat2Id":"Modded_SecondHat","visor2Id":"Modded_SecondVisor"}]})
+    }
+    fn secondary_read(ps: usize, address: u64, size: usize) -> Result<Vec<u8>, String> {
+        if address == 0x20000 + (2 * ps) as u64 && size == 1 {
+            return Ok(vec![1]);
+        }
+        let value: u64 = match address {
+            0x20000 => 0x30000,
+            at if at == 0x20000 + (3 * ps) as u64 => 0x40000,
+            0x40000 => 0x50000,
+            _ => return Err("Unexpected native field read".into()),
+        };
+        if size != ps {
+            return Err("Unexpected native field width".into());
+        }
+        Ok(value.to_le_bytes()[..ps].to_vec())
+    }
+    #[test]
+    fn snr_lobby_secondary_cosmetics_bind_without_role_players() {
+        for ps in [4, 8] {
+            let layout = SecondaryCosmetics::parse(&secondary_layout(ps), 7)
+                .unwrap()
+                .unwrap();
+            let read = |address, size| secondary_read(ps, address, size);
+            for phase in [0, 1, 2] {
+                let mut state = json!({"gameState":phase,"players":[{"id":1,"objectPtr":0x20000}]});
+                enrich_snr(&mut state, None, &json!([]));
+                assert!(state["players"][0]["snrHat2Id"].is_null());
+                layout.enrich(&mut state, &read);
+                assert_eq!(state["players"][0]["snrHat2Id"], "Modded_SecondHat");
+                assert_eq!(state["players"][0]["snrVisor2Id"], "Modded_SecondVisor");
+                assert!(state["players"][0]["snrRole"].is_null());
+                state["players"][0]["id"] = json!(2);
+                layout.enrich(&mut state, &read);
+                assert!(state["players"][0]["snrHat2Id"].is_null());
+                assert!(state["players"][0]["snrVisor2Id"].is_null());
+            }
+        }
+    }
+    #[test]
+    fn snr_secondary_native_binding_rejects_stale_or_disconnected_owners() {
+        use std::cell::Cell;
+        let ps = 8;
+        let layout = SecondaryCosmetics::parse(&secondary_layout(ps), 7)
+            .unwrap()
+            .unwrap();
+        let player = json!({"id":1,"objectPtr":0x20000});
+        for changed_address in [
+            0x20000,
+            0x20000 + 2 * ps as u64,
+            0x20000 + 3 * ps as u64,
+            0x40000,
+        ] {
+            let calls = Cell::new(0);
+            let read = |address, size| {
+                if address == changed_address {
+                    let previous = calls.replace(calls.get() + 1);
+                    if previous > 0 {
+                        return Ok(vec![0; size]);
+                    }
+                }
+                secondary_read(ps, address, size)
+            };
+            assert!(
+                layout.player(&player, &read).is_err(),
+                "changed field {changed_address:x}"
+            );
+        }
+        let read = |address, size| secondary_read(ps, address, size);
+        for row in [
+            json!({"id":1,"objectPtr":0x20000,"disconnected":true}),
+            json!({"id":1,"objectPtr":0x60000}),
+            json!({"id":1,"objectPtr":0}),
+        ] {
+            let mut state = json!({"players":[row]});
+            layout.enrich(&mut state, &read);
+            assert!(state["players"][0]["snrHat2Id"].is_null());
+            assert!(state["players"][0]["snrVisor2Id"].is_null());
+        }
+        let mut empty = secondary_layout(ps);
+        empty["layers"][0]["hat2Id"] = Value::Null;
+        empty["layers"][0]["visor2Id"] = Value::Null;
+        let mut state = json!({"players":[player]});
+        layout.enrich(&mut state, &read);
+        SecondaryCosmetics::parse(&empty, 7)
+            .unwrap()
+            .unwrap()
+            .enrich(&mut state, &read);
+        assert!(state["players"][0]["snrHat2Id"].is_null());
+        assert!(state["players"][0]["snrVisor2Id"].is_null());
+    }
+    #[test]
+    fn snr_secondary_layout_rejects_invalid_or_ambiguous_fields() {
+        let valid = secondary_layout(8);
+        assert!(SecondaryCosmetics::parse(&valid, 8).is_err());
+        for (key, value) in [
+            ("pointerSize", json!(2)),
+            ("playerIdOffset", json!(0)),
+            ("cosmeticsOffset", json!(4096)),
+            ("controlClass", json!(0)),
+        ] {
+            let mut invalid = valid.clone();
+            invalid[key] = value;
+            assert!(
+                SecondaryCosmetics::parse(&invalid, 7).is_err(),
+                "field {key}"
+            );
+        }
+        let mut invalid = valid.clone();
+        invalid["layers"][0]["class"] = json!(0x60000);
+        assert!(SecondaryCosmetics::parse(&invalid, 7).is_err());
+        invalid = valid.clone();
+        invalid["layers"][0]["hat2Id"] = json!("x".repeat(1025));
+        assert!(SecondaryCosmetics::parse(&invalid, 7).is_err());
+        invalid = valid.clone();
+        invalid["layers"]
+            .as_array_mut()
+            .unwrap()
+            .push(valid["layers"][0].clone());
+        assert!(SecondaryCosmetics::parse(&invalid, 7).is_err());
+    }
     #[test]
     fn mod_detection_recognizes_launcher_and_historical_names() {
         assert_eq!(
@@ -734,5 +980,30 @@ mod tests {
         let metadata = json!([{"playerId":1,"role":{"value":2},"isNeutral":true,"canKill":true}]);
         enrich_snr(&mut state, Some(&rows), &metadata);
         assert!(state["players"][0]["snrRole"]["canKill"].is_null());
+    }
+    #[test]
+    fn snr_secondary_cosmetics_do_not_require_live_role_permissions() {
+        let metadata = json!([{"playerId":1,"role":{"value":2},"isNeutral":true,"canKill":true,
+            "hat2Id":"Modded_SecondHat","visor2Id":"Modded_SecondVisor"}]);
+        let rows = json!([[1,{"role":{"value":3,"name":"Crewmate"},"modifier":null,"ghostRole":null}]]);
+        for phase in [0, 1, 2] {
+            let mut state = json!({"gameState":phase,"players":[{"id":1}]});
+            enrich_snr(&mut state, if phase == 0 { None } else { Some(&rows) }, &metadata);
+            assert_eq!(state["players"][0]["snrHat2Id"], "Modded_SecondHat", "phase {phase}");
+            assert_eq!(state["players"][0]["snrVisor2Id"], "Modded_SecondVisor", "phase {phase}");
+            assert!(state["players"][0]["snrRole"]["canKill"].is_null());
+            if phase == 0 {
+                assert!(state["players"][0]["snrRole"].is_null());
+            }
+            // A confirmed empty outfit replaces the old second slot, and a
+            // missing/disconnected player must never keep the previous IDs.
+            enrich_snr(&mut state, None, &json!([{"playerId":1,"hat2Id":null,"visor2Id":null}]));
+            assert!(state["players"][0]["snrHat2Id"].is_null());
+            assert!(state["players"][0]["snrVisor2Id"].is_null());
+            state["players"][0]["disconnected"] = json!(true);
+            enrich_snr(&mut state, Some(&rows), &metadata);
+            assert!(state["players"][0]["snrHat2Id"].is_null());
+            assert!(state["players"][0]["snrVisor2Id"].is_null());
+        }
     }
 }

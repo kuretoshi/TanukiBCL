@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads';
-import { findSnrBundledCosmeticFile } from './snrBundleCosmetics';
+import { findSnrBundledCosmetic } from './snrBundleCosmetics';
 import type { SnrCosmeticPart } from './snrCosmetics';
 
 interface CosmeticRequest {
@@ -11,11 +11,11 @@ interface CosmeticRequest {
 }
 
 parentPort?.on('message', async (request: CosmeticRequest) => {
-	let file: string | undefined;
+	let asset: Awaited<ReturnType<typeof findSnrBundledCosmetic>>;
 	try {
-		file = await findSnrBundledCosmeticFile(request.gameExecutable, request.productId, request.part, request.cacheRoot);
+		asset = await findSnrBundledCosmetic(request.gameExecutable, request.productId, request.part, request.cacheRoot);
 	} catch (error) {
 		console.warn('[SNR cosmetics] Bundle worker failed:', error);
 	}
-	parentPort?.postMessage({ id: request.id, file });
+	parentPort?.postMessage({ id: request.id, ...asset });
 });

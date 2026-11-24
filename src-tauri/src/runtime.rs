@@ -38,6 +38,13 @@ impl RuntimeBackend {
             Self::Node(_) => "node",
         }
     }
+    pub(crate) fn cosmetics_catalog_revision(&self) -> Option<std::time::Instant> {
+        match self {
+            Self::Rust(backend) => backend.cosmetics_catalog_revision(),
+            #[cfg(feature = "node-compat")]
+            Self::Node(_) => None,
+        }
+    }
 
     pub async fn request(
         &self,

@@ -1,19 +1,23 @@
 import { Worker } from 'node:worker_threads';
 import type { SnrCosmeticPart } from './snrCosmetics';
+import type { SnrCosmeticAsset } from './snrBundleCosmetics';
 
 let worker: Worker | undefined;
 let nextId = 0;
-const pending = new Map<number, (file: string | undefined) => void>();
+const pending = new Map<number, (asset: SnrCosmeticAsset | undefined) => void>();
 
 function getWorker(): Worker {
 	if (worker) return worker;
 	const instance = new Worker(new URL('./snrCosmeticsWorker.js', import.meta.url));
 	instance.unref();
 	worker = instance;
-	instance.on('message', ({ id, file }: { id: number; file?: string }) => {
-		pending.get(id)?.(file);
-		pending.delete(id);
-	});
+	instance.on(
+		'message',
+		({ id, file, adaptive, scale }: { id: number; file?: string; adaptive?: boolean; scale?: boolean }) => {
+			pending.get(id)?.(file ? { file, adaptive: adaptive === true, scale } : undefined);
+			pending.delete(id);
+		}
+	);
 	const finish = (error?: Error) => {
 		if (worker !== instance) return;
 		worker = undefined;
@@ -27,12 +31,12 @@ function getWorker(): Worker {
 }
 
 /** Read SNR's bundle without blocking game updates and voice controls on the main thread. */
-export function findSnrBundledCosmeticFile(
+export function findSnrBundledCosmetic(
 	gameExecutable: string,
 	productId: string,
 	part: SnrCosmeticPart,
 	cacheRoot: string
-): Promise<string | undefined> {
+): Promise<SnrCosmeticAsset | undefined> {
 	return new Promise((resolve) => {
 		const id = ++nextId;
 		pending.set(id, resolve);

@@ -335,9 +335,9 @@ pub fn cosmetic(s: &State, id: &str, part: &str, color: i64, override_url: Optio
         }) || part.starts_with("hat")
             && plain(id).starts_with("Modded_Multiverse Costume SEL_");
         let query = if adaptive {
-            format!("?adaptive=1&color={color}")
+            format!("?color={color}&adaptive=1")
         } else {
-            String::new()
+            format!("?color={color}")
         };
         let scaling = part == "visor"
             && definition
@@ -410,5 +410,83 @@ mod tests {
         assert!(color("red").is_none());
         assert_eq!(dimension(&serde_json::json!("2px;display:none"), "0"), "0");
         assert!(tint(PLAYER, [18, 171, 239]).unwrap().len() > 100);
+    }
+    #[test]
+    fn snr_layers_follow_color_changes_in_both_cosmetic_slots() {
+        let mut state = State::for_view("app", "test");
+        state.game = serde_json::json!({"mod":"SUPER_NEW_ROLES","gameState":2});
+        let mut player = serde_json::json!({
+            "clientId":1,"isLocal":true,"colorId":0,"currentOutfit":0,
+            "hatId":"Modded_Test_Hat","skinId":"Modded_Test_Skin","visorId":"Modded_Test_Visor",
+            "snrHat2Id":"Modded_Test_HatTwo","snrVisor2Id":"Modded_Test_VisorTwo",
+            "appearanceColorId":9,"appearanceHatId":"Modded_Test_Hat",
+            "appearanceSkinId":"Modded_Test_Skin","appearanceVisorId":"Modded_Test_Visor"
+        });
+        for color in [0, 6] {
+            player["colorId"] = serde_json::json!(color);
+            let html = crate::views::avatar(&state, &player);
+            for (part, id) in [
+                ("hat-back", "Hat"),
+                ("hat-back", "HatTwo"),
+                ("skin", "Skin"),
+                ("hat-front", "HatTwo"),
+                ("visor", "VisorTwo"),
+                ("hat-front", "Hat"),
+                ("visor", "Visor"),
+            ] {
+                assert!(html.contains(&format!(
+                    "https://snr-cosmetic.localhost/{part}/Modded_Test_{id}?color={color}"
+                )));
+            }
+            assert_eq!(html.matches(&format!("?color={color}")).count(), 7);
+            assert!(!html.contains("adaptive=1"));
+        }
+        player["currentOutfit"] = serde_json::json!(1);
+        let html = crate::views::avatar(&state, &player);
+        assert_eq!(html.matches("?color=9").count(), 7);
+        assert!(!html.contains("?color=6"));
+    }
+    #[test]
+    fn snr_color_queries_preserve_catalog_hints_and_visor_load_scaling() {
+        let mut state = State::for_view("app", "test");
+        state.game = serde_json::json!({"mod":"SUPER_NEW_ROLES"});
+        state.catalog = serde_json::json!({
+            "snrHats":[{"package":"Test","name":"Hat","adaptive":true}],
+            "snrVisors":[
+                {"package":"Test","name":"Visor","resource":"visor_adaptive","IsSNR":true},
+                {"package":"Test","name":"Fixed","adaptive":false,"IsSNR":"true"}
+            ]
+        });
+        for (part, id) in [
+            ("hat-back", "Hat"),
+            ("hat-front", "Hat"),
+            ("visor", "Visor"),
+        ] {
+            let html = cosmetic(&state, &format!("Modded_Test_{id}"), part, 5, None);
+            assert!(html.contains("?color=5&amp;adaptive=1"));
+            assert!(html.contains("top:-52%;width:140%;left:-18px"));
+        }
+        let html = cosmetic(&state, "Modded_Test_Visor", "visor", 5, None);
+        assert!(html.contains("data-snr-scale=true"));
+        let html = cosmetic(&state, "Modded_Test_Fixed", "visor", 6, None);
+        assert!(html.contains("?color=6"));
+        assert!(!html.contains("adaptive=1"));
+        assert!(html.contains("data-snr-scale=true"));
+    }
+    #[test]
+    fn snr_legacy_folder_hint_keeps_color_but_does_not_tint_unknown_ids() {
+        let mut state = State::for_view("app", "test");
+        state.game = serde_json::json!({"mod":"SUPER_NEW_ROLES"});
+        let html = cosmetic(
+            &state,
+            "Modded_Multiverse Costume SEL_Fixture",
+            "hat-front",
+            4,
+            None,
+        );
+        assert!(html.contains("?color=4&amp;adaptive=1"));
+        let html = cosmetic(&state, "Modded_Test_Unknown", "hat-front", 4, None);
+        assert!(html.contains("?color=4"));
+        assert!(!html.contains("adaptive=1"));
     }
 }

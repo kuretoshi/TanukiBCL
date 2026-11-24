@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
+import process from 'node:process';
+import console from 'node:console';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { build } from 'esbuild';
 import { PNG } from 'pngjs';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, URL } from 'node:url';
 import { unityBundleFixture } from './native-voice/unity-bundle-fixture.mjs';
 import { zipFixture } from './native-voice/zip-fixture.mjs';
 const root = resolve(import.meta.dirname, '..'),
@@ -123,6 +126,60 @@ const bundleDirectory = join(game, 'SuperNewRolesNext/CustomCosmetics/generated.
 await mkdir(bundleDirectory, { recursive: true });
 await writeFile(join(bundleDirectory, 'generated.bundle'), unityBundleFixture().bundle);
 requests.push({ player: {}, snrId: 'Modded_bundlepack_hat', snrPart: 'hat-front' });
+const packedDirectory = join(game, 'SuperNewRolesNext/CustomCosmetics/cropped.bundle');
+await mkdir(packedDirectory, { recursive: true });
+await writeFile(
+	join(packedDirectory, 'cropped.bundle'),
+	unityBundleFixture({ packedSprite: true, packageName: 'croppedpack' }).bundle
+);
+requests.push({ player: {}, snrId: 'Modded_croppedpack_hat', snrPart: 'hat-front', packedFixture: true });
+const tintPixels = [255, 0, 0, 255, 0, 0, 255, 128, 255, 255, 255, 64, 0, 0, 0, 0];
+const palette = [
+	['#ff0000', '#880000'],
+	['#00ff00', '#008800'],
+];
+for (const visor of [false, true]) {
+	const packageName = visor ? 'adaptivevisor' : 'adaptivehat';
+	const directory = join(game, `SuperNewRolesNext/CustomCosmetics/${packageName}.bundle`);
+	await mkdir(directory, { recursive: true });
+	await writeFile(
+		join(directory, 'fixture.bundle'),
+		unityBundleFixture({ packedSprite: true, packageName, adaptive: true, visor, pixelData: tintPixels }).bundle
+	);
+	for (const color of [0, 1])
+		requests.push({
+			player: {},
+			snrId: `Modded_${packageName}_hat`,
+			snrPart: visor ? 'visor' : 'hat-front',
+			packedFixture: true,
+			tintFixture: true,
+			snrColor: color,
+		});
+}
+requests.push({
+	player: {},
+	snrId: 'Modded_adaptivehat_hat',
+	snrPart: 'skin',
+	packedFixture: true,
+	tintFixture: true,
+	snrColor: 1,
+});
+requests.push({
+	player: {},
+	snrId: 'Modded_adaptivehat_hat',
+	snrPart: 'hat-front',
+	snrColor: 999,
+	expectSnrError: true,
+});
+for (const color of [0, 1, 999])
+	requests.push({
+		player: {},
+		snrId: 'Modded_croppedpack_hat',
+		snrPart: 'hat-front',
+		packedFixture: true,
+		snrColor: color,
+		snrFallbackAdaptive: true,
+	});
 const bundleOracleFile = join(dir, 'bundle-oracle.mjs');
 await build({
 	stdin: { contents: "export {findSnrBundledCosmeticFile} from './src/main/snrBundleCosmetics';", resolveDir: root },
@@ -136,7 +193,7 @@ await build({
 const { findSnrBundledCosmeticFile } = await import(pathToFileURL(bundleOracleFile));
 const input = join(dir, 'input.json'),
 	output = join(dir, 'output.json');
-await writeFile(input, JSON.stringify({ root: game, requests, palette: [['#ff0000', '#880000']] }));
+await writeFile(input, JSON.stringify({ root: game, requests, palette }));
 await new Promise((done, fail) => {
 	const p = spawn(exe, ['--rust-cosmetic-probe', input, '--probe-output', output], {
 		windowsHide: true,
@@ -151,6 +208,11 @@ const native = JSON.parse(await readFile(output));
 let checked = 0;
 for (const [index, request] of requests.entries()) {
 	if (request.snrId) {
+		if (request.expectSnrError) {
+			assert.equal(native.results[index].images.snr, null, 'Adaptive images reject invalid palette indices');
+			assert.match(native.results[index].images.error, /Invalid SNR tint/);
+			continue;
+		}
 		const source =
 			findSnrCosmeticFile(join(game, 'Among Us.exe'), request.snrId, request.snrPart) ??
 			(await findSnrBundledCosmeticFile(
@@ -161,7 +223,26 @@ for (const [index, request] of requests.entries()) {
 			));
 		assert.ok(source, 'Generated UnityFS texture is readable by the release parser');
 		const actual = PNG.sync.read(Buffer.from(native.results[index].images.snr, 'base64')),
-			expected = PNG.sync.read(await readFile(source));
+			cropped = PNG.sync.read(await readFile(source));
+		let expected = cropped;
+		if (request.packedFixture) {
+			expected = { width: 8, height: 6, data: Buffer.alloc(8 * 6 * 4) };
+			// Authored texture bytes and placement are independent of both decoders.
+			// Unity rows start at the bottom; offset (2,1) lies on the original 8x6 canvas.
+			const texture = request.tintFixture ? Buffer.from(tintPixels) : unityBundleFixture().pixels;
+			texture.copy(expected.data, (3 * 8 + 2) * 4, 8, 16);
+			texture.copy(expected.data, (4 * 8 + 2) * 4, 0, 8);
+			assert.equal(cropped.width, 8, 'Published Node decoder restores the original canvas');
+			assert.equal(cropped.height, 6);
+			assert.deepEqual(cropped.data, expected.data, 'Independent Node full-canvas pixels');
+			if (request.tintFixture) {
+				const [body, shadow] = palette[request.snrColor].map((hex) => [...Buffer.from(hex.slice(1), 'hex')]);
+				expected.data.set([...body, 255], (4 * 8 + 2) * 4);
+				expected.data.set([...shadow, 128], (4 * 8 + 3) * 4);
+			}
+		}
+		assert.equal(actual.width, expected.width, 'SNR original sprite canvas width');
+		assert.equal(actual.height, expected.height, 'SNR original sprite canvas height');
 		assert.deepEqual(actual.data, expected.data, 'SNR UnityFS/folder texture pixels');
 		checked++;
 		continue;
@@ -195,6 +276,9 @@ const report = {
 		'sprite sheets and cropping',
 		'invalid divisions',
 		'SNR folder and markup IDs',
+		'SNR packed sprite original canvas and bottom-left offset',
+		'local SNR adaptive hats/visors and skin alias follow player palette',
+		'local fixed metadata overrides CDN adaptive hint and preserves pixels',
 	],
 };
 await writeFile(join(dir, 'result.json'), JSON.stringify(report, null, 2) + '\n');

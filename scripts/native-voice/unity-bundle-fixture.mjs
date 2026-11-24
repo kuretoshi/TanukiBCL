@@ -1,4 +1,6 @@
 // Minimal generated Unity 2019.4/v17 fixture. No game assets are redistributed.
+import { Buffer } from 'node:buffer';
+
 class Writer {
 	constructor(big = false) {
 		this.big = big;
@@ -28,6 +30,11 @@ class Writer {
 		b[this.big ? 'writeUInt16BE' : 'writeUInt16LE'](v);
 		return this.raw(b);
 	}
+	f32(v) {
+		const b = Buffer.alloc(4);
+		b.writeFloatLE(v);
+		return this.raw(b);
+	}
 	align(n = 4) {
 		return this.zero((n - (this.length % n)) % n);
 	}
@@ -44,8 +51,14 @@ class Writer {
 		return Buffer.concat(this.parts);
 	}
 }
-export function unityBundleFixture() {
-	const pixels = Buffer.from([255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 200, 100, 50, 255]);
+export function unityBundleFixture({
+	packedSprite = false,
+	packageName = 'bundlepack',
+	adaptive = false,
+	visor = false,
+	pixelData,
+} = {}) {
+	const pixels = Buffer.from(pixelData ?? [255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 200, 100, 50, 255]);
 	const texture = new Writer()
 		.string('front')
 		.u32(0)
@@ -68,17 +81,21 @@ export function unityBundleFixture() {
 		.u32(0)
 		.string('')
 		.done();
-	const definition = JSON.stringify({ package: { name: 'bundlepack' }, hats: [{ hat_id: 'hat' }] });
+	const prefix = `assets/${visor ? 'visors' : 'hats'}/generated`;
+	const definition = JSON.stringify({
+		package: { name: packageName },
+		[visor ? 'visors' : 'hats']: [{ [visor ? 'visor_id' : 'hat_id']: 'hat', ...(adaptive ? { adaptive: true } : {}) }],
+	});
 	const text = new Writer().string('package').string(definition).done();
 	const container = new Writer()
 		.string('GeneratedSNR')
 		.u32(0)
 		.u32(2)
-		.string('assets/hats/generated/package.json')
+		.string(`${prefix}/package.json`)
 		.u32(0)
 		.u32(0)
 		.ptr(2)
-		.string('assets/hats/generated/hat/front.png')
+		.string(`${prefix}/hat/${visor ? 'idle' : 'front'}.png`)
 		.u32(0)
 		.u32(0)
 		.ptr(3)
@@ -90,14 +107,60 @@ export function unityBundleFixture() {
 		.u32(0)
 		.zero(2)
 		.align()
-		.u32(0).u32(0).u32(0)
+		.u32(0)
+		.u32(0)
+		.u32(0)
+		.done();
+	// A cropped 2x2 packed sprite inside its original 8x6 canvas, offset from bottom-left.
+	const sprite = new Writer()
+		.string('front')
+		.f32(0)
+		.f32(0)
+		.f32(8)
+		.f32(6)
+		.zero(8 + 16)
+		.f32(3)
+		.f32(0.53)
+		.f32(0.575)
+		.u32(0)
+		.zero(1)
+		.align()
+		.zero(24)
+		.u32(0)
+		.ptr(0)
+		.ptr(4)
+		.ptr(0)
+		.u32(0)
+		.u32(0)
+		.bytes(Buffer.alloc(0))
+		.u32(0)
+		.u32(0)
+		.bytes(Buffer.alloc(0))
+		.u32(0)
+		.f32(0)
+		.f32(0)
+		.f32(2)
+		.f32(2)
+		.f32(2)
+		.f32(1)
+		.zero(8)
+		.u32(3)
+		.zero(16)
+		.f32(1)
+		.u32(0)
+		.u32(0)
 		.done();
 	const objects = [
 			[1, 142, container],
 			[2, 49, text],
-			[3, 28, texture],
+			...(packedSprite
+				? [
+						[3, 213, sprite],
+						[4, 28, texture],
+					]
+				: [[3, 28, texture]]),
 		],
-		classes = [142, 49, 28];
+		classes = packedSprite ? [142, 49, 213, 28] : [142, 49, 28];
 	const m = new Writer().raw(Buffer.from('2019.4.0f1\0')).u32(5).zero(1).u32(classes.length);
 	for (const type of classes) m.u32(type).zero(1).u16(65535).zero(16);
 	m.u32(objects.length);

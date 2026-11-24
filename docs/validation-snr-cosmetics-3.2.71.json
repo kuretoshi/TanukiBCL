@@ -1,0 +1,68 @@
+{
+  "version": "3.2.71-tauri-beta.1",
+  "date": "2026-11-24T15:53:53.065Z",
+  "passed": true,
+  "baseVersion": "3.2.71",
+  "baseCommit": "2fd43e18f4d1af6dc1fe0ec20472524c8a3ad2f5",
+  "pinnedCoreFiles": 150,
+  "fixes": [
+    "Restore SNR packed sprite original canvas and transparent placement.",
+    "Read lobby secondary cosmetics independently of role initialization using validated native owner identity.",
+    "Apply local adaptive flags and current effective body palette, preserving fixed assets and alpha.",
+    "Recover failed cosmetic image display with bounded retries.",
+    "Relay seven completed cosmetic PNG layers and special visor layout to mobile; refresh late catalog metadata without dropping the prior PNG."
+  ],
+  "tests": {
+    "workspacePassed": 181,
+    "workspaceIgnored": 3,
+    "rustUiPassed": 28,
+    "rustWasmSizingAndColorCases": 6,
+    "rustWasmImageRecoveryCases": 7,
+    "mobileRelayUnits": 6,
+    "nativeFixtureRequests": 30,
+    "nativePixelImages": 68,
+    "rawAndInstallerExeBothValidated": true,
+    "packagedUiSeconds": 60,
+    "settingsOpenedTwice": true,
+    "normalDesktopCI": "https://github.com/kuretoshi/TanukiBCL/actions/runs/45427014107"
+  },
+  "packaging": {
+    "passed": true,
+    "version": "3.2.71-tauri-beta.1",
+    "baseVersion": "3.2.71",
+    "installerSha256": "f4292031e51db7d801c4d93fd1e0bcc27cdfa53db564776fb3ab0d355174b4d2",
+    "installerBytes": 59475111,
+    "executableSha256": "8260ce0cac58965cd5131c739b3c20faeacd45ea2ed99cdf80302ebe460c515a",
+    "buildExecutableSha256": "d7da851868b06b095029febbdf7362c93708c1ab7cf544a7120f75a53176c8bb",
+    "nsisBundleTypeMarkerVerified": true,
+    "embeddedUiAssetsVerified": [
+      "index.html",
+      "rust-ui/bootstrap.js",
+      "rust-ui/tbcl_rust_ui_bg.wasm"
+    ],
+    "verifiedBackendFiles": 33,
+    "allPackagedResourcesMatched": true,
+    "portableResourceCopyCreated": false,
+    "physicalMicrophoneTested": false,
+    "liveGameLobbyExitTested": false
+  },
+  "preservation": {
+    "main": {
+      "files": 115,
+      "changed": [],
+      "missing": []
+    },
+    "originalTauri": {
+      "files": 301,
+      "changed": [],
+      "missing": []
+    }
+  },
+  "sourceIsolation": "Published beta3 source in an existing clean worktree; reviewed SNR changes and exact desktop3.2.71 core files only. Dependencies, Cargo target and speech resources reused without copying their trees.",
+  "userLiveConfirmation": "The user confirmed both secondary slots visible in the prior debug build. Current game exited before an additional C# helper probe; no game was launched or controlled.",
+  "limitations": [
+    "Three existing tests require external speech resources and remain ignored.",
+    "No physical phone installation, microphone or multi-person call regression for this release.",
+    "Equipment changes use the existing5–10second discovery cadence."
+  ]
+}

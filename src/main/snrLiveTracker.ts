@@ -1,6 +1,8 @@
 import { hasSnrJumbo, isSnrJackal, SnrEnumValue, SnrLiveRole } from '../common/SnrRole';
 import { isSnrLiveLayout, readSnrLiveRoles, SnrLiveLayout } from './snrLiveMemory';
 import { readSnrMeeting } from './snrMeetingMemory';
+import { isSnrSecondaryLayout, readSnrSecondaryCosmetics, SnrSecondaryLayout } from './snrSecondaryCosmetics';
+import type { Player } from '../common/AmongUsState';
 
 function readTeam(value: unknown): SnrEnumValue | null | undefined {
 	if (value === null) return null;
@@ -14,6 +16,8 @@ function readTeam(value: unknown): SnrEnumValue | null | undefined {
 export class SnrLiveTracker {
 	private pid = -1;
 	private layout: SnrLiveLayout | undefined;
+	private secondary: SnrSecondaryLayout | undefined;
+	private session = '';
 	private attemptedSession = '';
 	private request = 0;
 	private pending = false;
@@ -41,6 +45,8 @@ export class SnrLiveTracker {
 		this.request++;
 		this.pid = -1;
 		this.layout = undefined;
+		this.secondary = undefined;
+		this.session = '';
 		this.attemptedSession = '';
 		this.pending = false;
 		this.needsAbilityLayout = false;
@@ -58,6 +64,7 @@ export class SnrLiveTracker {
 			status?: string;
 			pid?: number;
 			liveLayout?: unknown;
+			secondaryCosmetics?: unknown;
 			players?: Array<{
 				playerId?: number;
 				role?: { value?: number };
@@ -70,20 +77,31 @@ export class SnrLiveTracker {
 				visor2Id?: string;
 			}>;
 		};
-		if (response.status !== 'ok' || response.pid !== pid || !isSnrLiveLayout(response.liveLayout, pid)) return false;
+		const live = isSnrLiveLayout(response.liveLayout, pid);
+		const secondary = isSnrSecondaryLayout(response.secondaryCosmetics, pid);
+		if (
+			response.status !== 'ok' ||
+			response.pid !== pid ||
+			(!live && !secondary) ||
+			(response.liveLayout != null && !live) ||
+			(response.secondaryCosmetics != null && !secondary)
+		)
+			return false;
 		this.pid = pid;
-		this.layout = response.liveLayout;
+		this.layout = live ? (response.liveLayout as SnrLiveLayout) : undefined;
+		this.secondary = secondary ? (response.secondaryCosmetics as SnrSecondaryLayout) : undefined;
 		this.discoveryRetryAt = 0;
-		this.needsRoleMetadata = !(response.players ?? []).some(
-			(player) =>
-				Number.isInteger(player.playerId) &&
-				Number.isInteger(player.role?.value) &&
-				typeof player.isNeutral === 'boolean' &&
-				typeof player.canKill === 'boolean'
-		);
+		this.needsRoleMetadata =
+			live &&
+			!(response.players ?? []).some(
+				(player) =>
+					Number.isInteger(player.playerId) &&
+					Number.isInteger(player.role?.value) &&
+					typeof player.isNeutral === 'boolean' &&
+					typeof player.canKill === 'boolean'
+			);
 		this.roleMetadataRetryAt = this.needsRoleMetadata ? Date.now() + 1000 : 0;
 		this.cosmeticRefreshAt = Date.now() + 5000;
-		const previousMetadata = this.roleMetadata;
 		this.roleMetadata = new Map(
 			(response.players ?? [])
 				.filter((player) => Number.isInteger(player.playerId) && Number.isInteger(player.role?.value))
@@ -96,8 +114,8 @@ export class SnrLiveTracker {
 						assignedTeam: readTeam(player.assignedTeam),
 						winnerTeam: readTeam(player.winnerTeam),
 						teamTag: readTeam(player.teamTag),
-						hat2Id: player.hat2Id || previousMetadata.get(player.playerId!)?.hat2Id,
-						visor2Id: player.visor2Id || previousMetadata.get(player.playerId!)?.visor2Id,
+						hat2Id: player.hat2Id || undefined,
+						visor2Id: player.visor2Id || undefined,
 					},
 				])
 		);
@@ -105,27 +123,25 @@ export class SnrLiveTracker {
 	}
 
 	update(pid: number, session: string, read: (address: number, size: number) => Buffer): Map<number, SnrLiveRole> {
-		if (this.pid !== pid) {
+		if (this.pid !== pid || (this.session && this.session !== session)) {
 			this.reset();
 			this.pid = pid;
 		}
-		const refreshCosmetics = !!this.layout && Date.now() >= this.cosmeticRefreshAt;
-		const discoverySession = this.layout
+		this.session = session;
+		const discovered = !!(this.layout || this.secondary);
+		const refreshCosmetics = discovered && Date.now() >= this.cosmeticRefreshAt;
+		const discoverySession = discovered
 			? `${session}:${
-					this.needsRoleMetadata
-						? 'metadata'
-						: this.needsAbilityLayout
-							? 'abilities'
-							: `cosmetics-${Math.floor(Date.now() / 5000)}`
-				}`
+					this.needsRoleMetadata ? 'metadata' : this.needsAbilityLayout ? 'abilities' : 'cosmetics'
+				}:${Math.floor(Date.now() / 5000)}`
 			: session;
 		const retryReady =
 			(!this.needsRoleMetadata || Date.now() >= this.roleMetadataRetryAt) && Date.now() >= this.discoveryRetryAt;
 		if (
-			(!this.layout || this.needsAbilityLayout || this.needsRoleMetadata || refreshCosmetics) &&
+			(!discovered || this.needsAbilityLayout || this.needsRoleMetadata || refreshCosmetics) &&
 			retryReady &&
 			!this.pending &&
-			(this.attemptedSession !== discoverySession || !this.layout)
+			(this.attemptedSession !== discoverySession || !discovered)
 		) {
 			this.attemptedSession = discoverySession;
 			this.pending = true;
@@ -135,12 +151,16 @@ export class SnrLiveTracker {
 				.then((result) => {
 					if (request !== this.request) return;
 					if (!this.accept(pid, result)) {
+						this.secondary = undefined;
+						this.roleMetadata.clear();
 						this.discoveryRetryAt = Date.now() + 10000;
 						this.message = 'SNR役職未取得（10秒後に自動再取得）。';
 					}
 				})
 				.catch(() => {
 					if (request === this.request) {
+						this.secondary = undefined;
+						this.roleMetadata.clear();
 						this.discoveryRetryAt = Date.now() + 10000;
 						this.message = 'SNR役職の読み取り位置を取得できませんでした（10秒後に自動再取得）。';
 					}
@@ -196,5 +216,13 @@ export class SnrLiveTracker {
 			this.message = 'SNR役職未取得（自動更新待ち）。';
 			return new Map();
 		}
+	}
+
+	cosmetics(
+		player: Player,
+		read: (address: number, size: number) => Buffer
+	): Pick<Player, 'snrHat2Id' | 'snrVisor2Id'> {
+		if (this.secondary) return readSnrSecondaryCosmetics(this.secondary, player, read);
+		return { snrHat2Id: undefined, snrVisor2Id: undefined };
 	}
 }

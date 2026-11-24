@@ -8,17 +8,65 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use unity_bundle_assets::{Assets, Bundle, Limits, SerializedFile};
+use unity_bundle_assets::{Assets, Bundle, Image, Limits, Rect, SerializedFile};
 const LIMITS: Limits = Limits::DEFAULT
     .with_max_file_size(128 * 1024 * 1024)
     .with_max_decompressed(128 * 1024 * 1024)
     .with_max_objects(100000)
     .with_max_texture_pixels(4096 * 4096)
     .with_max_total_work(4096 * 4096 * 16);
+
+// SNR loads the Sprite with its original rect/pivot, not the atlas's trimmed PNG.
+// Restore the transparent border before the existing avatar layout scales that canvas.
+fn sprite_canvas(image: Image, rect: Rect, offset: [f32; 2]) -> Result<Image, String> {
+    if ![rect.width, rect.height, offset[0], offset[1]]
+        .iter()
+        .all(|v| v.is_finite())
+        || !(1.0..=4096.0).contains(&rect.width)
+        || !(1.0..=4096.0).contains(&rect.height)
+        || offset.iter().any(|v| v.abs() > 4096.0)
+    {
+        return Err("Invalid SNR sprite canvas".into());
+    }
+    let (width, height) = (rect.width.round() as usize, rect.height.round() as usize);
+    let left = offset[0].round() as isize;
+    let bottom = offset[1].round() as isize;
+    // Fractional atlas rectangles round outwards during extraction. One edge pixel may
+    // extend beyond the full rect (present in SNR's installed selfie_front sprite).
+    if width * height * 4 > 16 * 1024 * 1024
+        || left < 0
+        || bottom < 0
+        || left + image.width() as isize > width as isize + 1
+        || bottom + image.height() as isize > height as isize + 1
+    {
+        return Err("SNR sprite placement exceeds canvas".into());
+    }
+    // Unity's offsets start at the bottom; decoded PNG rows start at the top.
+    let top = height as isize - bottom - image.height() as isize;
+    let mut pixels = vec![0; width * height * 4];
+    for y in 0..image.height() as usize {
+        let target_y = top + y as isize;
+        if !(0..height as isize).contains(&target_y) {
+            continue;
+        }
+        let from_x = (-left).max(0) as usize;
+        let until_x = (width as isize - left).max(0).min(image.width() as isize) as usize;
+        if from_x >= until_x {
+            continue;
+        }
+        let from = (y * image.width() as usize + from_x) * 4;
+        let to = (target_y as usize * width + (left + from_x as isize) as usize) * 4;
+        let count = (until_x - from_x) * 4;
+        pixels[to..to + count].copy_from_slice(&image.rgba()[from..from + count]);
+    }
+    Image::new(width as u32, height as u32, pixels).map_err(|e| e.to_string())
+}
 struct Index {
     revision: String,
     bundle: Arc<Bundle>,
     images: HashMap<String, Vec<String>>,
+    adaptive: HashMap<String, bool>,
+    scaled: HashMap<String, bool>,
     container: HashMap<String, (String, i64)>,
     used: Instant,
 }
@@ -26,8 +74,9 @@ struct Index {
 pub struct Snr {
     root: PathBuf,
     index: Option<Index>,
-    cache: VecDeque<(String, Vec<u8>)>,
+    cache: VecDeque<(String, Vec<u8>, bool, bool)>,
     bytes: usize,
+    last_visor_scale: Option<(String, Option<bool>)>,
 }
 fn revision(path: &Path) -> Option<String> {
     let m = fs::metadata(path).ok()?;
@@ -59,6 +108,16 @@ fn safe_name(name: &str) -> String {
         .chars()
         .filter(|c| *c >= ' ' && !"<>:\"/\\|?*".contains(*c))
         .collect()
+}
+fn hat_adaptive(definition: &Value, part: &str) -> bool {
+    // Match SNR CustomCosmeticsHatOptions.GetOption, including per-layer overrides.
+    let layer = if part == "hat-back" { "back" } else { "front" };
+    definition[format!("{layer}_adaptive")] == true
+        || (definition["adaptive"] == true
+            && (definition[layer] == true || (layer == "front" && definition[layer].is_null())))
+}
+fn visor_scaled(definition: &Value) -> bool {
+    definition["IsSNR"] == true || definition["IsSNR"] == "true" || definition["isSNR"] == true
 }
 fn file_bytes(path: &Path) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
@@ -188,6 +247,8 @@ fn load(path: &Path) -> Result<Index, String> {
         }
     }
     let mut images = HashMap::new();
+    let mut adaptive = HashMap::new();
+    let mut scaled = HashMap::new();
     for (path, v) in definitions {
         let Some(package) = v["package"]["name"]
             .as_str()
@@ -203,8 +264,10 @@ fn load(path: &Path) -> Result<Index, String> {
                     ("hat-back", "back"),
                     ("skin", "front"),
                 ] {
+                    let key = format!("{part}:Modded_{package}_{id}");
+                    adaptive.insert(key.clone(), hat_adaptive(hat, part));
                     images.insert(
-                        format!("{part}:Modded_{package}_{id}"),
+                        key,
                         vec![format!("{prefix}/{id}/{file}.png").to_ascii_lowercase()],
                     );
                 }
@@ -219,8 +282,11 @@ fn load(path: &Path) -> Result<Index, String> {
             .take(10000)
         {
             if let Some(id) = visor["visor_id"].as_str() {
+                let key = format!("visor:Modded_{package}_{id}");
+                adaptive.insert(key.clone(), visor["adaptive"] == true);
+                scaled.insert(key.clone(), visor_scaled(visor));
                 images.insert(
-                    format!("visor:Modded_{package}_{id}"),
+                    key,
                     vec![
                         format!("{prefix}/{id}/idle.png").to_ascii_lowercase(),
                         format!("{prefix}/{id}/front.png").to_ascii_lowercase(),
@@ -233,6 +299,8 @@ fn load(path: &Path) -> Result<Index, String> {
         revision: revision(path).ok_or("Bundle disappeared")?,
         bundle,
         images,
+        adaptive,
+        scaled,
         container: all,
         used: Instant::now(),
     })
@@ -323,13 +391,15 @@ impl Snr {
         files.sort_by(|a, b| b.0.cmp(&a.0));
         files.into_iter().take(1024).map(|(_, p)| p).collect()
     }
-    fn bundled(&mut self, id: &str, part: &str) -> Result<Vec<u8>, String> {
+    fn bundled(&mut self, id: &str, part: &str) -> Result<(Vec<u8>, bool, bool), String> {
         let mut failure = None;
         for file in self.bundles() {
             let Some(rev) = revision(&file) else { continue };
             let cache_key = format!("{rev}:{part}:{id}");
-            if let Some((_, bytes)) = self.cache.iter().find(|(k, _)| *k == cache_key) {
-                return Ok(bytes.clone());
+            if let Some((_, bytes, adaptive, scaled)) =
+                self.cache.iter().find(|(k, _, _, _)| *k == cache_key)
+            {
+                return Ok((bytes.clone(), *adaptive, *scaled));
             }
             if self.index.as_ref().is_none_or(|i| i.revision != rev) {
                 self.index = match load(&file) {
@@ -344,6 +414,16 @@ impl Snr {
                 continue;
             };
             index.used = Instant::now();
+            let adaptive = index
+                .adaptive
+                .get(&format!("{part}:{id}"))
+                .copied()
+                .unwrap_or(false);
+            let scaled = index
+                .scaled
+                .get(&format!("{part}:{id}"))
+                .copied()
+                .unwrap_or(false);
             for path in index
                 .images
                 .get(&format!("{part}:{id}"))
@@ -362,7 +442,10 @@ impl Snr {
                     .into_iter()
                     .find(|s| s.path_id == *path_id);
                 let image = if let Some(sprite) = sprite {
-                    super::sprite::extract(&assets, &index.bundle, &sprite)
+                    super::sprite::extract(&assets, &index.bundle, &sprite).and_then(|image| {
+                        let placement = assets.placement(&sprite).map_err(|e| e.to_string())?;
+                        sprite_canvas(image, sprite.rect, placement.texture_rect_offset)
+                    })
                 } else {
                     assets
                         .decode_texture(*path_id)
@@ -383,20 +466,36 @@ impl Snr {
                         return Err("SNR PNG exceeds limit".into());
                     }
                     while self.bytes + bytes.len() > 16 * 1024 * 1024 || self.cache.len() >= 64 {
-                        let Some((_, old)) = self.cache.pop_front() else {
+                        let Some((_, old, _, _)) = self.cache.pop_front() else {
                             break;
                         };
                         self.bytes -= old.len();
                     }
                     self.bytes += bytes.len();
-                    self.cache.push_back((cache_key, bytes.clone()));
-                    return Ok(bytes);
+                    self.cache
+                        .push_back((cache_key, bytes.clone(), adaptive, scaled));
+                    return Ok((bytes, adaptive, scaled));
                 }
             }
         }
         Err(failure.unwrap_or_else(|| "SNR cosmetic is not installed".into()))
     }
     pub fn image(&mut self, id: &str, part: &str) -> Result<Vec<u8>, String> {
+        self.image_with_metadata(id, part).map(|(bytes, _)| bytes)
+    }
+    // Query immediately after image_for_color while holding the same cosmetics lock.
+    // Standalone PNGs have no authoritative metadata and retain catalog fallbacks.
+    pub fn cached_visor_scale(&self, id: &str) -> Option<bool> {
+        self.last_visor_scale
+            .as_ref()
+            .filter(|(key, _)| key == &plain(id))
+            .and_then(|(_, scaled)| *scaled)
+    }
+    pub fn image_with_metadata(
+        &mut self,
+        id: &str,
+        part: &str,
+    ) -> Result<(Vec<u8>, Option<bool>), String> {
         if !matches!(part, "hat-front" | "hat-back" | "visor" | "skin")
             || !id.starts_with("Modded_")
             || id.len() > 1024
@@ -406,15 +505,156 @@ impl Snr {
         }
         let id = plain(id);
         if let Some(path) = self.folder(&id, part) {
-            file_bytes(&path)
+            self.last_visor_scale = Some((id.clone(), None));
+            file_bytes(&path).map(|bytes| (bytes, None))
         } else {
-            self.bundled(&id, part)
+            let (bytes, adaptive, scaled) = self.bundled(&id, part)?;
+            self.last_visor_scale = Some((id, Some(part == "visor" && scaled)));
+            Ok((bytes, Some(adaptive)))
+        }
+    }
+    pub fn image_for_color(
+        &mut self,
+        id: &str,
+        part: &str,
+        palette: &[[String; 2]],
+        color: usize,
+        fallback_adaptive: bool,
+    ) -> Result<Vec<u8>, String> {
+        let (bytes, local_adaptive) = self.image_with_metadata(id, part)?;
+        if local_adaptive.unwrap_or(fallback_adaptive) {
+            let colors = palette.get(color).ok_or("Invalid SNR tint")?;
+            super::super::assets::recolor(&bytes, &colors[0], &colors[1])
+        } else {
+            Ok(bytes)
         }
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn special_visor_scale_is_retained_with_cached_image_metadata() {
+        assert!(visor_scaled(&serde_json::json!({"IsSNR":true})));
+        assert!(visor_scaled(&serde_json::json!({"IsSNR":"true"})));
+        assert!(visor_scaled(&serde_json::json!({"isSNR":true})));
+        assert!(!visor_scaled(&serde_json::json!({"adaptive":true})));
+        let mut snr = Snr::default();
+        snr.last_visor_scale = Some(("Modded_pack_special".into(), Some(true)));
+        assert_eq!(snr.cached_visor_scale("Modded_pack_special"), Some(true));
+        assert_eq!(snr.cached_visor_scale("Modded_pack_plain"), None);
+        assert_eq!(snr.cached_visor_scale("Modded_pack_missing"), None);
+        snr.last_visor_scale = Some(("Modded_pack_special".into(), Some(false)));
+        assert_eq!(snr.cached_visor_scale("Modded_pack_special"), Some(false));
+    }
+    #[test]
+    fn local_hat_adaptive_flags_match_snr_layer_options() {
+        let definition = serde_json::json!({"adaptive":true,"back":true});
+        assert!(hat_adaptive(&definition, "hat-front"));
+        assert!(hat_adaptive(&definition, "hat-back"));
+        assert!(hat_adaptive(&definition, "skin"));
+        assert!(!hat_adaptive(
+            &serde_json::json!({"adaptive":true}),
+            "hat-back"
+        ));
+        assert!(!hat_adaptive(
+            &serde_json::json!({"adaptive":true,"front":false}),
+            "hat-front"
+        ));
+        assert!(hat_adaptive(
+            &serde_json::json!({"front_adaptive":true}),
+            "hat-front"
+        ));
+        assert!(hat_adaptive(
+            &serde_json::json!({"back_adaptive":true}),
+            "hat-back"
+        ));
+        assert!(!hat_adaptive(
+            &serde_json::json!({"adaptive":"true"}),
+            "hat-front"
+        ));
+        assert!(!hat_adaptive(&serde_json::json!({}), "hat-front"));
+    }
+    #[test]
+    fn packed_snr_sprite_restores_full_canvas_and_bottom_origin_offset() {
+        let rgba = vec![
+            255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 200, 100, 50, 255,
+        ];
+        let image = Image::new(2, 2, rgba.clone()).unwrap();
+        let full = sprite_canvas(
+            image,
+            Rect {
+                x: 0.,
+                y: 0.,
+                width: 8.,
+                height: 6.,
+            },
+            [2., 1.],
+        )
+        .unwrap();
+        assert_eq!((full.width(), full.height()), (8, 6));
+        let mut expected = vec![0; 8 * 6 * 4];
+        expected[(3 * 8 + 2) * 4..(3 * 8 + 4) * 4].copy_from_slice(&rgba[..8]);
+        expected[(4 * 8 + 2) * 4..(4 * 8 + 4) * 4].copy_from_slice(&rgba[8..]);
+        assert_eq!(full.rgba(), expected);
+    }
+    #[test]
+    fn snr_canvas_rejects_corrupt_dimensions_and_offsets() {
+        for (width, offset) in [
+            (f32::NAN, 0.),
+            (4097., 0.),
+            (300., f32::INFINITY),
+            (300., -2.),
+            (300., 301.),
+        ] {
+            let image = Image::new(1, 1, vec![255; 4]).unwrap();
+            assert!(sprite_canvas(
+                image,
+                Rect {
+                    x: 0.,
+                    y: 0.,
+                    width,
+                    height: 375.
+                },
+                [offset, 0.]
+            )
+            .is_err());
+        }
+        assert!(sprite_canvas(
+            Image::new(1, 1, vec![0; 4]).unwrap(),
+            Rect {
+                x: 0.,
+                y: 0.,
+                width: 4096.,
+                height: 4096.
+            },
+            [0., 0.]
+        )
+        .is_err());
+    }
+    #[test]
+    fn untrimmed_snr_canvas_is_identical_and_fractional_offsets_round_to_pixels() {
+        let rgba = vec![
+            255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 200, 100, 50, 255,
+        ];
+        let image = || Image::new(2, 2, rgba.clone()).unwrap();
+        let rect = Rect {
+            x: 0.,
+            y: 0.,
+            width: 2.,
+            height: 2.,
+        };
+        assert_eq!(sprite_canvas(image(), rect, [0., 0.]).unwrap().rgba(), rgba);
+        let rect = Rect {
+            width: 8.,
+            height: 6.,
+            ..rect
+        };
+        assert_eq!(
+            sprite_canvas(image(), rect, [2.076, 1.076]).unwrap().rgba(),
+            sprite_canvas(image(), rect, [2., 1.]).unwrap().rgba()
+        );
+    }
     #[test]
     fn folder_ids_remove_markup_and_unsafe_file_characters() {
         assert_eq!(plain("Modded_<b>pack</b>_hat"), "Modded_pack_hat");

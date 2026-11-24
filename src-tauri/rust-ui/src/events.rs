@@ -1265,6 +1265,44 @@ fn release_radios(app: App) {
         native_command(app, "jackal-radio", json!(false)).await
     });
 }
+fn retry_snr_image(image: &web_sys::HtmlImageElement) {
+    if !image.src().starts_with("https://snr-cosmetic.localhost/")
+        || !image
+            .class_name()
+            .split_whitespace()
+            .any(|c| c == "cosmetic")
+    {
+        return;
+    }
+    if !image.has_attribute("data-snr-error-style") {
+        let _ = image.set_attribute(
+            "data-snr-error-style",
+            &image.get_attribute("style").unwrap_or_default(),
+        );
+    }
+    let attempts = image
+        .get_attribute("data-snr-retries")
+        .and_then(|v| v.parse::<u8>().ok())
+        .unwrap_or(0);
+    if attempts >= 2 || image.has_attribute("data-snr-retry-pending") {
+        return;
+    }
+    let source = image.src();
+    let _ = image.set_attribute("data-snr-retries", &(attempts + 1).to_string());
+    let _ = image.set_attribute("data-snr-retry-pending", "true");
+    let image = image.clone();
+    t::dispatch(async move {
+        crate::wait(if attempts == 0 { 250 } else { 1000 }).await?;
+        let _ = image.remove_attribute("data-snr-retry-pending");
+        if image.is_connected() && image.src() == source && image.natural_width() == 0 {
+            let mut url = url::Url::parse(&source).map_err(|e| e.to_string())?;
+            url.query_pairs_mut()
+                .append_pair("snr_retry", &(attempts + 1).to_string());
+            image.set_src(url.as_str());
+        }
+        Ok(())
+    });
+}
 fn bind_image_events(document: &web_sys::Document) -> Result<(), JsValue> {
     let load = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
         let Some(image) = event
@@ -1273,6 +1311,12 @@ fn bind_image_events(document: &web_sys::Document) -> Result<(), JsValue> {
         else {
             return;
         };
+        if let Some(style) = image.get_attribute("data-snr-error-style") {
+            let _ = image.set_attribute("style", &style);
+            let _ = image.remove_attribute("data-snr-error-style");
+            let _ = image.remove_attribute("data-snr-retries");
+            let _ = image.remove_attribute("data-snr-retry-pending");
+        }
         if image.has_attribute("data-snr-scale") && image.natural_width() > 0 {
             let width = (image.natural_width() as f64 / (115.0 * (8.0 / 3.0)) * 140.0).min(140.0);
             let height = image.natural_height() as f64 / image.natural_width() as f64 * width;
@@ -1313,6 +1357,7 @@ fn bind_image_events(document: &web_sys::Document) -> Result<(), JsValue> {
                 let _ = image.set_attribute("data-fallback", "true");
                 image.set_src("https://static.localhost/generated/player/0.png");
             } else {
+                retry_snr_image(&image);
                 let _ = image.set_attribute("style", "display:none");
             }
         }

@@ -185,6 +185,11 @@ function isSnrLocalAdaptiveHat(id: string): boolean {
 	const plainId = id.replace(/<[^>]*>/g, '');
 	return plainId.startsWith('Modded_Multiverse Costume SEL_');
 }
+
+export function isSnrScaledVisor(id: string): boolean {
+	const definition = findSnrDefinition(id, snrVisorDefinitions);
+	return definition?.IsSNR === true || definition?.IsSNR === 'true' || definition?.isSNR === true;
+}
 function getModHat(color: number, id = '', mod: ModsType, back = false) {
 	if (!initializedHats) {
 		return '';
@@ -279,7 +284,7 @@ export function getCosmetic(
 			definition?.adaptive === true ||
 			/_adaptive(?:_|\.)/i.test(definition?.resource ?? '') ||
 			((type === cosmeticType.hat || type === cosmeticType.hat_back) && isSnrLocalAdaptiveHat(id));
-		return adaptive ? `${localCosmetic}?adaptive=1&color=${color}` : localCosmetic;
+		return `${localCosmetic}?color=${color}${adaptive ? '&adaptive=1' : ''}`;
 	} else {
 		const modHat = getModHat(color, id, mod, type === cosmeticType.hat_back);
 		if (modHat) return modHat;

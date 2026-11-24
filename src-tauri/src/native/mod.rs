@@ -97,6 +97,11 @@ fn resources(app: &AppHandle) -> Result<PathBuf, String> {
             .join("backend"))
     }
 }
+fn parse_cosmetics_catalog(bytes: &[u8]) -> Result<Value, String> {
+    // SNR's published JSON may start with a UTF-8 BOM.
+    serde_json::from_slice(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes))
+        .map_err(|e| e.to_string())
+}
 fn shortcuts(settings: &Value) -> Vec<String> {
     [
         ("pushToTalkShortcut", "V"),
@@ -110,6 +115,11 @@ fn shortcuts(settings: &Value) -> Vec<String> {
     .collect()
 }
 impl Backend {
+    pub(crate) fn cosmetics_catalog_revision(&self) -> Option<Instant> {
+        self.catalog.lock().unwrap().as_ref()
+            .filter(|(mode, _, _)| mode == "SUPER_NEW_ROLES")
+            .map(|(_, revision, _)| *revision)
+    }
     pub fn start(app: &AppHandle) -> Result<Arc<Self>, Box<dyn std::error::Error>> {
         let resources = resources(app)?;
         let data = app.path().app_config_dir()?;
@@ -465,6 +475,8 @@ impl Backend {
                 }))
             }
             "__asset" => {
+                let mut snr_scaled = false;
+                let mut snr_metadata_known = true;
                 let bytes = match text(0) {
                     "static" => assets::static_asset(&self.data, text(1))?,
                     "generate" => {
@@ -500,33 +512,44 @@ impl Backend {
                         let id = percent_encoding::percent_decode_str(id)
                             .decode_utf8()
                             .map_err(|e| e.to_string())?;
-                        let bytes = self.cosmetics.lock().unwrap().snr.image(&id, part)?;
                         let query = tauri::Url::parse(&format!(
                             "https://snr-cosmetic.localhost/?{}",
                             text(2)
                         ))
                         .map_err(|e| e.to_string())?;
-                        if query
+                        let fallback_adaptive = query
                             .query_pairs()
-                            .any(|(k, v)| k == "adaptive" && v == "1")
-                        {
-                            let color = query
-                                .query_pairs()
-                                .find(|(k, _)| k == "color")
-                                .and_then(|(_, v)| v.parse::<usize>().ok())
-                                .ok_or("Invalid SNR tint")?;
-                            let palette = self.colors.lock().unwrap();
-                            let colors = palette.get(color).ok_or("Invalid SNR tint")?;
-                            assets::recolor(&bytes, &colors[0], &colors[1])?
-                        } else {
-                            bytes
-                        }
+                            .any(|(k, v)| k == "adaptive" && v == "1");
+                        let (catalog_adaptive, catalog_scaled, catalog_known) = {
+                            let cache = self.catalog.lock().unwrap();
+                            let catalog = cache.as_ref().filter(|(mode, _, _)| mode == "SUPER_NEW_ROLES");
+                            let row = catalog.and_then(|(_, _, value)| value[if part == "visor" {"snrVisors"} else {"snrHats"}].as_array())
+                                .and_then(|rows| rows.iter().find(|row| id == format!("Modded_{}_{}",row["package"].as_str().unwrap_or("NONE_PACKAGE"),row["name"].as_str().unwrap_or(""))));
+                            let (adaptive, scaled) = row.map(|row| (row["adaptive"] == true || row["resource"].as_str().is_some_and(|r| r.to_ascii_lowercase().contains("_adaptive")),
+                                row["IsSNR"] == true || row["IsSNR"] == "true" || row["isSNR"] == true)).unwrap_or((false,false));
+                            (adaptive, scaled, catalog.is_some())
+                        };
+                        let color = query
+                            .query_pairs()
+                            .find(|(k, _)| k == "color")
+                            .map(|(_, value)| value.parse::<usize>().unwrap_or(usize::MAX))
+                            .unwrap_or(0);
+                        // Do not nest the palette and cosmetics mutexes. Installed SNR
+                        // metadata decides whether this part actually follows body color.
+                        let palette = self.colors.lock().unwrap().clone();
+                        let mut cosmetics = self.cosmetics.lock().unwrap();
+                        let bytes = cosmetics.snr.image_for_color(
+                            &id, part, &palette, color, fallback_adaptive || catalog_adaptive,
+                        )?;
+                        let local_scale = cosmetics.snr.cached_visor_scale(&id);
+                        snr_metadata_known = local_scale.is_some() || catalog_known;
+                        snr_scaled = part == "visor" && local_scale.unwrap_or(catalog_scaled);
+                        bytes
                     }
                     _ => return Err("Unsupported cosmetic source".into()),
                 };
-                return Ok(json!(
-                    base64::engine::general_purpose::STANDARD.encode(bytes)
-                ));
+                let png = base64::engine::general_purpose::STANDARD.encode(bytes);
+                return Ok(if get(3) == true { json!({"png":png,"snrScaled":snr_scaled,"snrMetadataKnown":snr_metadata_known}) } else { json!(png) });
             }
             _ => return Err(format!("Unsupported Rust request: {channel}")),
         }
@@ -569,8 +592,7 @@ impl Backend {
             }
         }
         let read = |url: &str| -> Result<Value, String> {
-            serde_json::from_slice(&http::get(&self.client, url, 8 * 1024 * 1024)?)
-                .map_err(|e| e.to_string())
+            parse_cosmetics_catalog(&http::get(&self.client, url, 8 * 1024 * 1024)?)
         };
         let mut result = json!({"collection":read("https://cdn.jsdelivr.net/gh/OhMyGuus/BetterCrewLink-Hats@master/hats.json")?,"snrHats":[],"snrVisors":[]});
         if mode == "SUPER_NEW_ROLES" {
@@ -793,6 +815,15 @@ fn ban_check_endpoint(lab: bool, override_url: Option<&str>) -> String {
 }
 #[cfg(test)]
 mod endpoint_tests {
+    #[test]
+    fn snr_catalog_accepts_bom_without_dropping_adaptive_definitions() {
+        let plain = br#"{"hats":[{"name":"fixture","adaptive":true}]}"#;
+        let bom = [b"\xef\xbb\xbf".as_slice(), plain.as_slice()].concat();
+        let expected = super::parse_cosmetics_catalog(plain).unwrap();
+        assert_eq!(super::parse_cosmetics_catalog(&bom).unwrap(), expected);
+        assert_eq!(expected["hats"][0]["adaptive"], true);
+        assert!(super::parse_cosmetics_catalog(b"\xef\xbb\xbfnot-json").is_err());
+    }
     #[test]
     fn access_fixture_cannot_redirect_production_or_send_game_identity_to_an_external_host() {
         let official = super::ban_check_endpoint(false, None);
