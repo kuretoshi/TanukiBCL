@@ -1,4 +1,5 @@
 import { useNosBodyMask } from '../lib/nosCosmetics';
+import { retrySnrImage, clearSnrImageRetry } from '../lib/snrImageRetry';
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { hasVisibleAppearanceChanged, Player } from '../../common/AmongUsState';
 import { getCosmetic, redAlive, cosmeticType, getHatDementions, useHatsLoaded, HatDementions } from '../lib/cosmetics';
@@ -478,10 +479,12 @@ const Canvas = React.memo(function Canvas({
 	});
 	const onerror = (e: React.SyntheticEvent<HTMLImageElement>) => {
 		e.currentTarget.style.display = 'none';
+		retrySnrImage(e.currentTarget);
 	};
 
 	const onload = (e: React.SyntheticEvent<HTMLImageElement>) => {
 		e.currentTarget.style.display = '';
+		clearSnrImageRetry(e.currentTarget);
 	};
 
 	const bodyMaskStyle = bodyMask

@@ -485,16 +485,20 @@ export default class GameReader {
 				const falling = state === GameState.TASKS ? this.snrPush.update(this.pid, this.is_64bit) : [];
 				if (state !== GameState.TASKS) this.snrPush.reset();
 				if (state !== GameState.TASKS) this.snrVoiceOrigins.clear();
-				const roles = snrActive
-					? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}`, (address, size) =>
+				const readSnr = snrActive || (state === GameState.LOBBY && this.cosmeticsEnabled);
+				if (!readSnr) this.snrRoles.reset();
+				const roles = readSnr
+					? this.snrRoles.update(this.pid, `${lobbyCode}:${this.snrRound}:${snrActive}`, (address, size) =>
 							readBuffer(this.amongUs!.handle, address, size)
 						)
 					: new Map();
 				for (const player of players) {
 					this.applySnrPushState(player, falling);
-					player.snrRole = player.disconnected ? undefined : roles.get(player.id);
-					player.snrHat2Id = player.snrRole?.hat2Id;
-					player.snrVisor2Id = player.snrRole?.visor2Id;
+					player.snrRole = player.disconnected || !snrActive ? undefined : roles.get(player.id);
+					Object.assign(
+						player,
+						this.snrRoles.cosmetics(player, (address, size) => readBuffer(this.amongUs!.handle, address, size))
+					);
 					player.roleName = player.snrRole ? formatSnrRole(player.snrRole) : 'SNR役職未取得';
 				}
 			} else {

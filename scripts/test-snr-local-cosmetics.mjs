@@ -56,6 +56,9 @@ try {
 		assert.equal(url.protocol, 'snr-cosmetic:');
 		assert.equal(url.host, part);
 		assert.equal(decodeURIComponent(url.pathname.slice(1)), 'Modded_めめ村クローゼット_gutierrez');
+		assert.equal(url.searchParams.get('color'), '0');
+		const changed = new URL(getCosmetic(6, true, type, 'Modded_めめ村クローゼット_gutierrez', 'SUPER_NEW_ROLES'));
+		assert.equal(changed.searchParams.get('color'), '6');
 	}
 	assert.deepEqual(getHatDementions('Modded_めめ村クローゼット_gutierrez', 'SUPER_NEW_ROLES', cosmeticType.skin), {
 		top: '-52%',

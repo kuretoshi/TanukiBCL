@@ -27,7 +27,7 @@ import { nosAddonLink } from './nosAddonLink';
 import { GenerateHat } from './avatarGenerator';
 import { getAppArgs } from './args';
 import { findSnrCosmeticFile, SnrCosmeticPart } from './snrCosmetics';
-import { findSnrBundledCosmeticFile } from './snrBundleCosmeticsClient';
+import { findSnrBundledCosmetic } from './snrBundleCosmeticsClient';
 import {
 	initializeDebugLogging,
 	registerWindowLogging,
@@ -674,24 +674,33 @@ if (!gotTheLock) {
 			if (!['hat-front', 'hat-back', 'visor', 'skin'].includes(part)) return new Response(null, { status: 404 });
 			const productId = decodeURIComponent(url.pathname.slice(1));
 			let filePath = findSnrCosmeticFile(gameReader.gamePath, productId, part);
+			let adaptive = url.searchParams.get('adaptive') === '1';
+			let scale: boolean | undefined;
 			if (!filePath) {
-				filePath = await findSnrBundledCosmeticFile(
+				const asset = await findSnrBundledCosmetic(
 					gameReader.gamePath,
 					productId,
 					part,
 					joinPath(app.getPath('userData'), 'snr-cosmetics-cache')
 				);
+				filePath = asset?.file;
+				adaptive = asset?.adaptive ?? adaptive;
+				scale = asset?.scale;
 			}
 			if (!filePath) return new Response(null, { status: 404 });
-			if (url.searchParams.get('adaptive') === '1') {
+			if (adaptive) {
 				const generatedPath = await GenerateHat(
 					new URL(pathToFileURL(filePath).toString()),
 					gameReader.playercolors,
 					Number(url.searchParams.get('color'))
 				);
-				return generatedPath ? net.fetch(pathToFileURL(generatedPath).toString()) : new Response(null, { status: 500 });
+				if (!generatedPath) return new Response(null, { status: 500 });
+				filePath = generatedPath;
 			}
-			return net.fetch(pathToFileURL(filePath).toString());
+			const response = await net.fetch(pathToFileURL(filePath).toString());
+			const headers = new Headers(response.headers);
+			if (scale !== undefined) headers.set('X-Tanuki-Snr-Scale', scale ? '1' : '0');
+			return new Response(response.body, { status: response.status, headers });
 		});
 
 		protocol.handle('static', (request) => {

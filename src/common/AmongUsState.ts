@@ -107,6 +107,9 @@ export interface Player {
 	snrPushOrigin?: { x: number; y: number };
 	snrHat2Id?: string;
 	snrVisor2Id?: string;
+	/** Completed host PNGs; mobile reuses the existing bounded cosmetic asset relay. */
+	snrCosmetics?: Partial<Record<'hat' | 'hatBack' | 'skin' | 'visor' | 'hat2' | 'hat2Back' | 'visor2', string>>;
+	snrCosmeticScale?: { visor?: boolean; visor2?: boolean };
 	nosPlayer?: NosPlayerData;
 	nosRole?: NosRole;
 	/** A fresh report from this player's own NoS snapshot; undefined until known. */

@@ -4,7 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text.Json;
 
-// Inspect a snapshot, never write to or execute code in the game process.
+// Inspect without suspending, writing to, or executing code in the game process.
 var diagnostics = new List<object>();
 try
 {
@@ -16,7 +16,7 @@ try
         SnrPushWatcher.Run(pid, started, args.Length > 2 ? int.Parse(args[2]) : null, ReadEnums);
         return;
     }
-    using var target = DataTarget.CreateSnapshotAndAttach(pid);
+    using var target = DataTarget.AttachToProcess(pid, suspend: false);
     var info = target.ClrVersions.FirstOrDefault() ?? throw new InvalidOperationException("CoreCLR not found");
     using var runtime = info.CreateRuntime();
     if (args.Length > 1 && args[1] == "--toh") {
@@ -26,7 +26,19 @@ try
         Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, layout }));
         return;
     }
-    var source = SnrPlayerSource.Resolve(runtime, diagnostics);
+    SnrSecondaryCosmetics? independentCosmetics = null;
+    try { independentCosmetics = SnrSecondaryCosmetics.Resolve(runtime, target, pid); }
+    catch (Exception error) { diagnostics.Add(new { secondaryCosmetics = error.Message }); }
+    SnrPlayerSource source;
+    try { source = SnrPlayerSource.Resolve(runtime, diagnostics); }
+    catch when (independentCosmetics is not null)
+    {
+        using var liveProcess = Process.GetProcessById(pid);
+        if (liveProcess.StartTime.ToUniversalTime().Ticks != started) throw new InvalidOperationException("Process changed");
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, liveLayout = (object?)null,
+            secondaryCosmetics = independentCosmetics.Layout, players = Array.Empty<object>(), diagnostics }));
+        return;
+    }
     var module = source.Module;
     var secondaryCosmetics = ReadSecondaryCosmetics(module);
     var array = source.Array.AsArray();
@@ -50,6 +62,7 @@ try
         var assignedTeam = Describe(roleBase, "AssignedTeam", enums);
         var cosmetics = ReadObject(ReadObject(player, "Player"), "cosmetics");
         secondaryCosmetics.TryGetValue(cosmetics.Address, out var secondary);
+        if (independentCosmetics is not null) secondary = independentCosmetics.Player(player);
         rows.Add(new {
             playerId, role = Describe(player, "Role", enums), modifier = Describe(player, "ModifierRole", enums),
             ghostRole = Describe(player, "GhostRole", enums), roleClass = roleBase.Type?.Name,
@@ -64,7 +77,8 @@ try
     using var current = Process.GetProcessById(pid);
     if (current.StartTime.ToUniversalTime().Ticks != started) throw new InvalidOperationException("Process changed");
     Console.WriteLine(JsonSerializer.Serialize(new { status = "ok", pid, capturedAt = DateTimeOffset.UtcNow.ToString("O"),
-        version = FileVersionInfo.GetVersionInfo(snrPath).FileVersion, diagnostics, liveLayout, players = rows }));
+        version = FileVersionInfo.GetVersionInfo(snrPath).FileVersion, diagnostics, liveLayout,
+        secondaryCosmetics = independentCosmetics?.Layout, players = rows }));
 }
 catch (Exception error)
 {
@@ -181,18 +195,11 @@ static Dictionary<ulong, (string? hat2Id, string? visor2Id)> ReadSecondaryCosmet
         var layer = entry.Type?.GetFieldByName("value")?.ReadObject(entry.Address, true) ?? default;
         var cosmeticsLayer = ReadObject(layer, "cosmeticsLayer");
         if (layer.IsNull || cosmeticsLayer.IsNull) continue;
-        var hat = ReadObject(ReadObject(layer, "hat2"), "Hat");
-        var visor = ReadObject(ReadObject(layer, "visor2"), "Visor");
-        result[cosmeticsLayer.Address] = (ReadString(hat, "ProdId"), ReadString(visor, "ProdId"));
+        result[cosmeticsLayer.Address] = (SnrSecondaryCosmetics.Product(layer, true), SnrSecondaryCosmetics.Product(layer, false));
     }
     return result;
 }
 static ClrObject ReadObject(ClrObject obj, string name) => Field(obj, name)?.ReadObject(obj.Address, false) ?? default;
-static string? ReadString(ClrObject obj, string name)
-{
-    var value = ReadObject(obj, name);
-    return value.IsNull ? null : value.AsString();
-}
 static long? ReadNumber(ClrObject obj, string name)
 {
     var field = Field(obj, name);

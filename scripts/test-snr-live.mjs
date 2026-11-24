@@ -196,6 +196,7 @@ try {
   setRole(11, 16);
 }
 
+async function verifyManagedFixture() {
 if (process.argv.includes('--real-game')) {
   const sample = JSON.parse(await readFile('.cache/live-sample.json', 'utf8'));
   assert.ok(isSnrLiveLayout(sample.liveLayout, sample.pid));
@@ -247,3 +248,6 @@ if (process.argv.includes('--real-game')) {
     await rm(ready, { force: true });
   }
 }
+
+}
+if (!process.argv.includes('--unit-only')) await verifyManagedFixture();

@@ -19,7 +19,7 @@ const bundled = await build({
 	write: false,
 });
 await writeFile(output, bundled.outputFiles[0].contents);
-const { findSnrBundledCosmeticFile } = await import(pathToFileURL(output).href);
+const { findSnrBundledCosmeticFile, findSnrBundledCosmetic } = await import(pathToFileURL(output).href);
 const workerOutput = resolve('.tools/test-cache/snr-cosmetics-worker.mjs');
 await build({
 	entryPoints: ['src/main/snrCosmeticsWorker.ts'],
@@ -39,14 +39,17 @@ try {
 	const file = await findSnrBundledCosmeticFile(executable, id, 'hat-front', cache);
 	assert.ok(file, 'SNR bundle hat is missing');
 	const image = PNG.sync.read(await readFile(file));
-	assert.equal(image.width, 168);
-	assert.equal(image.height, 194);
+	assert.equal(image.width, 300);
+	assert.equal(image.height, 375);
+	assert.equal((await findSnrBundledCosmetic(executable, id, 'hat-front', cache)).adaptive, false);
 	const back = await findSnrBundledCosmeticFile(executable, id, 'hat-back', cache);
 	assert.ok(back, 'SNR bundle back hat is missing');
 	assert.ok(PNG.sync.read(await readFile(back)).width > 0);
 	const visor = await findSnrBundledCosmeticFile(executable, 'Modded_アルジャンバイザー_ArujanHaguki', 'visor', cache);
 	assert.ok(visor, 'SNR bundle visor is missing');
 	assert.ok(PNG.sync.read(await readFile(visor)).height > 0);
+	assert.equal(PNG.sync.read(await readFile(visor)).width, 300);
+	assert.equal(PNG.sync.read(await readFile(visor)).height, 375);
 	assert.equal(await findSnrBundledCosmeticFile(executable, id, 'hat-front', cache), file);
 	assert.equal(await findSnrBundledCosmeticFile(executable, 'Modded_missing_Name', 'hat-front', cache), undefined);
 	const worker = new Worker(pathToFileURL(workerOutput));
@@ -65,7 +68,8 @@ try {
 		});
 		assert.equal(response.id, 1);
 		assert.ok(response.file);
-		assert.equal(PNG.sync.read(await readFile(response.file)).width, 168);
+		assert.equal(PNG.sync.read(await readFile(response.file)).width, 300);
+		assert.equal(response.adaptive, false);
 	} finally {
 		await worker.terminate();
 	}
