@@ -1,7 +1,7 @@
 {
   "baseVersion": "3.2.71",
   "baseCommit": "2fd43e18f4d1af6dc1fe0ec20472524c8a3ad2f5",
-  "deliveredVersion": "3.2.71-tauri-beta.2",
+  "deliveredVersion": "3.2.71-tauri-beta.3",
   "objective": "Port every Windows application feature, including UI and remaining managed Mod readers/watchers, to Rust while preserving the Electron edition; compare memory again after full migration.",
   "scope": "Application logic and UI source must be Rust. Generated WebAssembly interoperability glue and existing third-party native libraries are allowed. No application feature may require the React/TypeScript UI, a C# helper, or the Node compatibility backend. Electron source, settings and delivered artifacts are preserved.",
   "complete": true,
@@ -136,10 +136,15 @@
       "feature": "Show host-settings synchronization as waiting while preserving admission gates and actual errors",
       "status": "packaged-beta.2",
       "version": "3.2.71-tauri-beta.2"
+    },
+    {
+      "feature": "Normalize native jitter units and match Electron overlay geometry, names, cosmetics, empty-list behavior and client bounds",
+      "status": "packaged-beta.3",
+      "version": "3.2.71-tauri-beta.3"
     }
   ],
   "migrationImplemented": true,
-  "validationReport": "validation-host-settings-wait-3.2.71-beta2.json",
+  "validationReport": "validation-receive-jitter-3.2.71-beta3.json",
   "memoryReport": "memory-comparison-rust-ui-3.2.62.json",
   "verificationLimits": [
     "TOH4E actual match blocked by game-side lobby creation error; generated decoder and runtime role-transfer tests passed.",
@@ -157,10 +162,10 @@
     "Feature parity and lifecycle checks pass before a new final memory comparison.",
     "No completion claim while required application features remain unported."
   ],
-  "implementedVersion": "3.2.71-tauri-beta.2",
-  "packageReport": "validation-rust-package-3.2.71-beta2.json",
+  "implementedVersion": "3.2.71-tauri-beta.3",
+  "packageReport": "validation-rust-package-3.2.71-beta3.json",
   "completedAt": "2026-11-11T01:13:29.993Z",
   "uiParityReport": "validation-ui-parity-beta9.json",
   "uiLayoutRestored": true,
-  "latestFixSource": "https://github.com/kuretoshi/TanukiBCL/tree/codex/tauri-3.2.71-beta.2-source"
+  "latestFixSource": "https://github.com/kuretoshi/TanukiBCL/tree/codex/tauri-3.2.71-beta.3-source"
 }

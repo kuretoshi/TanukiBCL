@@ -63,7 +63,7 @@ impl Sampler {
 }
 pub fn rows(report: &rtc::statistics::report::RTCStatsReport) -> Vec<Value> {
     use rtc::statistics::report::RTCStatsReportEntry as S;
-    report
+    let rows = report
         .iter()
         .filter_map(|e| {
             let (kind, result) = match e {
@@ -71,6 +71,7 @@ pub fn rows(report: &rtc::statistics::report::RTCStatsReport) -> Vec<Value> {
                 S::IceCandidatePair(v) => ("candidate-pair", serde_json::to_value(v)),
                 S::LocalCandidate(v) => ("local-candidate", serde_json::to_value(v)),
                 S::RemoteCandidate(v) => ("remote-candidate", serde_json::to_value(v)),
+                S::Codec(v) => ("codec", serde_json::to_value(v)),
                 S::InboundRtp(v) => ("inbound-rtp", serde_json::to_value(v)),
                 _ => return None,
             };
@@ -79,11 +80,62 @@ pub fn rows(report: &rtc::statistics::report::RTCStatsReport) -> Vec<Value> {
                 v
             })
         })
-        .collect()
+        .collect();
+    normalize_native_rows(rows)
+}
+
+fn normalize_native_rows(mut rows: Vec<Value>) -> Vec<Value> {
+    let clocks: HashMap<String, u64> = rows
+        .iter()
+        .filter(|row| row["type"] == "codec")
+        .filter_map(|row| Some((row["id"].as_str()?.into(), row["clockRate"].as_u64().filter(|rate| *rate > 0)?)))
+        .collect();
+    for row in &mut rows {
+        if row["type"] != "inbound-rtp" || row["kind"] != "audio" {
+            continue;
+        }
+        // rtc =0.21.1 passes the raw RTCP ReceiverReport.jitter into its
+        // supposedly-seconds stats field (handler/interceptor.rs). Convert RTP
+        // clock ticks here, leaving Sampler's browser-compatible seconds intact.
+        // The native Opus engine uses 48 kHz when rtc omits codec metadata.
+        let clock = row["codecId"]
+            .as_str()
+            .and_then(|id| clocks.get(id))
+            .copied()
+            .unwrap_or(super::model::RATE as u64);
+        if let Some(ticks) = row["jitter"].as_f64().filter(|n| n.is_finite() && *n >= 0.) {
+            row["jitter"] = json!(ticks / clock as f64);
+        }
+    }
+    rows
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_rtcp_ticks_match_browser_seconds_without_double_conversion() {
+        let raw = json!({"type":"inbound-rtp","id":"audio","kind":"audio","codecId":"opus","packetsReceived":100,"packetsLost":0,"jitter":480});
+        let codec = json!({"type":"codec","id":"opus","clockRate":48000});
+        let native = Sampler::default().read(&normalize_native_rows(vec![raw.clone(), codec]), None);
+        let mut browser = raw;
+        browser["jitter"] = json!(0.01);
+        assert_eq!(native, Sampler::default().read(&[browser], None));
+        assert_eq!(native["jitterMs"], 10.);
+    }
+
+    #[test]
+    fn native_jitter_uses_each_audio_codec_clock_and_ignores_video() {
+        let rows = normalize_native_rows(vec![
+            json!({"type":"codec","id":"pcmu","clockRate":8000}),
+            json!({"type":"inbound-rtp","id":"opus","kind":"audio","jitter":480}),
+            json!({"type":"inbound-rtp","id":"pcmu","kind":"audio","codecId":"pcmu","jitter":320}),
+            json!({"type":"inbound-rtp","id":"video","kind":"video","jitter":90000}),
+        ]);
+        assert_eq!(rows[1]["jitter"], 0.01);
+        assert_eq!(rows[2]["jitter"], 0.04);
+        assert_eq!(Sampler::default().read(&rows, None)["jitterMs"], 40.);
+    }
+
     #[test]
     fn packet_loss_uses_interval_counters_and_restarts_its_baseline() {
         let mut s = Sampler::default();

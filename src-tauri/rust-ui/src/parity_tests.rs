@@ -5,6 +5,19 @@ use crate::{
 };
 use serde_json::{json, Value};
 #[test]
+fn received_jitter_tooltip_rounds_milliseconds_like_electron() {
+    let mut state = State::for_view("app", "test");
+    state.game = json!({"mod":"NONE","gameState":0});
+    state.voice = json!({"status":{"voiceSnapshot":{
+        "playerSocketIds":{"2":"peer"}, "audioConnected":{"peer":true},
+        "connectionQuality":{"peer":{"rttMs":20,"jitterMs":10.5}}
+    }}});
+    let player = json!({"id":1,"clientId":2,"name":"Guest","colorId":1});
+    let html = views::avatar(&state, &player);
+    assert!(html.contains("受信の揺らぎ：11 ms"));
+    assert!(!html.contains("受信の揺らぎ：10.5 ms"));
+}
+#[test]
 fn waiting_for_host_settings_keeps_players_and_controls_without_hiding_real_errors() {
     let mut state = State::for_view("app", "test");
     state.game = json!({

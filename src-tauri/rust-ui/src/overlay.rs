@@ -1,4 +1,4 @@
-//! Overlay layout and meeting ordering follow the pinned 3.2.62 renderer.
+//! Overlay layout and meeting ordering follow the pinned Electron renderer.
 use crate::{
     state::{escaped as e, text, State},
     views,
@@ -104,17 +104,7 @@ fn meeting(s: &State) -> String {
     if s.settings["meetingOverlay"] != true || game["gameState"] != 2 {
         return String::new();
     }
-    let window = web_sys::window().unwrap();
-    let vw = window
-        .inner_width()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1920.0);
-    let vh = window
-        .inner_height()
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1080.0);
+    let [vw, vh] = s.viewport;
     let old = game["oldMeetingHud"] == true;
     let (width, height) = if old {
         let ratio = 854.0 / 579.0;
@@ -195,7 +185,15 @@ pub fn render(s: &State) -> String {
         "SUPER_NEW_ROLES" => "SuperNewRoles",
         other => other,
     };
-    let watermark=format!("<div class=\"tanuki-overlay-watermark{}{}{}\"><div>TanukiBCL v{} [{}]</div><div>{}</div>{}</div>",if mode=="SUPER_NEW_ROLES"{" tanuki-overlay-watermark_snr"}else{""},if game["gameState"]==1{" tanuki-overlay-watermark_game"}else{""},if mode=="NoS"{" tanuki-overlay-watermark_nos"}else{""},e(&s.version),e(mod_name),e(&text(&s.settings["serverURL"])),if mode=="NoS"&&game["nosReadStatus"]["failed"]==true{format!("<div class=notice>{}</div>",e(&text(&game["nosReadStatus"]["message"])))}else{String::new()});
+    let failed = mode == "NoS" && game["nosReadStatus"]["failed"] == true;
+    let message = text(&game["nosReadStatus"]["message"]);
+    let watermark = format!("<div class=\"tanuki-overlay-watermark{}{}{}\"{}><div>TanukiBCL v{}{}</div><div>{}</div>{}</div>",
+        if mode=="SUPER_NEW_ROLES"{" tanuki-overlay-watermark_snr"}else{""},
+        if game["gameState"]==1{" tanuki-overlay-watermark_game"}else{""},
+        if mode=="NoS"{" tanuki-overlay-watermark_nos"}else{""},
+        if failed{" style=\"background-color:#581e24;white-space:normal;overflow-wrap:anywhere;max-width:360px\""}else{""},
+        e(&s.version), if mod_name.is_empty(){String::new()}else{format!(" [{}]",e(mod_name))},
+        e(&text(&s.settings["serverURL"])), if failed{format!("<div role=status>{}</div>",e(&message))}else{String::new()});
     let position = s.settings["overlayPosition"].as_str().unwrap_or("right");
     let valid = [
         "right",
@@ -240,7 +238,7 @@ pub fn render(s: &State) -> String {
             let hidden =
                 player["shiftedColor"].as_i64().is_some_and(|v| v != -1) && game["gameState"] != 2;
             let clone_talking = s.snapshot()["cloneTalking"][&id] == true;
-            let talking = clone_talking
+            let voice_activity = clone_talking
                 || (!hidden || local)
                     && (s.snapshot()["otherTalking"][&id] == true
                         || local && s.voice["status"]["talking"] == true);
@@ -249,29 +247,90 @@ pub fn render(s: &State) -> String {
                 .is_some_and(|socket| {
                     s.snapshot()["socketClients"][socket]["clientId"] == player["clientId"]
                 });
-            if (!local && !connected) || (compact && !talking) {
+            if (!local && !connected) || (compact && !voice_activity) {
                 continue;
             }
+            let talking = clone_talking || voice_activity && player["inVent"] != true;
             let html = views::avatar(s, player);
+            let name = player["appearanceName"].as_str().filter(|n| !n.is_empty())
+                .unwrap_or(player["name"].as_str().unwrap_or(""));
+            let label = if show_name {
+                format!("<span class=playername style=\"opacity:{}\"><small>{}</small></span>",
+                    if position.ends_with('1') && !talking { 0 } else { 1 }, e(name))
+            } else { String::new() };
             avatar_count += 1;
             avatars.push_str(&format!(
-                "<div class=\"player_wrapper{}{}\"><div>{html}</div></div>",
-                if show_name { " show-name" } else { "" },
+                "<div class=\"player_wrapper{}\"><div>{html}</div>{label}</div>",
                 if talking { " active" } else { "" }
             ));
         }
     }
-    let height = web_sys::window()
-        .and_then(|w| w.inner_height().ok())
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1080.0);
-    let zoom = (height * 0.075 * (10.0 / avatar_count.max(10) as f64) / 60.0).clamp(0.1, 2.0);
-    format!("<div class=overlay-surface>{watermark}{}<div class=\"overlay-wrapper gamestate_game overlay_postion_{} overlay_postion_{} {}\" style=\"--overlay-zoom:{zoom}\"><div class=otherplayers><div class=players_container>{avatars}</div></div></div></div>",meeting(s),e(position.trim_end_matches('1')),e(position),if s.settings["compactOverlay"]==true||position.ends_with('1'){"compactoverlay"}else{""})
+    let list = if avatar_count == 0 { String::new() } else {
+        let menu = matches!(game["gameState"].as_i64(), Some(3 | 4));
+        let class = if menu { "gamestate_menu".into() } else {
+            format!("gamestate_game overlay_postion_{} overlay_postion_{} {} {}", e(position.trim_end_matches('1')), e(position), if s.settings["compactOverlay"]==true||position.ends_with('1'){"compactoverlay"}else{""}, if s.settings["compactOverlay"]==true{"compact-talking-only"}else{""})
+        };
+        format!("<div class=\"overlay-wrapper {class}\" style=\"--size:{}vh\"><div class=otherplayers><div class=\"players_container playerContainerBack\">{avatars}</div></div></div>",75.0/avatar_count as f64)
+    };
+    format!("<div class=overlay-surface>{watermark}{}{list}</div>",meeting(s))
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    fn fixture(count: usize) -> State {
+        let mut s = State::for_view("overlay", "test");
+        s.viewport = [1600.0, 900.0];
+        s.settings = json!({"enableOverlay":true,"overlayPosition":"right","serverURL":"https://example.test"});
+        s.game = json!({"gameState":1,"mod":"NONE","players":(0..count).map(|id|json!({"id":id,"clientId":id+1,"isLocal":id==0,"colorId":0,"shiftedColor":-1,"name":format!("Player {id}")})).collect::<Vec<_>>()});
+        s.voice = json!({"status":{"talking":true,"voiceSnapshot":{"localIsAlive":true,"playerSocketIds":{},"socketClients":{}}}});
+        for id in 1..count {
+            let client = (id+1).to_string(); let socket = format!("peer-{id}");
+            s.voice["status"]["voiceSnapshot"]["playerSocketIds"][&client] = json!(socket);
+            s.voice["status"]["voiceSnapshot"]["socketClients"][&socket] = json!({"clientId":id+1});
+        }
+        s
+    }
+    #[test]
+    fn side_list_matches_electron_size_names_and_connected_filter() {
+        let mut s = fixture(13);
+        let html = render(&s);
+        assert!(html.contains("--size:5.769230769230769vh"));
+        assert_eq!(html.matches("class=playername").count(),13);
+        assert!(html.contains("<span class=playername style=\"opacity:1\"><small>Player 0</small></span>"));
+        assert!(!html.contains("--overlay-zoom"));
+        s.voice["status"]["voiceSnapshot"]["socketClients"]["peer-1"] = Value::Null;
+        assert_eq!(render(&s).matches("class=playername").count(),12);
+        s.settings["overlayPosition"] = json!("top");
+        assert!(!render(&s).contains("class=playername"));
+    }
+    #[test]
+    fn compact_list_vents_and_empty_list_match_electron() {
+        let mut s = fixture(2);
+        s.settings["overlayPosition"] = json!("right1");
+        assert!(render(&s).contains("opacity:0\"><small>Player 1"));
+        s.game["players"][0]["inVent"] = json!(true);
+        assert!(!render(&s).contains("class=\"player talking"));
+        s.settings["compactOverlay"] = json!(true);
+        // Activity still includes the local player in a vent; its border stays off.
+        assert_eq!(render(&s).matches("data-player=").count(),1);
+        s.voice["status"]["talking"] = json!(false);
+        assert!(!render(&s).contains("class=\"overlay-wrapper"));
+        s.settings["overlayPosition"] = json!("hidden");
+        assert!(!render(&s).contains("class=\"overlay-wrapper"));
+    }
+    #[test]
+    fn overlay_cosmetics_and_waiting_watermark_match_electron() {
+        let mut s = fixture(1);
+        s.game["mod"] = json!("NoS");
+        s.game["players"][0]["nosCosmetics"]["hat"] = json!("https://example.test/hat.png");
+        s.game["nosReadStatus"] = json!({"failed":true,"message":"Reading <players>"});
+        let html = render(&s);
+        assert!(html.contains("top:calc(22% + -52%);left:calc(-18px - 5.75px);width:140%"));
+        assert!(html.contains("background-color:#581e24"));
+        assert!(html.contains("<div role=status>Reading &lt;players&gt;</div>"));
+        assert!(!html.contains("class=notice"));
+    }
     #[test]
     fn snr_slots_do_not_shift_on_missing_players() {
         let game = json!({"mod":"SUPER_NEW_ROLES","players":[],"snrMeeting":{"enabled":true,"currentPage":2,"playerIds":(0..20).collect::<Vec<_>>()}});

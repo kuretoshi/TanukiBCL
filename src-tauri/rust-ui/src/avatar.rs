@@ -296,12 +296,19 @@ fn dimension(value: &Value, fallback: &str) -> String {
         fallback.into()
     }
 }
+fn cosmetic_style(s: &State, top: &str, left: &str, width: &str) -> String {
+    if s.view == "overlay" {
+        format!("top:calc(22% + {top});left:calc({left} - 5.75px);width:{width}")
+    } else {
+        format!("top:{top};width:{width};left:{left}")
+    }
+}
 pub fn cosmetic(s: &State, id: &str, part: &str, color: i64, override_url: Option<&str>) -> String {
     if let Some(source) = override_url.filter(|u| !u.is_empty()) {
         return image(
             source,
             &format!("cosmetic {part}"),
-            "top:-52%;width:140%;left:-18px",
+            &cosmetic_style(s, "-52%", "-18px", "140%"),
             false,
         );
     }
@@ -345,7 +352,7 @@ pub fn cosmetic(s: &State, id: &str, part: &str, color: i64, override_url: Optio
         return image(
             &format!("https://snr-cosmetic.localhost/{part}/{encoded}{query}"),
             &format!("cosmetic {part}"),
-            "top:-52%;width:140%;left:-18px",
+            &cosmetic_style(s, "-52%", "-18px", "140%"),
             scaling,
         );
     }
@@ -397,7 +404,7 @@ pub fn cosmetic(s: &State, id: &str, part: &str, color: i64, override_url: Optio
     image(
         &source,
         &format!("cosmetic {part}"),
-        &format!("top:{top};left:{left};width:{width}"),
+        &cosmetic_style(s, &top, &left, &width),
         false,
     )
 }

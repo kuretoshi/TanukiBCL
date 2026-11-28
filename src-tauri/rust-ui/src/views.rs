@@ -8,7 +8,9 @@ pub fn avatar(s: &State, p: &Value) -> String {
     let client = text(&p["clientId"]);
     let local = p["isLocal"] == true;
     let voice = s.snapshot();
-    let dead = if local {
+    let dead = if s.view == "overlay" {
+        voice["otherDead"][&client] == true && !(local && p["isDead"] != true)
+    } else if local {
         p["isDead"] == true
     } else {
         voice["otherDead"][&client]
@@ -89,6 +91,8 @@ pub fn avatar(s: &State, p: &Value) -> String {
     layers.push_str(&a::cosmetic(s, &visor, "visor", color, nos("visor")));
     let muted = if local {
         s.voice["muted"] == true
+    } else if s.view == "overlay" {
+        false
     } else {
         let id = text(&p["playerConfigId"]);
         s.settings["playerConfigMap"][&id]["isMuted"] == true
@@ -98,7 +102,7 @@ pub fn avatar(s: &State, p: &Value) -> String {
         crate::chrome::icon("VolumeOff")
     } else if muted {
         crate::chrome::icon("MicOff")
-    } else if !local
+    } else if s.view != "overlay" && !local
         && voice["playerSocketIds"][&client]
             .as_str()
             .is_none_or(|socket| voice["audioConnected"][socket] != true)
@@ -119,7 +123,7 @@ pub fn avatar(s: &State, p: &Value) -> String {
     } else {
         String::new()
     };
-    let talking = clone_talking || talking && (local || p["inVent"] != true);
+    let talking = clone_talking || talking && ((local && s.view != "overlay") || p["inVent"] != true);
     let class = if talking { " talking" } else { "" };
     let name = p["appearanceName"]
         .as_str()
@@ -148,7 +152,14 @@ pub fn avatar(s: &State, p: &Value) -> String {
     } else {
         &voice["connectionQuality"][socket]
     };
-    format!("<article class=\"player{class}{}{}{}\" data-player=\"{}\"{control}><div class=avatar><div class=avatar-paint>{layers}{}</div><span class=badge>{marker}</span>{}</div><strong>{}</strong><small>{}</small></article>",if dead{" ghost"}else{""},if vad_hidden&&local{" vad-hidden"}else{""},if hidden{" appearance-hidden"}else{""},e(&client),if radio{format!("<span class=radio-icon>{}</span>",crate::chrome::icon("Radio"))}else{String::new()},quality_indicator(connected,quality),e(name),e(&role))
+    let canvas_style = if s.view == "overlay" {
+        let pos = s.settings["overlayPosition"].as_str().unwrap_or("right");
+        let border = if talking { if local && vad_hidden { "gray" } else { "#2ecc71" } }
+            else if (pos.starts_with("left") || pos.starts_with("right")) && s.settings["compactOverlay"] != true { "#ccbdcc86" }
+            else { "transparent" };
+        format!(" style=\"border-color:{border}\"")
+    } else { String::new() };
+    format!("<article class=\"player{class}{}{}{}\" data-player=\"{}\"{control}><div class=avatar{canvas_style}><div class=avatar-paint>{layers}{}</div><span class=badge>{marker}</span>{}</div><strong>{}</strong><small>{}</small></article>",if dead{" ghost"}else{""},if vad_hidden&&local{" vad-hidden"}else{""},if hidden{" appearance-hidden"}else{""},e(&client),if radio{format!("<span class=radio-icon>{}</span>",crate::chrome::icon("Radio"))}else{String::new()},quality_indicator(connected,quality),e(name),e(&role))
 }
 fn quality_indicator(connected: bool, quality: &Value) -> String {
     let ping = quality["serverPingMs"]
@@ -173,7 +184,8 @@ fn quality_indicator(connected: bool, quality: &Value) -> String {
     let title = format!(
         "音声接続：{status} ／ ping：{} ／ 受信の揺らぎ：{} ms ／ 受信ロス：{}%",
         ping.map(|n| format!("{n:.0} ms")).unwrap_or("—".into()),
-        text(&quality["jitterMs"]),
+        quality["jitterMs"].as_f64().filter(|n| n.is_finite() && *n >= 0.)
+            .map(|n| n.round().to_string()).unwrap_or("—".into()),
         text(&quality["lossPercent"])
     );
     format!(

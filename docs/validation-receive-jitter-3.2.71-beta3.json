@@ -1,0 +1,106 @@
+{
+  "version": "3.2.71-tauri-beta.3",
+  "passed": true,
+  "verifiedAt": "2026-11-28T12:35:40.354Z",
+  "baseCommit": "2fd43e18f4d1af6dc1fe0ec20472524c8a3ad2f5",
+  "previousTauriSource": "b748247b495b586027794fde05f7a47466f667d7",
+  "tests": {
+    "passed": 188,
+    "ignored": 3,
+    "groups": [
+      {
+        "passed": 149,
+        "ignored": 3
+      },
+      {
+        "passed": 6,
+        "ignored": 0
+      },
+      {
+        "passed": 33,
+        "ignored": 0
+      }
+    ]
+  },
+  "startup": {
+    "waitingNoticeVerified": true,
+    "waitingKeepsPlayerGrid": true,
+    "waitingColor": "rgb(180, 170, 189)",
+    "transmissionBlockedUntilHostSettings": true,
+    "mainUrl": "https://tauri.localhost/index.html?view=app&version=3.2.71-tauri-beta.3",
+    "mainVersion": "3.2.71-tauri-beta.3",
+    "settingsOpened": true,
+    "settingsClosed": true,
+    "mainStillUsable": true,
+    "backgroundOnly": true,
+    "usesMouseOrKeyboard": false,
+    "executableSha256": "c92b7d43c8122371fbd3d841f4ea99f4d8649bfa8cde647d2763d83ed58b5a8a",
+    "installerSha256": "5969b7589929e2261e93367a1ae7ff682d5055c1d8087b97fa88954978b267af",
+    "settingsUrl": "https://tauri.localhost/index.html?view=settings&version=3.2.71-tauri-beta.3",
+    "settingsControls": 2,
+    "settingsOpenedTwice": true,
+    "hostSettingsRecoveryVerified": true,
+    "receivedHostDistance": 7.77,
+    "packagedOverlayVerified": true,
+    "overlay": {
+      "url": "https://tauri.localhost/index.html?view=overlay&version=3.2.71-tauri-beta.3",
+      "players": 2,
+      "names": 2,
+      "width": 71.5,
+      "height": 71.5,
+      "size": "37.5vh",
+      "background": "rgba(0, 0, 0, 0)",
+      "visible": false
+    },
+    "rtpQualityVerified": true,
+    "roundedJitterTooltipVerified": true,
+    "receivedJitterMs": 0.4375,
+    "receivedPackets": 356,
+    "decodedFrames": 339840
+  },
+  "overlayParity": {
+    "passed": true,
+    "cases": 11,
+    "wasmSha256": "8e3459393603430214f7c6aa9a2a43f8999548dad03341e388fd7f5d59fb5179",
+    "reference": "Pinned Electron AvatarOverlay and Avatar components",
+    "geometryTolerancePixels": 1.1,
+    "transitionsDisabledDuringGeometryComparison": true,
+    "backgroundOnly": true
+  },
+  "electronReference": [
+    {
+      "name": "Opus 10 ms",
+      "electronJitterMs": 10,
+      "displayedJitterMs": 10
+    },
+    {
+      "name": "Mixed audio maximum",
+      "electronJitterMs": 40,
+      "displayedJitterMs": 40
+    },
+    {
+      "name": "Rounded tooltip boundary",
+      "electronJitterMs": 10.5,
+      "displayedJitterMs": 11
+    }
+  ],
+  "unitConversion": {
+    "upstream": "rtc =0.21.1",
+    "rtpTicks": 480,
+    "opusClockRate": 48000,
+    "expectedMilliseconds": 10
+  },
+  "installerSha256": "5969b7589929e2261e93367a1ae7ff682d5055c1d8087b97fa88954978b267af",
+  "executableSha256": "c92b7d43c8122371fbd3d841f4ea99f4d8649bfa8cde647d2763d83ed58b5a8a",
+  "preservation": {
+    "pinnedCoreFiles": 150,
+    "beta2InstallerUnchanged": true
+  },
+  "physicalMicrophoneTested": false,
+  "liveGameTested": false,
+  "installerExecuted": false,
+  "limits": [
+    "Local synthetic signaling verifies host-settings admission and recovery, not a real multi-person call.",
+    "Three existing tests requiring external speech resources were ignored."
+  ]
+}
