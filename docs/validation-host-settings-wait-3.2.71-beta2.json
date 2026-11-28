@@ -1,0 +1,58 @@
+{
+  "version": "3.2.71-tauri-beta.2",
+  "passed": true,
+  "verifiedAt": "2026-11-28T11:38:32.500Z",
+  "baseCommit": "2fd43e18f4d1af6dc1fe0ec20472524c8a3ad2f5",
+  "previousTauriSource": "1f7267fdb8c2ba646b1b26e71c4ea488b844336f",
+  "tests": {
+    "passed": 182,
+    "ignored": 3,
+    "groups": [
+      {
+        "passed": 147,
+        "ignored": 3
+      },
+      {
+        "passed": 6,
+        "ignored": 0
+      },
+      {
+        "passed": 29,
+        "ignored": 0
+      }
+    ]
+  },
+  "startup": {
+    "waitingNoticeVerified": true,
+    "waitingKeepsPlayerGrid": true,
+    "waitingColor": "rgb(180, 170, 189)",
+    "transmissionBlockedUntilHostSettings": true,
+    "mainUrl": "https://tauri.localhost/index.html?view=app&version=3.2.71-tauri-beta.2",
+    "mainVersion": "3.2.71-tauri-beta.2",
+    "settingsOpened": true,
+    "settingsClosed": true,
+    "mainStillUsable": true,
+    "backgroundOnly": true,
+    "usesMouseOrKeyboard": false,
+    "executableSha256": "a272263722b85dd5ca64bd7c3d40aa57375727796c355162f127aa4791940fbd",
+    "installerSha256": "3114256cb978131012584f21ea1b2e45b76294453e77bf0daa53acbb87104db7",
+    "settingsUrl": "https://tauri.localhost/index.html?view=settings&version=3.2.71-tauri-beta.2",
+    "settingsControls": 2,
+    "settingsOpenedTwice": true,
+    "hostSettingsRecoveryVerified": true,
+    "receivedHostDistance": 7.77
+  },
+  "installerSha256": "3114256cb978131012584f21ea1b2e45b76294453e77bf0daa53acbb87104db7",
+  "executableSha256": "a272263722b85dd5ca64bd7c3d40aa57375727796c355162f127aa4791940fbd",
+  "preservation": {
+    "pinnedCoreFiles": 150,
+    "beta1InstallerUnchanged": true
+  },
+  "physicalMicrophoneTested": false,
+  "liveGameTested": false,
+  "installerExecuted": false,
+  "limits": [
+    "Local synthetic signaling verifies host-settings admission and recovery, not a real multi-person call.",
+    "Three existing tests requiring external speech resources were ignored."
+  ]
+}

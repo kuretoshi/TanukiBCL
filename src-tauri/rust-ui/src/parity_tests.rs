@@ -5,6 +5,36 @@ use crate::{
 };
 use serde_json::{json, Value};
 #[test]
+fn waiting_for_host_settings_keeps_players_and_controls_without_hiding_real_errors() {
+    let mut state = State::for_view("app", "test");
+    state.game = json!({
+        "mod":"NoS", "gameState":0, "lobbyCode":"ABCDEF", "hostId":1,
+        "players":[
+            {"id":0,"clientId":1,"isLocal":false,"name":"Host","colorId":0},
+            {"id":1,"clientId":2,"isLocal":true,"name":"Guest","colorId":1}
+        ]
+    });
+    state.voice = json!({"status":{"waitingForHostSettings":true,"error":""}});
+    let html = views::main_view(&state);
+    assert!(html.contains("role=status"));
+    assert!(html.contains("ホスト側でもベタクルを起動してください"));
+    assert!(html.contains("Guest"));
+    assert!(html.contains("Host"));
+    assert!(html.contains("other-players-grid"));
+    assert!(html.contains("ABCDEF"));
+    assert!(!html.contains("voice-error"));
+
+    state.voice["status"]["waitingForHostSettings"] = json!(false);
+    assert!(!views::main_view(&state).contains("host-settings-wait"));
+
+    state.voice["status"]["waitingForHostSettings"] = json!(true);
+    state.voice["status"]["error"] = json!("音声デバイスを開けません");
+    let html = views::main_view(&state);
+    assert!(html.contains("voice-error"));
+    assert!(html.contains("音声デバイスを開けません"));
+    assert!(!html.contains("host-settings-wait"));
+}
+#[test]
 fn audible_clone_restores_speaking_ring_for_disguised_venting_owner() {
     let mut state = State::for_view("app", "test");
     state.game = json!({"mod":"NoS","gameState":1});

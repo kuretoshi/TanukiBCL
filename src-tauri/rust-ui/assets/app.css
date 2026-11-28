@@ -90,3 +90,4 @@ select option,select optgroup{background-color:#29252e;color:#fff}
 .ban-item>div{flex:1;min-width:min(180px,100%)}
 .ban-history-list{max-height:360px;overflow:auto;border:1px solid #ffffff1f;border-radius:4px;padding:8px}
 .ban-history-item{padding:6px 0;border-bottom:1px solid #ffffff1f}
+.host-settings-wait{color:#b4aabd;font-size:12px;line-height:1.5;text-align:center;flex-shrink:0;margin:4px 8px}

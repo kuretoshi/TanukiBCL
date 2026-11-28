@@ -369,7 +369,12 @@ pub fn main_view(s: &State) -> String {
         format!("<span class=detected-mod>MOD: {}</span>", e(label))
     };
     let content = if error.is_empty() {
-        format!("{top}<div class=voice-divider></div>{grid}")
+        let waiting = if s.voice["status"]["waitingForHostSettings"] == true {
+            "<p class=host-settings-wait role=status aria-live=polite>ホストの通話設定を待っています。ホスト側でもベタクルを起動してください。</p>"
+        } else {
+            ""
+        };
+        format!("{top}{waiting}<div class=voice-divider></div>{grid}")
     } else {
         format!(
             "<div class=voice-error><h3>ERROR</h3><p>{}</p></div>",

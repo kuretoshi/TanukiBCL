@@ -154,6 +154,7 @@ pub struct Status {
     pub lobby: String,
     pub peers: usize,
     pub error: String,
+    pub waiting_for_host_settings: bool,
     pub game_error: String,
     pub microphone_name: String,
     pub speaker_name: String,

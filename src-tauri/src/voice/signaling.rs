@@ -89,6 +89,7 @@ impl Engine {
                 s.audio_ready = false;
                 s.peers = 0;
                 s.talking = false;
+                s.waiting_for_host_settings = false;
                 s.voice_snapshot = Value::Null;
                 s.effective_game = Value::Null;
             }
@@ -302,6 +303,7 @@ impl Engine {
                         if rules!=own_rules{let payload=own_rules.to_string();for (id,peer) in &peers{if let Some(channel)=&peer.channel{let _=tokio::time::timeout(Duration::from_millis(200),channel.send_text(&payload)).await;}signal_to(&mut socket,id,&peer.generation,json!({"type":"bcl-control","payload":payload})).await?;}}
                         rules=own_rules.clone();host_rules_known=true;
                     }
+                    self.status.lock().unwrap().waiting_for_host_settings=!identity.is_null()&&!host&&!host_rules_known;
                     self.controls.joined.store(!identity.is_null()&&(host||host_rules_known),Ordering::Relaxed);
                     let stale:Vec<_>=peers.iter().filter(|(id,p)|!eligible(id,&clients,&state)||(!p.connected&&p.started.elapsed()>Duration::from_secs(30))).map(|(id,_)|id.clone()).collect();
                     for id in stale{if let Some(peer)=peers.remove(&id){peer.close().await;}mixer.lock().unwrap().remove(&id);}
@@ -380,8 +382,6 @@ impl Engine {
                     let may_radio=local(&state).is_some_and(|p|super::routing::can_use_radio(&state,p,&rules));
                     let channel=|kind|super::routing::radio_enabled(kind,&rules)&&state["nosRadios"].as_array().is_some_and(|rows|rows.iter().any(|r|r["kind"].as_i64()==Some(kind)));
                     status.radio_available=may_radio&&(state["mod"]!="NoS"||channel(0));status.jackal_radio_available=may_radio&&state["mod"]=="NoS"&&channel(1);
-                    if !identity.is_null()&&!host&&!host_rules_known{status.error="ホストの通話設定を待っています".into();}
-                    else if status.error.starts_with("ホストの通話設定")||status.error.starts_with("この部屋の設定"){status.error.clear();}
                 }
             }}
             Ok(())
